@@ -9,6 +9,8 @@
   - `feature-thenu-booking`
   - `feature-chapa-search`
   - `feature-meths-documents`
+  Test note: Sample commit by Methsarani (feature-meths-documents).
+
   - `feature-vithana-scheduling`
   - `feature-udavi-kyc`
 
