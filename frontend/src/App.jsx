@@ -1,4 +1,8 @@
 import { Routes, Route, Link } from "react-router-dom";
+import Login from "./pages/Login";
+import Register from "./pages/Register";
+import Booking from "./pages/Booking";
+import ManageBookings from "./pages/ManageBookings";
 
 function App() {
   return (
@@ -30,11 +34,12 @@ function App() {
 
       <Routes>
         {/* Thenu – Auth + Booking */}
-        <Route path="/login" element={<div>Login Page (Thenu)</div>} />
-        <Route path="/register" element={<div>Register Page (Thenu)</div>} />
-        <Route path="/booking/:lawyerId" element={<div>Booking Page (Thenu)</div>} />
-        <Route path="/booking" element={<div>Booking Page (Thenu)</div>} />
-        <Route path="/manage-bookings" element={<div>Manage Bookings Page (Thenu)</div>} />
+        <Route path="/login" element={<Login />} />
+        <Route path="/register" element={<Register />} />
+        <Route path="/booking/:lawyerId" element={<Booking />} />
+        <Route path="/booking" element={<Booking />} />
+        <Route path="/manage-bookings" element={<ManageBookings />} />
+        <Route path="/my-bookings" element={<ManageBookings />} />
 
         {/* Chapa – Search + Profile */}
         <Route path="/search" element={<div>Search Page (Chapa)</div>} />
