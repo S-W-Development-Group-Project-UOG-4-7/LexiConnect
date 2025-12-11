@@ -12,6 +12,7 @@ function App() {
         <Link to="/register" style={{ marginRight: "1rem" }}>Register</Link>
         <Link to="/booking" style={{ marginRight: "1rem" }}>Booking</Link>
         <Link to="/manage-bookings" style={{ marginRight: "1rem" }}>My Bookings</Link>
+        <Link to="/manage-bookings" style={{ marginRight: "1rem" }}>My Bookings</Link>
 
         {/* Chapa */}
         <Link to="/search" style={{ marginRight: "1rem" }}>Search Lawyers</Link>
