@@ -1,4 +1,5 @@
 import { Routes, Route, Link } from "react-router-dom";
+import AvailabilityEditor from "./pages/AvailabilityEditor";
 
 function App() {
   return (
@@ -45,7 +46,7 @@ function App() {
         <Route path="/admin" element={<div>Admin Dashboard Page (Methsarani)</div>} />
 
         {/* Vithana – Availability */}
-        <Route path="/availability" element={<div>Availability Editor Page (Vithana)</div>} />
+        <Route path="/availability" element={<AvailabilityEditor />} />
 
         {/* Udavi – KYC + Branches */}
         <Route path="/kyc" element={<div>KYC Form Page (Udavi)</div>} />

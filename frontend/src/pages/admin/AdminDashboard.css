@@ -1,0 +1,375 @@
+.admin-dashboard-page {
+  min-height: 100vh;
+  position: relative;
+}
+
+.admin-dashboard-main {
+  padding: 48px 32px;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.admin-dashboard-container {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+}
+
+/* System Overview Section */
+.admin-overview-section {
+  margin-bottom: 8px;
+}
+
+.admin-overview-card {
+  background: var(--bg-card);
+  border-radius: 12px;
+  padding: 32px;
+  border: 1px solid var(--border-color);
+  box-shadow: var(--shadow-md);
+}
+
+.admin-overview-title {
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: 2px;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  margin-bottom: 12px;
+}
+
+.admin-overview-subtitle {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 12px;
+}
+
+.admin-overview-description {
+  font-size: 16px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+/* Metrics Grid */
+.admin-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 24px;
+}
+
+.admin-metric-card {
+  background: var(--bg-card);
+  border-radius: 12px;
+  padding: 24px;
+  border: 1px solid var(--border-color);
+  box-shadow: var(--shadow-md);
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  transition: all 0.3s ease;
+}
+
+.admin-metric-card:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-lg);
+  border-color: var(--accent-gold);
+}
+
+.metric-icon {
+  font-size: 48px;
+  filter: drop-shadow(0 0 8px rgba(212, 175, 55, 0.4));
+}
+
+.metric-content {
+  flex: 1;
+}
+
+.metric-value {
+  font-size: 36px;
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1;
+  margin-bottom: 8px;
+}
+
+.metric-label {
+  font-size: 14px;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+}
+
+.metric-detail {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.metric-detail.verified {
+  color: var(--accent-green);
+}
+
+.metric-detail.gold-link {
+  color: var(--accent-gold);
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.metric-detail.gold-link:hover {
+  text-decoration: underline;
+}
+
+/* KYC Banner */
+.admin-kyc-banner {
+  background: var(--bg-card);
+  border-radius: 12px;
+  padding: 24px 32px;
+  border: 1px solid var(--border-color);
+  box-shadow: var(--shadow-md);
+  display: flex;
+  align-items: center;
+  gap: 24px;
+}
+
+.kyc-banner-icon {
+  font-size: 48px;
+  filter: drop-shadow(0 0 8px rgba(212, 175, 55, 0.4));
+}
+
+.kyc-banner-content {
+  flex: 1;
+}
+
+.kyc-banner-title {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 8px;
+}
+
+.kyc-banner-description {
+  font-size: 14px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+.kyc-review-btn {
+  white-space: nowrap;
+}
+
+/* Content Grid */
+.admin-content-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+  gap: 24px;
+}
+
+.admin-content-card {
+  background: var(--bg-card);
+  border-radius: 12px;
+  padding: 24px;
+  border: 1px solid var(--border-color);
+  box-shadow: var(--shadow-md);
+}
+
+.content-card-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.content-card-icon {
+  font-size: 24px;
+}
+
+.content-card-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.content-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.booking-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px;
+  background: var(--bg-secondary);
+  border-radius: 8px;
+}
+
+.booking-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.booking-lawyer {
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.booking-date {
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+.booking-status {
+  padding: 4px 12px;
+  border-radius: 16px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+.booking-status.confirmed {
+  background: rgba(46, 204, 113, 0.2);
+  color: var(--accent-green);
+  border: 1px solid var(--accent-green);
+}
+
+.lawyer-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  background: var(--bg-secondary);
+  border-radius: 8px;
+}
+
+.lawyer-avatar-small {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--bg-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  border: 2px solid var(--border-color);
+}
+
+.lawyer-info-small {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.lawyer-name-small {
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.lawyer-spec-small {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.lawyer-status-icon {
+  font-size: 20px;
+}
+
+.lawyer-status-icon.verified-icon {
+  color: var(--accent-green);
+}
+
+.lawyer-status-icon.pending-icon {
+  color: var(--accent-gold);
+}
+
+/* Bottom Cards */
+.admin-bottom-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 24px;
+}
+
+.admin-feature-card {
+  background: var(--bg-card);
+  border-radius: 12px;
+  padding: 24px;
+  border: 1px solid var(--border-color);
+  box-shadow: var(--shadow-md);
+  text-decoration: none;
+  color: inherit;
+  transition: all 0.3s ease;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.admin-feature-card:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-lg);
+  border-color: var(--accent-gold);
+}
+
+.feature-card-icon {
+  font-size: 32px;
+  filter: drop-shadow(0 0 8px rgba(212, 175, 55, 0.4));
+}
+
+.feature-card-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.feature-card-description {
+  font-size: 14px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+.feature-card-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.feature-card-list li {
+  font-size: 14px;
+  color: var(--text-secondary);
+  padding-left: 20px;
+  position: relative;
+}
+
+.feature-card-list li::before {
+  content: '•';
+  position: absolute;
+  left: 8px;
+  color: var(--accent-gold);
+  font-size: 16px;
+}
+
+@media (max-width: 768px) {
+  .admin-dashboard-main {
+    padding: 32px 16px;
+  }
+
+  .admin-content-grid,
+  .admin-metrics-grid,
+  .admin-bottom-cards {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-kyc-banner {
+    flex-direction: column;
+    text-align: center;
+  }
+
+  .kyc-review-btn {
+    width: 100%;
+  }
+}
+
