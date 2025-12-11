@@ -4,7 +4,7 @@ from typing import List, Optional
 router = APIRouter(prefix="/lawyers", tags=["Lawyers"])
 
 
-@router.get("")
+@router.get("/")
 def list_lawyers(
     district: Optional[str] = None,
     city: Optional[str] = None,
@@ -32,7 +32,6 @@ def list_lawyers(
             "rating": 4.2,
         },
     ]
-    # Later you will filter by the query params. For now we return all.
     return lawyers
 
 
