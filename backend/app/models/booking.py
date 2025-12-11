@@ -1,16 +1,36 @@
-from sqlalchemy import Column, Integer, ForeignKey, String, DateTime
-from sqlalchemy.orm import relationship
-from app.database import Base
-import datetime
+from fastapi import APIRouter
+from app.models.kyc import KYCSubmission
+from app.database import SessionLocal
 
-class Booking(Base):
-    __tablename__ = "bookings"
+router = APIRouter(prefix="/admin/kyc", tags=["kyc"])
 
-    id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"))
-    lawyer_id = Column(Integer, ForeignKey("lawyers.id"))
-    scheduled_at = Column(DateTime, default=datetime.datetime.utcnow)
-    status = Column(String, default="pending")  # pending / confirmed / cancelled
+@router.get("/pending")
+def get_pending_kyc():
+    db = SessionLocal()
+    submissions = db.query(KYCSubmission).filter(KYCSubmission.status=="pending").all()
+    db.close()
+    return submissions
 
-    user = relationship("User")
-    lawyer = relationship("Lawyer")
+@router.post("/approve")
+def approve_kyc(submission_id: int):
+    db = SessionLocal()
+    kyc = db.query(KYCSubmission).get(submission_id)
+    if not kyc:
+        db.close()
+        return {"success": False, "message": "Submission not found"}
+    kyc.status = "approved"
+    db.commit()
+    db.close()
+    return {"success": True}
+
+@router.post("/reject")
+def reject_kyc(submission_id: int):
+    db = SessionLocal()
+    kyc = db.query(KYCSubmission).get(submission_id)
+    if not kyc:
+        db.close()
+        return {"success": False, "message": "Submission not found"}
+    kyc.status = "rejected"
+    db.commit()
+    db.close()
+    return {"success": True}
