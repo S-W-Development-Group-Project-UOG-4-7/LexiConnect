@@ -1,16 +1,26 @@
 import os
 
 from sqlalchemy import create_engine
-from sqlalchemy.orm import declarative_base, sessionmaker
+from sqlalchemy.orm import sessionmaker, declarative_base
 
-# Example: postgresql+psycopg2://user:password@localhost:5432/lexiconnect
+# Use DATABASE_URL from environment if provided.
+# Default = local SQLite file so everyone can run without installing Postgres.
 DATABASE_URL = os.getenv(
     "DATABASE_URL",
-    "postgresql+psycopg2://postgres:postgres@localhost:5432/lexiconnect",
+    "sqlite:///./lexiconnect.db",
 )
 
-engine = create_engine(DATABASE_URL, pool_pre_ping=True)
+# If we are using SQLite, we need connect_args.
+# For Postgres or other DBs, connect_args can be empty.
+connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
+
+engine = create_engine(
+    DATABASE_URL,
+    connect_args=connect_args,
+)
+
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
 Base = declarative_base()
 
 
@@ -21,4 +31,3 @@ def get_db():
         yield db
     finally:
         db.close()
-
