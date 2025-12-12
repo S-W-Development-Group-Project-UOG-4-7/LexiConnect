@@ -72,7 +72,7 @@ const Login = () => {
         </form>
 
         <div className="footer-text">
-          Don’t have an account?{" "}
+          Don't have an account?{" "}
           <Link to="/register" className="link">
             Register Now
           </Link>
@@ -88,7 +88,7 @@ const Login = () => {
         </div>
       </div>
 
-      <style>{`
+      <style jsx>{`
         :root {
           color-scheme: dark;
         }

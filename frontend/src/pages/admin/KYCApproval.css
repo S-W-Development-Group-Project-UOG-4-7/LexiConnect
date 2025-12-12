@@ -1,0 +1,313 @@
+.kyc-approval-page {
+  min-height: 100vh;
+  position: relative;
+}
+
+.kyc-approval-main {
+  padding: 48px 32px;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.kyc-approval-container {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+}
+
+/* Page Title */
+.kyc-page-title {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+/* Tabs */
+.kyc-tabs {
+  display: flex;
+  gap: 8px;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 0;
+}
+
+.kyc-tab {
+  padding: 12px 24px;
+  background: transparent;
+  border: none;
+  border-bottom: 3px solid transparent;
+  color: var(--text-secondary);
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  position: relative;
+  top: 1px;
+}
+
+.kyc-tab:hover {
+  color: var(--text-primary);
+  background: rgba(212, 175, 55, 0.1);
+}
+
+.kyc-tab.active {
+  color: var(--text-primary);
+  background: var(--accent-gold);
+  border-bottom-color: var(--accent-gold);
+  border-radius: 8px 8px 0 0;
+}
+
+/* KYC Cards */
+.kyc-cards-list {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.kyc-card {
+  background: var(--text-primary);
+  border-radius: 16px;
+  padding: 32px;
+  box-shadow: var(--shadow-lg);
+  display: flex;
+  gap: 32px;
+  color: var(--bg-primary);
+}
+
+.kyc-card-left {
+  display: flex;
+  gap: 24px;
+  flex: 1;
+}
+
+.kyc-avatar {
+  flex-shrink: 0;
+}
+
+.kyc-avatar-icon {
+  width: 100px;
+  height: 100px;
+  border-radius: 50%;
+  background: var(--bg-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 50px;
+  border: 3px solid var(--border-color);
+}
+
+.kyc-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.kyc-name-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.kyc-name {
+  font-size: 28px;
+  font-weight: 600;
+  color: var(--bg-primary);
+  margin: 0;
+}
+
+.kyc-degree {
+  font-size: 16px;
+  color: var(--bg-primary);
+  opacity: 0.8;
+  margin: 0;
+}
+
+.kyc-specializations {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.kyc-spec-tag {
+  padding: 6px 14px;
+  background: rgba(74, 144, 226, 0.1);
+  border: 1px solid rgba(74, 144, 226, 0.3);
+  border-radius: 20px;
+  font-size: 13px;
+  color: var(--accent-blue);
+  font-weight: 500;
+}
+
+.kyc-contact-info {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.kyc-contact-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+  color: var(--bg-primary);
+}
+
+.kyc-contact-icon {
+  font-size: 18px;
+}
+
+.kyc-rating {
+  font-size: 14px;
+  color: var(--bg-primary);
+  opacity: 0.7;
+  margin-top: 4px;
+}
+
+.kyc-card-right {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  min-width: 250px;
+}
+
+.kyc-details {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.kyc-detail-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+  color: var(--bg-primary);
+}
+
+.kyc-detail-icon {
+  font-size: 18px;
+}
+
+.kyc-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.approve-btn,
+.reject-btn,
+.view-docs-btn {
+  min-width: 180px;
+  justify-content: center;
+  padding: 12px 24px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn-success {
+  background: var(--accent-green);
+  color: var(--text-primary);
+}
+
+.btn-success:hover {
+  background: #27ae60;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(46, 204, 113, 0.4);
+}
+
+.view-docs-btn {
+  background: var(--accent-blue);
+  color: var(--text-primary);
+}
+
+.view-docs-btn:hover {
+  background: #357abd;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(74, 144, 226, 0.4);
+}
+
+/* Badge styles for KYC card */
+.kyc-card .badge {
+  padding: 6px 16px;
+  font-size: 13px;
+}
+
+.badge-pending {
+  background: rgba(212, 175, 55, 0.2);
+  color: var(--accent-gold-dark);
+  border: 1px solid var(--accent-gold);
+}
+
+.badge-approved {
+  background: rgba(46, 204, 113, 0.2);
+  color: var(--accent-green);
+  border: 1px solid var(--accent-green);
+}
+
+.badge-rejected {
+  background: rgba(231, 76, 60, 0.2);
+  color: var(--accent-red);
+  border: 1px solid var(--accent-red);
+}
+
+.no-kyc-data {
+  text-align: center;
+  padding: 64px 32px;
+  background: var(--bg-card);
+  border-radius: 12px;
+  border: 1px solid var(--border-color);
+}
+
+.no-kyc-data p {
+  font-size: 18px;
+  color: var(--text-secondary);
+}
+
+@media (max-width: 1024px) {
+  .kyc-card {
+    flex-direction: column;
+  }
+
+  .kyc-card-right {
+    width: 100%;
+  }
+
+  .kyc-actions {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+
+  .approve-btn,
+  .reject-btn,
+  .view-docs-btn {
+    flex: 1;
+    min-width: 150px;
+  }
+}
+
+@media (max-width: 768px) {
+  .kyc-approval-main {
+    padding: 32px 16px;
+  }
+
+  .kyc-card-left {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+  }
+
+  .kyc-tabs {
+    flex-wrap: wrap;
+  }
+
+  .kyc-tab {
+    flex: 1;
+    min-width: 100px;
+  }
+}
+
+

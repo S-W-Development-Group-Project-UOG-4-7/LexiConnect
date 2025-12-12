@@ -12,6 +12,7 @@ from .routers import (
     branches,
     kyc,
 )
+from .api.v1 import admin as admin_v1, booking as booking_v1
 
 from .database import Base, engine
 
@@ -58,6 +59,10 @@ app.include_router(admin.router)
 app.include_router(availability.router)
 app.include_router(branches.router)
 app.include_router(kyc.router)   # include only once
+
+# Include API v1 routers
+app.include_router(admin_v1.router)
+app.include_router(booking_v1.router)
 
 # ---- Custom OpenAPI schema to add BearerAuth (JWT) to Swagger ----
 

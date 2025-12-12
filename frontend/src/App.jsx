@@ -1,4 +1,5 @@
-import { Routes, Route, Link } from "react-router-dom";
+import { Routes, Route, Link, Navigate } from "react-router-dom";
+import AvailabilityEditor from "./pages/AvailabilityEditor";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import Booking from "./pages/Booking";
@@ -9,13 +10,11 @@ function App() {
     <div style={{ padding: "1rem", fontFamily: "sans-serif" }}>
       <h1>LexiConnect</h1>
 
-      {/* Simple nav for now */}
       <nav style={{ marginBottom: "1rem" }}>
         {/* Thenu */}
         <Link to="/login" style={{ marginRight: "1rem" }}>Login</Link>
         <Link to="/register" style={{ marginRight: "1rem" }}>Register</Link>
         <Link to="/booking" style={{ marginRight: "1rem" }}>Booking</Link>
-        <Link to="/manage-bookings" style={{ marginRight: "1rem" }}>My Bookings</Link>
         <Link to="/manage-bookings" style={{ marginRight: "1rem" }}>My Bookings</Link>
 
         {/* Chapa */}
@@ -34,13 +33,18 @@ function App() {
       </nav>
 
       <Routes>
+        {/* Home */}
+        <Route path="/" element={<div>Welcome to LexiConnect. Use the links above to navigate.</div>} />
+
         {/* Thenu – Auth + Booking */}
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
-        <Route path="/booking/:lawyerId" element={<Booking />} />
         <Route path="/booking" element={<Booking />} />
+        <Route path="/booking/:lawyerId" element={<Booking />} />
         <Route path="/manage-bookings" element={<ManageBookings />} />
-        <Route path="/my-bookings" element={<ManageBookings />} />
+
+        {/* Redirect old route */}
+        <Route path="/my-bookings" element={<Navigate to="/manage-bookings" replace />} />
 
         {/* Chapa – Search + Profile */}
         <Route path="/search" element={<div>Search Page (Chapa)</div>} />
@@ -51,17 +55,14 @@ function App() {
         <Route path="/admin" element={<div>Admin Dashboard Page (Methsarani)</div>} />
 
         {/* Vithana – Availability */}
-        <Route path="/availability" element={<div>Availability Editor Page (Vithana)</div>} />
+        <Route path="/availability" element={<AvailabilityEditor />} />
 
         {/* Udavi – KYC + Branches */}
         <Route path="/kyc" element={<div>KYC Form Page (Udavi)</div>} />
         <Route path="/branches" element={<div>Branch Management Page (Udavi)</div>} />
 
-        {/* Default */}
-        <Route
-          path="*"
-          element={<div>Welcome to LexiConnect. Use the links above to navigate.</div>}
-        />
+        {/* Fallback */}
+        <Route path="*" element={<div>404 - Page not found</div>} />
       </Routes>
     </div>
   );

@@ -1,0 +1,149 @@
+.login-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px;
+  position: relative;
+}
+
+.login-container {
+  width: 100%;
+  max-width: 480px;
+  z-index: 1;
+}
+
+.login-card {
+  background: var(--bg-card);
+  border-radius: 16px;
+  padding: 48px 40px;
+  box-shadow: var(--shadow-lg);
+  border: 1px solid var(--border-color);
+}
+
+.login-header {
+  margin-bottom: 32px;
+}
+
+.login-logo {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  justify-content: center;
+}
+
+.login-logo-icon {
+  font-size: 48px;
+  color: var(--accent-gold);
+  filter: drop-shadow(0 0 12px rgba(212, 175, 55, 0.6));
+}
+
+.login-logo-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+}
+
+.login-logo-title {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--accent-gold);
+  letter-spacing: 0.5px;
+}
+
+.login-logo-subtitle {
+  font-size: 14px;
+  color: var(--text-secondary);
+  font-weight: 400;
+}
+
+.login-welcome {
+  text-align: center;
+  margin-bottom: 32px;
+}
+
+.login-welcome h2 {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 8px;
+}
+
+.login-welcome p {
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+.login-form {
+  margin-bottom: 24px;
+}
+
+.login-submit {
+  width: 100%;
+  justify-content: center;
+  margin-top: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  padding: 14px;
+}
+
+.login-register {
+  text-align: center;
+  margin-bottom: 32px;
+  font-size: 14px;
+}
+
+.demo-accounts {
+  background: rgba(15, 22, 41, 0.6);
+  border-radius: 12px;
+  padding: 20px;
+  border: 1px solid var(--border-color);
+}
+
+.demo-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+  color: var(--text-primary);
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.demo-star {
+  color: var(--accent-gold);
+  font-size: 16px;
+}
+
+.demo-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.demo-list li {
+  padding: 8px 0;
+  padding-left: 24px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  position: relative;
+}
+
+.demo-list li::before {
+  content: '•';
+  position: absolute;
+  left: 8px;
+  color: var(--accent-gold);
+  font-size: 16px;
+}
+
+@media (max-width: 640px) {
+  .login-page {
+    padding: 16px;
+  }
+
+  .login-card {
+    padding: 32px 24px;
+  }
+}
+
