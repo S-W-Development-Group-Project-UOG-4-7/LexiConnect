@@ -1,4 +1,7 @@
-Here’s a **clean, professional, and stylish README.md** suitable for a **university project + GitHub evaluation**. You can copy-paste this directly into `README.md`.
+Legal Disclaimer
+“LexiConnect is a neutral legal appointment facilitation platform developed strictly for academic purposes.
+It does not advertise, promote, rank, or endorse any legal practitioner.
+All lawyer profiles are standardized, admin-verified, and displayed solely based on user-selected filters.”
 
 ---
 
