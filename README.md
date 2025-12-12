@@ -9,10 +9,7 @@ This is a university group project for a Sri Lankan legal appointment and compli
 - `docs/`     → Reports, task breakdown, supervisor notes
 - `diagrams/` → UI wireframes, ERD, flowcharts
 
-## Interim Focus (by Dec 11)
-
-- User Registration & Login (JWT)
-- Search lawyers (district, city, specialization, language)
-- View lawyer profile
-- Book appointment
-- Manage bookings (client)
+Legal Disclaimer
+“LexiConnect is a neutral legal appointment facilitation platform developed strictly for academic purposes.
+It does not advertise, promote, rank, or endorse any legal practitioner.
+All lawyer profiles are standardized, admin-verified, and displayed solely based on user-selected filters.”
