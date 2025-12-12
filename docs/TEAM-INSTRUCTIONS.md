@@ -9,6 +9,8 @@
   - `feature-thenu-booking`
   - `feature-chapa-search`
   - `feature-meths-documents`
+  Test note: Sample commit by Methsarani (feature-meths-documents).
+
   - `feature-vithana-scheduling`
   - `feature-udavi-kyc`
 
@@ -24,7 +26,7 @@ Switch to dev branch and pull latest work:
 
 git checkout dev
 git pull origin dev
-
+fgvdxvfb
 
 Create your own feature branch (each person does this only once):
 
@@ -331,3 +333,5 @@ backend/app/routers/kyc.py:
 POST /kyc
 
 GET /kyc/my
+
+Test note: Sample commit by Methsarani (feature-meths-documents).

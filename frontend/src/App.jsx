@@ -1,12 +1,15 @@
-import { Routes, Route, Link } from "react-router-dom";
+import { Routes, Route, Link, Navigate } from "react-router-dom";
 import AvailabilityEditor from "./pages/AvailabilityEditor";
+import Login from "./pages/Login";
+import Register from "./pages/Register";
+import Booking from "./pages/Booking";
+import ManageBookings from "./pages/ManageBookings";
 
 function App() {
   return (
     <div style={{ padding: "1rem", fontFamily: "sans-serif" }}>
       <h1>LexiConnect</h1>
 
-      {/* Simple nav for now */}
       <nav style={{ marginBottom: "1rem" }}>
         {/* Thenu */}
         <Link to="/login" style={{ marginRight: "1rem" }}>Login</Link>
@@ -30,12 +33,18 @@ function App() {
       </nav>
 
       <Routes>
+        {/* Home */}
+        <Route path="/" element={<div>Welcome to LexiConnect. Use the links above to navigate.</div>} />
+
         {/* Thenu – Auth + Booking */}
-        <Route path="/login" element={<div>Login Page (Thenu)</div>} />
-        <Route path="/register" element={<div>Register Page (Thenu)</div>} />
-        <Route path="/booking/:lawyerId" element={<div>Booking Page (Thenu)</div>} />
-        <Route path="/booking" element={<div>Booking Page (Thenu)</div>} />
-        <Route path="/manage-bookings" element={<div>Manage Bookings Page (Thenu)</div>} />
+        <Route path="/login" element={<Login />} />
+        <Route path="/register" element={<Register />} />
+        <Route path="/booking" element={<Booking />} />
+        <Route path="/booking/:lawyerId" element={<Booking />} />
+        <Route path="/manage-bookings" element={<ManageBookings />} />
+
+        {/* Redirect old route */}
+        <Route path="/my-bookings" element={<Navigate to="/manage-bookings" replace />} />
 
         {/* Chapa – Search + Profile */}
         <Route path="/search" element={<div>Search Page (Chapa)</div>} />
@@ -52,11 +61,8 @@ function App() {
         <Route path="/kyc" element={<div>KYC Form Page (Udavi)</div>} />
         <Route path="/branches" element={<div>Branch Management Page (Udavi)</div>} />
 
-        {/* Default */}
-        <Route
-          path="*"
-          element={<div>Welcome to LexiConnect. Use the links above to navigate.</div>}
-        />
+        {/* Fallback */}
+        <Route path="*" element={<div>404 - Page not found</div>} />
       </Routes>
     </div>
   );
