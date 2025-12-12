@@ -4,6 +4,8 @@ export const getToken = () => localStorage.getItem("token");
 
 export const logout = () => {
   localStorage.removeItem("token");
+  localStorage.removeItem("role");
+  localStorage.removeItem("email");
 };
 
 const decodePayload = (token) => {
