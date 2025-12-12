@@ -101,3 +101,47 @@ def login(login_req: LoginRequest, db: Session = Depends(get_db)):
         expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES),
     )
     return Token(access_token=access_token, token_type="bearer")
+
+
+# ============================================================================
+# TEMPORARY DEV ENDPOINT - DELETE BEFORE PRODUCTION
+# ============================================================================
+@router.post("/dev/create-admin")
+def create_admin_user(db: Session = Depends(get_db)):
+    """
+    TEMPORARY: Creates a default admin user for testing.
+    DELETE THIS ENDPOINT BEFORE PRODUCTION DEPLOYMENT.
+    """
+    admin_email = "admin@lexiconnect.com"
+    
+    # Check if admin already exists
+    existing = get_user_by_email(db, admin_email)
+    if existing:
+        print(f"[DEV] Admin user {admin_email} already exists. Skipping creation.")
+        return {"message": "Admin user already exists", "email": admin_email}
+    
+    # Create admin user
+    hashed_password = get_password_hash("admin123")
+    admin_user = User(
+        email=admin_email,
+        full_name="System Admin",
+        hashed_password=hashed_password,
+        role=UserRole.admin,
+        phone=None,
+    )
+    db.add(admin_user)
+    db.commit()
+    db.refresh(admin_user)
+    
+    print(f"[DEV] ✓ Admin user created successfully!")
+    print(f"[DEV]   Email: {admin_email}")
+    print(f"[DEV]   Password: admin123")
+    print(f"[DEV]   Role: admin")
+    print(f"[DEV]   ID: {admin_user.id}")
+    
+    return {
+        "message": "Admin user created successfully",
+        "email": admin_email,
+        "password": "admin123",
+        "role": "admin",
+    }

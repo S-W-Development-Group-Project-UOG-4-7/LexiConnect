@@ -21,4 +21,3 @@ class Booking(Base):
 
     client = relationship("User", foreign_keys=[client_id], back_populates="bookings")
     lawyer = relationship("User", foreign_keys=[lawyer_id])
-
