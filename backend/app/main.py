@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware   # ⭐ ADD THIS
 
 from .routers import (
     auth,
@@ -23,6 +24,14 @@ Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="LexiConnect API")
 
+# ⭐⭐ CORS FIX — THIS ALLOWS FRONTEND TO TALK TO BACKEND ⭐⭐
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],       # Allow any frontend (React dev server)
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 @app.get("/health")
 def health_check():

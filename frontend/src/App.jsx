@@ -1,5 +1,9 @@
 import { Routes, Route, Link } from "react-router-dom";
 
+// Import Udavi’s real pages
+import KYCForm from "./pages/KYCForm";
+import BranchManagement from "./pages/BranchManagement";
+
 function App() {
   return (
     <div style={{ padding: "1rem", fontFamily: "sans-serif" }}>
@@ -48,8 +52,8 @@ function App() {
         <Route path="/availability" element={<div>Availability Editor Page (Vithana)</div>} />
 
         {/* Udavi – KYC + Branches */}
-        <Route path="/kyc" element={<div>KYC Form Page (Udavi)</div>} />
-        <Route path="/branches" element={<div>Branch Management Page (Udavi)</div>} />
+        <Route path="/kyc" element={<KYCForm />} />
+        <Route path="/branches" element={<BranchManagement />} />
 
         {/* Default */}
         <Route
