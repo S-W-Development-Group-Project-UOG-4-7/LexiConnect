@@ -6,7 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
 
-# Load environment variables before other imports that may use them
+# Load environment variables before other imports
 load_dotenv()
 
 # Local application imports
@@ -29,13 +29,14 @@ from .seed import seed_demo_users
 # Create all database tables
 Base.metadata.create_all(bind=engine)
 
+# FastAPI app
 app = FastAPI(
     title="LexiConnect API",
     version="0.1.0",
     swagger_ui_parameters={"persistAuthorization": True},
 )
 
-# ---- CORS for React frontend ----
+# ---- CORS for React (Vite) frontend ----
 origins = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
@@ -43,29 +44,28 @@ origins = [
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,       # your Vite dev URLs
+    allow_origins=origins,
     allow_credentials=True,
-    allow_methods=["*"],         # GET, POST, PATCH, OPTIONS, etc.
-    allow_headers=["*"],         # Authorization, Content-Type, etc.
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
-
+# ---- Startup seed ----
 @app.on_event("startup")
 def startup_seed_users():
-    """Seed demo users on application startup if SEED_DEMO_USERS is enabled."""
+    """Seed demo users on application startup if enabled."""
     db = SessionLocal()
     try:
         seed_demo_users(db)
     finally:
         db.close()
 
-
+# ---- Health check ----
 @app.get("/health")
 def health_check():
     return {"status": "ok"}
 
-
-# Routers
+# ---- Routers ----
 app.include_router(auth.router)
 app.include_router(lawyers.router)
 app.include_router(bookings.router)
@@ -73,15 +73,14 @@ app.include_router(documents.router, prefix="/bookings")
 app.include_router(admin.router)
 app.include_router(availability.router)
 app.include_router(branches.router)
-app.include_router(kyc.router)   # include only once
-app.include_router(dev.router)   # DEV-ONLY: seed users endpoint
+app.include_router(kyc.router)
+app.include_router(dev.router)          # DEV-ONLY endpoints
 
-# Include API v1 routers
+# API v1 routers
 app.include_router(admin_v1.router)
 app.include_router(booking_v1.router)
 
-# ---- Custom OpenAPI schema to add BearerAuth (JWT) to Swagger ----
-
+# ---- Custom OpenAPI (JWT Bearer Auth in Swagger) ----
 def custom_openapi():
     if app.openapi_schema:
         return app.openapi_schema
@@ -93,7 +92,6 @@ def custom_openapi():
         routes=app.routes,
     )
 
-    # Add JWT Bearer security scheme
     openapi_schema.setdefault("components", {})
     openapi_schema["components"].setdefault("securitySchemes", {})
     openapi_schema["components"]["securitySchemes"]["BearerAuth"] = {
@@ -102,7 +100,6 @@ def custom_openapi():
         "bearerFormat": "JWT",
     }
 
-    # Apply this security scheme globally (all endpoints)
     openapi_schema["security"] = [{"BearerAuth": []}]
 
     app.openapi_schema = openapi_schema
