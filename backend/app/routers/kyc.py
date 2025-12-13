@@ -9,7 +9,6 @@ router = APIRouter(prefix="/kyc", tags=["KYC"])
 
 fake_lawyer_id = 1  # Temporary until authentication is added
 
-
 @router.post("/", response_model=KYCSubmission)
 def submit_kyc(data: KYCSubmissionCreate, db: Session = Depends(get_db)):
     # Check if KYC already exists

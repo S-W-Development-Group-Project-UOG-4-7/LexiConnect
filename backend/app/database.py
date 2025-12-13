@@ -1,14 +1,37 @@
+import os
+
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
 
-# replace username/password/host/port/dbname as appropriate
-DATABASE_URL = "postgresql+psycopg2://lexiuser:12345678@localhost:5432/lexiconnect"
+# Use DATABASE_URL from environment if provided.
+# Default = local SQLite file so everyone can run without installing Postgres.
+DATABASE_URL = os.getenv(
+    "DATABASE_URL",
+    "sqlite:///./lexiconnect.db",
+)
 
-engine = create_engine(DATABASE_URL)  # no check_same_thread with Postgres
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+# If we are using SQLite, we need connect_args.
+# For Postgres or other DBs, connect_args can be empty.
+connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
+
+engine = create_engine(
+    DATABASE_URL,
+    connect_args=connect_args,
+)
+
+print("✅ USING DATABASE:", engine.url)
+
+SessionLocal = sessionmaker(
+    autocommit=False,
+    autoflush=False,
+    bind=engine,
+)
+
 Base = declarative_base()
 
+
 def get_db():
+    """FastAPI dependency that yields a database session."""
     db = SessionLocal()
     try:
         yield db
