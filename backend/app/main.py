@@ -1,26 +1,30 @@
+# Standard library imports
+from dotenv import load_dotenv
+
+# Third-party imports
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
 
-from .routers import (
-    auth,
-    lawyers,
-    bookings,
-    documents,
-    admin,
-    availability,
-    branches,
-    kyc,
-    dev,
-)
+# Load environment variables before other imports that may use them
+load_dotenv()
+
+# Local application imports
 from .api.v1 import admin as admin_v1, booking as booking_v1
-
-from .database import Base, engine
-
-# import all models so tables get created
-from .models import lawyer
-from .models import branch
-from .models import kyc_submission
+from .database import Base, engine, SessionLocal
+from .models import branch, kyc_submission, lawyer
+from .routers import (
+    admin,
+    auth,
+    availability,
+    bookings,
+    branches,
+    dev,
+    documents,
+    kyc,
+    lawyers,
+)
+from .seed import seed_demo_users
 
 # Create all database tables
 Base.metadata.create_all(bind=engine)
@@ -44,6 +48,16 @@ app.add_middleware(
     allow_methods=["*"],         # GET, POST, PATCH, OPTIONS, etc.
     allow_headers=["*"],         # Authorization, Content-Type, etc.
 )
+
+
+@app.on_event("startup")
+def startup_seed_users():
+    """Seed demo users on application startup if SEED_DEMO_USERS is enabled."""
+    db = SessionLocal()
+    try:
+        seed_demo_users(db)
+    finally:
+        db.close()
 
 
 @app.get("/health")

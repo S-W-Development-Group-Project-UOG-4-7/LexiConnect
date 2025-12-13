@@ -15,7 +15,16 @@ const Login = () => {
     setError("");
     setLoading(true);
     try {
-      const { data } = await api.post("/auth/login", { email, password });
+      // OAuth2PasswordRequestForm expects form-urlencoded with username and password
+      const formData = new URLSearchParams();
+      formData.append("username", email); // OAuth2 uses 'username' field for email
+      formData.append("password", password);
+      
+      const { data } = await api.post("/auth/login", formData, {
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+      });
       localStorage.setItem("token", data.access_token);
       
       // Extract role from response if available, otherwise decode JWT
