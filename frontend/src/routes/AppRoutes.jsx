@@ -3,6 +3,8 @@ import Login from "../pages/Login";
 import Register from "../pages/Register";
 import Booking from "../pages/Booking";
 import ManageBookings from "../pages/ManageBookings";
+import BranchManagement from "../pages/BranchManagement";
+
 import AvailabilityEditor from "../pages/AvailabilityEditor";
 import TokenQueue from "../pages/TokenQueue";
 import NotAuthorized from "../pages/NotAuthorized";
@@ -71,7 +73,7 @@ const AppRoutes = () => {
         <Route path="/lawyer/dashboard" element={<div>Lawyer Dashboard (placeholder)</div>} />
         <Route path="/lawyer/availability" element={<AvailabilityEditor />} />
         <Route path="/lawyer/token-queue" element={<TokenQueue />} />
-        <Route path="/lawyer/branches" element={<div>Branch Management Page (Udavi)</div>} />
+        <Route path="/lawyer/branches" element={<BranchManagement />} />
         <Route path="/lawyer/services" element={<div>Services Page (placeholder)</div>} />
         <Route path="/lawyer/checklist" element={<div>Checklist Page (placeholder)</div>} />
         <Route path="/lawyer/kyc" element={<div>KYC Form Page (Udavi)</div>} />
