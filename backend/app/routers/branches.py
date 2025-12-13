@@ -1,27 +1,28 @@
-from fastapi import APIRouter
-from typing import Optional
+from fastapi import APIRouter, Depends
+from sqlalchemy.orm import Session
+from ..database import get_db
+from ..models.branch import Branch as BranchModel
+from ..schemas.branch import BranchCreate, Branch as BranchSchema
 
-router = APIRouter(prefix="/branches", tags=["Branches"])
+router = APIRouter()
+
+fake_lawyer_id = 1  # Temporary until authentication works
+
+@router.post("/branches", response_model=BranchSchema)
+def create_branch(data: BranchCreate, db: Session = Depends(get_db)):
+    new_branch = BranchModel(
+        lawyer_id=fake_lawyer_id,
+        name=data.name,
+        district=data.district,
+        city=data.city,
+        address=data.address
+    )
+    db.add(new_branch)
+    db.commit()
+    db.refresh(new_branch)
+    return new_branch
 
 
-@router.get("")
-def list_branches_dummy(lawyer_id: Optional[int] = None):
-    """Return dummy branches for a lawyer."""
-    return [
-        {
-            "id": 1,
-            "lawyer_id": lawyer_id or 1,
-            "name": "Main Chamber",
-            "district": "Colombo",
-            "city": "Colombo 03",
-            "address": "123 Galle Road",
-        },
-        {
-            "id": 2,
-            "lawyer_id": lawyer_id or 1,
-            "name": "Negombo Office",
-            "district": "Gampaha",
-            "city": "Negombo",
-            "address": "456 Beach Road",
-        },
-    ]
+@router.get("/branches", response_model=list[BranchSchema])
+def get_branches(lawyer_id: int, db: Session = Depends(get_db)):
+    return db.query(BranchModel).filter(BranchModel.lawyer_id == lawyer_id).all()

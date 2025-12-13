@@ -1,0 +1,186 @@
+.bookings-page {
+  min-height: 100vh;
+  position: relative;
+}
+
+.bookings-main {
+  padding: 48px 32px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.bookings-container {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+}
+
+/* Page Title */
+.bookings-page-title {
+  font-size: 48px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.1);
+  text-transform: uppercase;
+  letter-spacing: 4px;
+  margin: 0;
+  position: absolute;
+  left: 32px;
+  top: 120px;
+  z-index: 0;
+  pointer-events: none;
+}
+
+/* Bookings List */
+.bookings-list {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  position: relative;
+  z-index: 1;
+}
+
+.booking-card {
+  background: var(--text-primary);
+  border-radius: 16px;
+  padding: 32px;
+  box-shadow: var(--shadow-lg);
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  position: relative;
+  color: var(--bg-primary);
+}
+
+.booking-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.booking-lawyer-info {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.booking-lawyer-name {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--bg-primary);
+  margin: 0;
+}
+
+.booking-details {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.booking-detail-row {
+  display: flex;
+  gap: 32px;
+  flex-wrap: wrap;
+}
+
+.booking-detail-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.booking-icon {
+  font-size: 18px;
+}
+
+.booking-text {
+  font-size: 16px;
+  color: var(--bg-primary);
+  font-weight: 500;
+}
+
+.booking-reason {
+  margin-top: 8px;
+}
+
+.booking-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: flex-end;
+}
+
+.upload-btn,
+.cancel-btn {
+  min-width: 180px;
+  justify-content: center;
+  padding: 12px 24px;
+}
+
+.upload-btn {
+  background: var(--accent-blue);
+  color: var(--text-primary);
+}
+
+.upload-btn:hover {
+  background: #357abd;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(74, 144, 226, 0.4);
+}
+
+.cancel-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* No Bookings State */
+.no-bookings {
+  text-align: center;
+  padding: 64px 32px;
+  background: var(--bg-card);
+  border-radius: 12px;
+  border: 1px solid var(--border-color);
+}
+
+.no-bookings-text {
+  font-size: 18px;
+  color: var(--text-secondary);
+  margin-bottom: 24px;
+}
+
+/* Badge in booking card */
+.booking-card .badge {
+  padding: 6px 16px;
+  font-size: 13px;
+}
+
+@media (max-width: 768px) {
+  .bookings-main {
+    padding: 32px 16px;
+  }
+
+  .bookings-page-title {
+    font-size: 32px;
+    left: 16px;
+    top: 100px;
+  }
+
+  .booking-card {
+    padding: 24px;
+  }
+
+  .booking-detail-row {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .booking-actions {
+    width: 100%;
+  }
+
+  .upload-btn,
+  .cancel-btn {
+    width: 100%;
+  }
+}
+
