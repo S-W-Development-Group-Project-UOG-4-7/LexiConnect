@@ -1,8 +1,3 @@
-[11 tools called]
-
-Replace the contents of `backend/app/routers/documents.py` with:
-
-```python
 import os
 from datetime import datetime
 from uuid import uuid4
@@ -62,4 +57,3 @@ def list_documents(booking_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail="Invalid booking_id.")
 
     return db.query(Document).filter(Document.booking_id == booking_id).all()
-```
