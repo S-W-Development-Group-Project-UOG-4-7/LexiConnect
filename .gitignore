@@ -1,1 +1,20 @@
-# Python venvbackend/venv/# Python cache**/__pycache__/*.py[cod]# Node modulesfrontend/node_modules/# Environment files*.env# Local DB files (SQLite)*.dbbackend/*.db
+# Python venv
+backend/venv/
+
+# Python cache
+**/__pycache__/
+*.py[cod]
+
+# Node modules
+frontend/node_modules/
+
+# Environment files
+*.env
+
+# Local DB files (SQLite)
+*.db
+backend/*.db
+
+.env
+backend/.env
+*.db
