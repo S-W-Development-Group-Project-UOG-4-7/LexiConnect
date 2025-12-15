@@ -5,6 +5,7 @@ import Booking from "../pages/Booking";
 import ManageBookings from "../pages/ManageBookings";
 import BranchManagement from "../pages/BranchManagement";
 import ServicePackages from "../pages/ServicePackages";
+import ChecklistTemplates from "../pages/ChecklistTemplates";
 
 import AvailabilityEditor from "../pages/AvailabilityEditor";
 import TokenQueue from "../pages/TokenQueue";
@@ -76,7 +77,7 @@ const AppRoutes = () => {
         <Route path="/lawyer/token-queue" element={<TokenQueue />} />
         <Route path="/lawyer/branches" element={<BranchManagement />} />
         <Route path="/lawyer/services" element={<ServicePackages />} />
-        <Route path="/lawyer/checklist" element={<div>Checklist Page (placeholder)</div>} />
+        <Route path="/lawyer/checklist" element={<ChecklistTemplates />} />
         <Route path="/lawyer/kyc" element={<div>KYC Form Page (Udavi)</div>} />
       </Route>
 
