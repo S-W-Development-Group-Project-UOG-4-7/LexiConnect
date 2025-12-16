@@ -120,6 +120,53 @@ LexiConnect/
    http://127.0.0.1:8000/docs
    ```
 
+### 🔹 DB Setup with Docker + Alembic
+
+1. **Start PostgreSQL using Docker Compose** (from repo root):
+
+   ```powershell
+   docker-compose up -d
+   ```
+
+2. **Configure environment variables**:
+
+   Copy `backend/.env.example` to `backend/.env` and update values if needed:
+   ```powershell
+   cd backend
+   copy .env.example .env
+   ```
+
+3. **Install dependencies** (if not already done):
+
+   ```powershell
+   pip install -r requirements.txt
+   ```
+
+4. **Create initial migration**:
+
+   ```powershell
+   alembic revision --autogenerate -m "Initial migration"
+   ```
+
+5. **Apply migrations to database**:
+
+   ```powershell
+   alembic upgrade head
+   ```
+
+6. **Verify database connection**:
+
+   The FastAPI server will automatically connect on startup. Check the console for:
+   ```
+   ✅ USING DATABASE: postgresql+psycopg2://...
+   ```
+
+**Note:** For subsequent model changes, create new migrations with:
+```powershell
+alembic revision --autogenerate -m "Description of changes"
+alembic upgrade head
+```
+
 ---
 
 ### 🔹 Frontend – React + Vite
