@@ -3,7 +3,12 @@ import Login from "../pages/Login";
 import Register from "../pages/Register";
 import Booking from "../pages/Booking";
 import ManageBookings from "../pages/ManageBookings";
+import BranchManagement from "../pages/BranchManagement";
+import ServicePackages from "../pages/ServicePackages";
+import ChecklistTemplates from "../pages/ChecklistTemplates";
+
 import AvailabilityEditor from "../pages/AvailabilityEditor";
+import TokenQueue from "../pages/TokenQueue";
 import NotAuthorized from "../pages/NotAuthorized";
 import LandingRedirect from "../pages/LandingRedirect";
 import ProtectedRoute from "../components/ProtectedRoute";
@@ -69,10 +74,10 @@ const AppRoutes = () => {
       >
         <Route path="/lawyer/dashboard" element={<div>Lawyer Dashboard (placeholder)</div>} />
         <Route path="/lawyer/availability" element={<AvailabilityEditor />} />
-        <Route path="/lawyer/token-queue" element={<div>Token Queue Page (placeholder)</div>} />
-        <Route path="/lawyer/branches" element={<div>Branch Management Page (Udavi)</div>} />
-        <Route path="/lawyer/services" element={<div>Services Page (placeholder)</div>} />
-        <Route path="/lawyer/checklist" element={<div>Checklist Page (placeholder)</div>} />
+        <Route path="/lawyer/token-queue" element={<TokenQueue />} />
+        <Route path="/lawyer/branches" element={<BranchManagement />} />
+        <Route path="/lawyer/services" element={<ServicePackages />} />
+        <Route path="/lawyer/checklist" element={<ChecklistTemplates />} />
         <Route path="/lawyer/kyc" element={<div>KYC Form Page (Udavi)</div>} />
       </Route>
 
