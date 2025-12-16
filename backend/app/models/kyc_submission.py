@@ -8,8 +8,14 @@ class KYCSubmission(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     lawyer_id = Column(Integer, ForeignKey("lawyers.id"))
+
+    full_name = Column(String, nullable=False)
     nic_number = Column(String, nullable=False)
-    nic_front_url = Column(String, nullable=False)
-    nic_back_url = Column(String, nullable=False)
+    bar_council_id = Column(String, nullable=False)
+    address = Column(String, nullable=False)
+    contact_number = Column(String, nullable=False)
+
+    bar_certificate_url = Column(String, nullable=True)
+
     status = Column(String, default="pending")
     submitted_at = Column(DateTime(timezone=True), server_default=func.now())
