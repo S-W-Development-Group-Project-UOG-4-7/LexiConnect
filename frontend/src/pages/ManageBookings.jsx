@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import api from "../services/api";
+import { listMyBookings, cancelBooking } from "../services/bookings";
 
 const ManageBookings = () => {
   const [bookings, setBookings] = useState([]);
@@ -11,7 +11,7 @@ const ManageBookings = () => {
     setError("");
     setLoading(true);
     try {
-      const { data } = await api.get("/bookings/my");
+      const data = await listMyBookings();
       setBookings(data || []);
     } catch (err) {
       const message =
@@ -30,13 +30,16 @@ const ManageBookings = () => {
   }, []);
 
   const handleCancel = async (id) => {
+    if (!window.confirm("Are you sure you want to cancel this booking?")) {
+      return;
+    }
+
     setError("");
     setActionId(id);
     try {
-      await api.patch(`/bookings/${id}/cancel`);
-      setBookings((prev) =>
-        prev.map((b) => (b.id === id ? { ...b, status: "CANCELLED" } : b))
-      );
+      await cancelBooking(id);
+      // Refresh bookings list
+      await fetchBookings();
     } catch (err) {
       const message =
         err?.response?.data?.detail ||
@@ -48,214 +51,70 @@ const ManageBookings = () => {
     }
   };
 
-  const formatDate = (d) => {
-    if (!d) return "-";
-    const date = new Date(d);
-    return date.toLocaleDateString();
-  };
-
-  const formatTime = (t) => {
-    if (!t) return "-";
-    // If backend returns "HH:MM:SS" or "HH:MM"
-    return t.length >= 5 ? t.slice(0, 5) : t;
+  const formatDateTime = (dateTimeStr) => {
+    if (!dateTimeStr) return "-";
+    try {
+      const date = new Date(dateTimeStr);
+      return date.toLocaleString();
+    } catch {
+      return dateTimeStr;
+    }
   };
 
   return (
-    <div className="manage-page">
-      <div className="top-bar">
-        <div className="logo">LexiConnect</div>
-        <div className="nav">
-          <span>Dashboard</span>
-          <span>Search Lawyers</span>
-          <span className="active">My Bookings</span>
-        </div>
-      </div>
+    <div className="min-h-screen bg-slate-900 text-white p-6">
+      <div className="max-w-4xl mx-auto">
+        <h1 className="text-3xl font-bold mb-6">My Bookings</h1>
 
-      <div className="content">
-        <h2>My Bookings</h2>
+        {error && (
+          <div className="mb-4 p-4 bg-red-900/30 border border-red-500/50 rounded-lg text-red-200">
+            {error}
+          </div>
+        )}
 
-        {error && <div className="alert error">{error}</div>}
         {loading ? (
-          <div className="loading">Loading bookings...</div>
+          <div className="text-gray-400">Loading bookings...</div>
         ) : bookings.length === 0 ? (
-          <div className="empty">No bookings yet.</div>
+          <div className="text-gray-400">No bookings yet.</div>
         ) : (
-          <div className="booking-list">
-            {bookings.map((b) => (
-              <div key={b.id} className="booking-card">
-                <div className="booking-row header">
-                  <div className="title">{b.lawyer_name || "Lawyer"}</div>
-                  <span
-                    className={`status ${
-                      b.status === "CANCELLED"
-                        ? "cancelled"
-                        : b.status === "CONFIRMED"
-                        ? "confirmed"
-                        : "pending"
-                    }`}
-                  >
-                    {b.status || "PENDING"}
-                  </span>
-                </div>
-
-                <div className="booking-row meta">
-                  <div className="meta-item">
-                    <span className="icon">📅</span>
-                    {formatDate(b.date)}
+          <div className="space-y-4">
+            {bookings.map((booking) => (
+              <div
+                key={booking.id}
+                className="bg-slate-800 border border-slate-700 rounded-lg p-4 flex items-center justify-between"
+              >
+                <div className="flex-1">
+                  <div className="flex items-center gap-4 mb-2">
+                    <span className="font-semibold">ID: {booking.id}</span>
+                    <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase ${
+                      booking.status === "cancelled"
+                        ? "bg-red-900/30 text-red-400"
+                        : booking.status === "confirmed"
+                        ? "bg-green-900/30 text-green-400"
+                        : "bg-yellow-900/30 text-yellow-400"
+                    }`}>
+                      {booking.status}
+                    </span>
                   </div>
-                  <div className="meta-item">
-                    <span className="icon">⏰</span>
-                    {formatTime(b.time)}
-                  </div>
-                  <div className="meta-item">
-                    <span className="icon">📍</span>
-                    {b.branch_name || "Branch TBD"}
+                  <div className="text-sm text-gray-400">
+                    Scheduled: {formatDateTime(booking.scheduled_at)}
                   </div>
                 </div>
 
-                <div className="booking-row reason">
-                  <div className="label">Reason:</div>
-                  <div className="text">{b.reason || "N/A"}</div>
-                </div>
-
-                <div className="booking-row actions">
+                {booking.status !== "cancelled" && (
                   <button
-                    className="btn cancel"
-                    onClick={() => handleCancel(b.id)}
-                    disabled={actionId === b.id || b.status === "CANCELLED"}
+                    onClick={() => handleCancel(booking.id)}
+                    disabled={actionId === booking.id}
+                    className="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-red-800 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg font-medium transition-colors"
                   >
-                    {actionId === b.id ? "Cancelling..." : "Cancel"}
+                    {actionId === booking.id ? "Cancelling..." : "Cancel"}
                   </button>
-                </div>
+                )}
               </div>
             ))}
           </div>
         )}
       </div>
-
-      <style>{`
-        :root { color-scheme: dark; }
-        .manage-page {
-          min-height: 100vh;
-          background: radial-gradient(circle at 20% 20%, rgba(255, 215, 128, 0.05), transparent 25%),
-            radial-gradient(circle at 80% 30%, rgba(255, 215, 128, 0.05), transparent 25%),
-            radial-gradient(circle at 50% 80%, rgba(255, 215, 128, 0.05), transparent 25%),
-            #0f172a;
-          color: #e5e7eb;
-          padding-bottom: 40px;
-        }
-        .top-bar {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          padding: 18px 26px;
-          background: rgba(10, 14, 26, 0.75);
-          border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-          position: sticky;
-          top: 0;
-          backdrop-filter: blur(8px);
-          z-index: 5;
-        }
-        .logo {
-          font-weight: 700;
-          color: #f7d560;
-        }
-        .nav {
-          display: flex;
-          gap: 18px;
-          font-size: 14px;
-          color: #cbd5e1;
-        }
-        .nav .active { color: #f5c147; font-weight: 700; }
-        .content {
-          max-width: 1080px;
-          margin: 0 auto;
-          padding: 28px 18px;
-        }
-        h2 {
-          margin: 0 0 18px 4px;
-          color: #f9fafb;
-        }
-        .booking-list { display: flex; flex-direction: column; gap: 18px; }
-        .booking-card {
-          background: rgba(255, 255, 255, 0.03);
-          border: 1px solid rgba(255, 255, 255, 0.06);
-          border-radius: 16px;
-          padding: 16px 18px;
-          box-shadow: 0 12px 35px rgba(0, 0, 0, 0.35);
-        }
-        .booking-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-        .booking-row.header .title { font-size: 18px; font-weight: 700; color: #111827; }
-        .booking-row.header {
-          background: rgba(255, 255, 255, 0.85);
-          padding: 10px 12px;
-          border-radius: 12px;
-        }
-        .status {
-          padding: 6px 10px;
-          border-radius: 999px;
-          font-size: 12px;
-          font-weight: 700;
-          text-transform: uppercase;
-        }
-        .status.confirmed { background: rgba(34, 197, 94, 0.18); color: #16a34a; }
-        .status.pending { background: rgba(245, 193, 71, 0.2); color: #d97706; }
-        .status.cancelled { background: rgba(248, 113, 113, 0.18); color: #ef4444; }
-        .booking-row.meta {
-          margin-top: 12px;
-          flex-wrap: wrap;
-          color: #e5e7eb;
-        }
-        .meta-item {
-          display: inline-flex;
-          align-items: center;
-          gap: 8px;
-          padding: 8px 10px;
-          background: rgba(255, 255, 255, 0.03);
-          border-radius: 10px;
-          font-size: 14px;
-          border: 1px solid rgba(255, 255, 255, 0.06);
-        }
-        .icon { font-size: 14px; }
-        .booking-row.reason {
-          align-items: flex-start;
-          margin-top: 12px;
-          padding: 10px 12px;
-          background: rgba(255, 255, 255, 0.03);
-          border-radius: 12px;
-          border: 1px solid rgba(255, 255, 255, 0.05);
-        }
-        .label { font-weight: 700; color: #e5e7eb; width: 70px; }
-        .text { color: #cbd5e1; flex: 1; }
-        .booking-row.actions {
-          justify-content: flex-end;
-          margin-top: 14px;
-          gap: 10px;
-        }
-        .btn {
-          border: none;
-          border-radius: 10px;
-          padding: 10px 14px;
-          font-weight: 700;
-          cursor: pointer;
-          transition: transform 0.1s ease, box-shadow 0.2s ease, opacity 0.2s ease;
-        }
-        .btn.cancel {
-          background: #ef4444;
-          color: #fff;
-          box-shadow: 0 10px 25px rgba(239, 68, 68, 0.25);
-        }
-        .btn.cancel:hover { transform: translateY(-1px); }
-        .btn:disabled { opacity: 0.7; cursor: not-allowed; transform: none; box-shadow: none; }
-        .alert {
-          padding: 12px 14px;
-          border-radius: 10px;
-          margin-bottom: 12px;
-          font-size: 14px;
-        }
-        .alert.error { background: rgba(239, 68, 68, 0.12); border: 1px solid rgba(239, 68, 68, 0.4); color: #fecdd3; }
-        .loading, .empty { color: #cbd5e1; padding: 12px 4px; }
-      `}</style>
     </div>
   );
 };

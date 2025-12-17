@@ -1,14 +1,13 @@
 import { useState } from "react";
-import { useParams } from "react-router-dom";
-import api from "../services/api";
+import { useParams, useNavigate } from "react-router-dom";
+import { createBooking } from "../services/bookings";
 
 const Booking = () => {
   const { lawyerId } = useParams();
+  const navigate = useNavigate();
   const [form, setForm] = useState({
-    date: "",
-    time: "",
-    reason: "",
-    branch_id: "",
+    lawyer_id: lawyerId || "",
+    scheduled_at: "",
   });
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -26,15 +25,21 @@ const Booking = () => {
     setLoading(true);
 
     try {
-      await api.post("/bookings", {
-        lawyer_id: Number(lawyerId),
-        branch_id: form.branch_id ? Number(form.branch_id) : null,
-        date: form.date,
-        time: form.time,
-        reason: form.reason,
-      });
-      setSuccess("Booking created successfully.");
-      setForm({ date: "", time: "", reason: "", branch_id: "" });
+      const payload = {
+        lawyer_id: Number(form.lawyer_id),
+        scheduled_at: form.scheduled_at ? new Date(form.scheduled_at).toISOString() : null,
+      };
+
+      await createBooking(payload);
+      setSuccess("Booking created successfully!");
+      
+      // Clear form and optionally redirect
+      setForm({ lawyer_id: "", scheduled_at: "" });
+      
+      // Optionally redirect to bookings list after a short delay
+      setTimeout(() => {
+        navigate("/client/manage-bookings");
+      }, 2000);
     } catch (err) {
       const message =
         err?.response?.data?.detail ||
@@ -47,178 +52,60 @@ const Booking = () => {
   };
 
   return (
-    <div className="booking-page">
-      <div className="booking-card">
-        <div className="logo-block">
-          <div className="logo-mark">⚖️</div>
-          <div className="logo-text">
-            <div className="brand">LexiConnect</div>
-            <div className="tagline">Book your consultation</div>
-          </div>
-        </div>
+    <div className="min-h-screen bg-slate-900 text-white flex items-center justify-center p-6">
+      <div className="w-full max-w-md bg-slate-800 border border-slate-700 rounded-lg p-8">
+        <h2 className="text-2xl font-bold mb-6 text-center">Create Booking</h2>
 
-        <h2 className="title">Schedule a Booking</h2>
-        <p className="subtitle">
-          Lawyer ID: <span className="highlight">{lawyerId}</span>
-        </p>
-
-        <form onSubmit={handleSubmit} className="form">
-          <label className="label">
-            Date
-            <input
-              type="date"
-              name="date"
-              value={form.date}
-              onChange={handleChange}
-              required
-            />
-          </label>
-
-          <label className="label">
-            Time
-            <input
-              type="time"
-              name="time"
-              value={form.time}
-              onChange={handleChange}
-              required
-            />
-          </label>
-
-          <label className="label">
-            Branch (optional)
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium mb-2">
+              Lawyer ID <span className="text-red-400">*</span>
+            </label>
             <input
               type="number"
-              name="branch_id"
-              value={form.branch_id}
+              name="lawyer_id"
+              value={form.lawyer_id}
               onChange={handleChange}
-              placeholder="Enter branch ID"
-              min="0"
+              required
+              className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
+              placeholder="Enter lawyer ID"
             />
-          </label>
+          </div>
 
-          <label className="label">
-            Reason
-            <textarea
-              name="reason"
-              value={form.reason}
+          <div>
+            <label className="block text-sm font-medium mb-2">
+              Scheduled At (optional)
+            </label>
+            <input
+              type="datetime-local"
+              name="scheduled_at"
+              value={form.scheduled_at}
               onChange={handleChange}
-              placeholder="Briefly describe your case..."
-              rows="4"
+              className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
             />
-          </label>
+          </div>
 
-          {error && <div className="error">{error}</div>}
-          {success && <div className="success">{success}</div>}
+          {error && (
+            <div className="p-3 bg-red-900/30 border border-red-500/50 rounded-lg text-red-200 text-sm">
+              {error}
+            </div>
+          )}
 
-          <button type="submit" disabled={loading}>
-            {loading ? "Booking..." : "Confirm Booking"}
+          {success && (
+            <div className="p-3 bg-green-900/30 border border-green-500/50 rounded-lg text-green-200 text-sm">
+              {success}
+            </div>
+          )}
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full py-2 bg-amber-600 hover:bg-amber-700 disabled:bg-amber-800 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors"
+          >
+            {loading ? "Creating..." : "Create Booking"}
           </button>
         </form>
       </div>
-
-      <style>{`
-        :root { color-scheme: dark; }
-        .booking-page {
-          min-height: 100vh;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          padding: 24px;
-          background: radial-gradient(circle at 20% 20%, rgba(255, 215, 128, 0.05), transparent 25%),
-            radial-gradient(circle at 80% 30%, rgba(255, 215, 128, 0.05), transparent 25%),
-            radial-gradient(circle at 50% 80%, rgba(255, 215, 128, 0.05), transparent 25%),
-            #0f172a;
-        }
-        .booking-card {
-          width: min(520px, 90vw);
-          background: linear-gradient(135deg, rgba(31, 41, 63, 0.95), rgba(20, 26, 40, 0.95));
-          border: 1px solid rgba(255, 255, 255, 0.06);
-          box-shadow: 0 20px 60px rgba(0, 0, 0, 0.45);
-          border-radius: 18px;
-          padding: 36px 36px 30px;
-          backdrop-filter: blur(8px);
-          color: #e5e7eb;
-        }
-        .logo-block {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-          justify-content: center;
-          margin-bottom: 12px;
-        }
-        .logo-mark { font-size: 28px; }
-        .logo-text .brand { font-size: 20px; font-weight: 700; color: #f7d560; }
-        .logo-text .tagline { font-size: 12px; color: #9ca3af; }
-        .title {
-          text-align: center;
-          margin: 8px 0 4px;
-          font-size: 22px;
-          font-weight: 700;
-          color: #f9fafb;
-        }
-        .subtitle {
-          text-align: center;
-          color: #cbd5e1;
-          margin-bottom: 18px;
-          font-size: 14px;
-        }
-        .highlight { color: #f5c147; font-weight: 700; }
-        .form { display: flex; flex-direction: column; gap: 14px; }
-        .label { display: flex; flex-direction: column; gap: 6px; font-size: 14px; color: #cbd5e1; }
-        input, textarea {
-          background: #0b1220;
-          border: 1px solid rgba(255, 255, 255, 0.08);
-          border-radius: 10px;
-          padding: 12px 14px;
-          color: #f8fafc;
-          font-size: 14px;
-          transition: border-color 0.2s, box-shadow 0.2s;
-        }
-        textarea { resize: vertical; min-height: 100px; }
-        input:focus, textarea:focus {
-          outline: none;
-          border-color: #f5c147;
-          box-shadow: 0 0 0 3px rgba(245, 193, 71, 0.2);
-        }
-        button {
-          margin-top: 4px;
-          padding: 12px 14px;
-          border: none;
-          border-radius: 10px;
-          background: linear-gradient(90deg, #f5c147, #f1a93c);
-          color: #1f2937;
-          font-weight: 700;
-          cursor: pointer;
-          transition: transform 0.1s ease, box-shadow 0.2s ease, opacity 0.2s ease;
-        }
-        button:hover {
-          transform: translateY(-1px);
-          box-shadow: 0 10px 25px rgba(245, 193, 71, 0.25);
-        }
-        button:disabled {
-          opacity: 0.7;
-          cursor: not-allowed;
-          transform: none;
-          box-shadow: none;
-        }
-        .error {
-          background: rgba(239, 68, 68, 0.1);
-          border: 1px solid rgba(239, 68, 68, 0.4);
-          color: #fecdd3;
-          padding: 10px 12px;
-          border-radius: 10px;
-          font-size: 13px;
-        }
-        .success {
-          background: rgba(34, 197, 94, 0.12);
-          border: 1px solid rgba(34, 197, 94, 0.35);
-          color: #bbf7d0;
-          padding: 10px 12px;
-          border-radius: 10px;
-          font-size: 13px;
-        }
-      `}</style>
     </div>
   );
 };

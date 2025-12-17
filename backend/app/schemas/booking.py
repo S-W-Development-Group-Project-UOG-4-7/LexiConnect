@@ -1,29 +1,40 @@
-from datetime import date, time
+from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 
-class BookingBase(BaseModel):
+class BookingCreate(BaseModel):
     lawyer_id: int
     branch_id: Optional[int] = None
-    date: date
-    time: time
-    reason: Optional[str] = None
-
-
-class BookingCreate(BookingBase):
-    pass
+    scheduled_at: Optional[datetime] = None
+    note: Optional[str] = None
 
 
 class BookingOut(BaseModel):
     id: int
-    lawyer_name: Optional[str] = None
-    branch_name: Optional[str] = None
-    date: date
-    time: time
+    client_id: int
+    lawyer_id: int
+    branch_id: Optional[int] = None
+    scheduled_at: Optional[datetime] = None
+    note: Optional[str] = None
+    status: str
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class BookingUpdate(BaseModel):
+    lawyer_id: Optional[int] = None
+    branch_id: Optional[int] = None
+    scheduled_at: Optional[datetime] = None
+    note: Optional[str] = None
+    status: Optional[str] = None
+
+
+class BookingCancelOut(BaseModel):
+    id: int
     status: str
 
-    class Config:
-        orm_mode = True
-
+    model_config = ConfigDict(from_attributes=True)
