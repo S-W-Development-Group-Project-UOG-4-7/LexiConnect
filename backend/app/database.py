@@ -12,7 +12,7 @@ load_dotenv()
 # For production, always set DATABASE_URL in environment.
 DATABASE_URL = os.getenv(
     "DATABASE_URL",
-    "postgresql+psycopg2://lexiconnect:lexiconnect@127.0.0.1:5433/lexiconnect",
+    "postgresql+psycopg2://lexiconnect:lexiconnect@127.0.0.1:5432/lexiconnect",
 )
 
 # If we are using SQLite, we need connect_args.
@@ -24,7 +24,21 @@ engine = create_engine(
     connect_args=connect_args,
 )
 
-print("✅ USING DATABASE:", engine.url)
+# Mask password in DATABASE_URL for logging
+def mask_password(url_str: str) -> str:
+    """Mask password in database URL for safe logging."""
+    from urllib.parse import urlparse, urlunparse
+    parsed = urlparse(str(url_str))
+    if parsed.password:
+        # Replace password with ***
+        netloc = f"{parsed.username}:***@{parsed.hostname}"
+        if parsed.port:
+            netloc += f":{parsed.port}"
+        masked = urlunparse((parsed.scheme, netloc, parsed.path, parsed.params, parsed.query, parsed.fragment))
+        return masked
+    return str(url_str)
+
+print("✅ USING DATABASE:", mask_password(engine.url))
 
 SessionLocal = sessionmaker(
     autocommit=False,

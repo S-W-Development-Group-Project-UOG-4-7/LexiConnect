@@ -87,115 +87,109 @@ LexiConnect/
 
 ---
 
-## 🚀 Getting Started (Development)
+## 🚀 Run Locally (Windows)
 
-### 🔹 Backend – FastAPI
+### 📦 Start Database
 
-1. Open a terminal and navigate to the backend:
+From the repository root, start PostgreSQL using Docker Compose:
+
+```powershell
+docker compose up -d db
+```
+
+This will start the PostgreSQL database in the background. Verify it's running:
+```powershell
+docker ps
+```
+
+### 🔧 Backend Setup
+
+1. **Navigate to backend directory:**
    ```powershell
    cd backend
-````
+   ```
 
-2. Activate virtual environment:
+2. **Create virtual environment (if missing):**
+   ```powershell
+   python -m venv venv
+   ```
 
+3. **Activate virtual environment:**
    ```powershell
    .\venv\Scripts\Activate
    ```
 
-3. Install dependencies:
-
+4. **Install dependencies:**
    ```powershell
    pip install -r requirements.txt
    ```
 
-4. Run the server:
-
+5. **Configure environment variables:**
    ```powershell
-   uvicorn app.main:app --reload
-   ```
-
-5. API Documentation (Swagger):
-
-   ```
-   http://127.0.0.1:8000/docs
-   ```
-
-### 🔹 DB Setup with Docker + Alembic
-
-1. **Start PostgreSQL using Docker Compose** (from repo root):
-
-   ```powershell
-   docker-compose up -d
-   ```
-
-2. **Configure environment variables**:
-
-   Copy `backend/.env.example` to `backend/.env` and update values if needed:
-   ```powershell
-   cd backend
    copy .env.example .env
    ```
+   **⚠️ Important:** Do NOT commit the `.env` file to Git. Edit `.env` if you need to change database credentials.
 
-3. **Install dependencies** (if not already done):
-
-   ```powershell
-   pip install -r requirements.txt
-   ```
-
-4. **Create initial migration** (run alembic commands only inside backend/):
-
-   ```powershell
-   cd backend
-   alembic revision --autogenerate -m "Initial migration"
-   ```
-
-5. **Apply migrations to database**:
-
+6. **Run database migrations:**
    ```powershell
    alembic upgrade head
    ```
 
-6. **Verify database connection**:
-
-   The FastAPI server will automatically connect on startup. Check the console for:
-   ```
-   ✅ USING DATABASE: postgresql+psycopg2://...
+7. **Start the FastAPI server:**
+   ```powershell
+   uvicorn app.main:app --reload
    ```
 
-**Note:** For subsequent model changes, create new migrations with (run alembic commands only inside backend/):
-```powershell
-cd backend
-alembic revision --autogenerate -m "Description of changes"
-alembic upgrade head
-```
+   The API will be available at: `http://127.0.0.1:8000`
+   
+   API Documentation (Swagger): `http://127.0.0.1:8000/docs`
 
----
+### 🎨 Frontend Setup
 
-### 🔹 Frontend – React + Vite
-
-1. Open a new terminal:
-
+1. **Navigate to frontend directory:**
    ```powershell
    cd frontend
    ```
 
-2. Install dependencies:
-
+2. **Install dependencies:**
    ```powershell
    npm install
    ```
 
-3. Start development server:
-
+3. **Start development server:**
    ```powershell
    npm run dev
    ```
 
-4. Access frontend:
+   The frontend will be available at: `http://127.0.0.1:5173`
 
-   ```
-   http://127.0.0.1:5173
-   ```
+---
+
+### 🔍 Troubleshooting
+
+#### "password authentication failed"
+- **Cause:** Database credentials in `.env` don't match Docker Compose settings
+- **Solution:** Check `backend/.env` matches the database credentials in `docker-compose.yml`:
+  - `POSTGRES_USER=lexiconnect`
+  - `POSTGRES_PASSWORD=lexiconnect`
+  - `POSTGRES_DB=lexiconnect`
+
+#### "DATABASE_URL not set"
+- **Cause:** Missing or incorrect `DATABASE_URL` in `backend/.env`
+- **Solution:** 
+  1. Ensure you've copied `backend/.env.example` to `backend/.env`
+  2. Verify `DATABASE_URL` in `.env` matches the format:
+     ```
+     DATABASE_URL=postgresql+psycopg2://lexiconnect:lexiconnect@localhost:5432/lexiconnect
+     ```
+
+#### "alembic revision mismatch / run upgrade head"
+- **Cause:** Database schema is out of sync with migration files
+- **Solution:** 
+  1. Ensure you're in the `backend` directory
+  2. Run: `alembic upgrade head`
+  3. If issues persist, check that all migration files in `backend/alembic/versions/` are committed to Git
+  4. If the database is fresh/empty, you may need to reset: drop and recreate the database, then run `alembic upgrade head`
 
 ---
 
