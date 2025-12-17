@@ -142,9 +142,10 @@ LexiConnect/
    pip install -r requirements.txt
    ```
 
-4. **Create initial migration**:
+4. **Create initial migration** (run alembic commands only inside backend/):
 
    ```powershell
+   cd backend
    alembic revision --autogenerate -m "Initial migration"
    ```
 
@@ -161,8 +162,9 @@ LexiConnect/
    ✅ USING DATABASE: postgresql+psycopg2://...
    ```
 
-**Note:** For subsequent model changes, create new migrations with:
+**Note:** For subsequent model changes, create new migrations with (run alembic commands only inside backend/):
 ```powershell
+cd backend
 alembic revision --autogenerate -m "Description of changes"
 alembic upgrade head
 ```
