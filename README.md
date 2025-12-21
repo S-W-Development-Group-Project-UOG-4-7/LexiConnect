@@ -193,6 +193,38 @@ docker ps
 
 ---
 
+## 👥 Demo Accounts + Seed
+
+To populate the database with demo accounts and sample data, run the seed script:
+
+```powershell
+cd backend
+python scripts/seed.py
+```
+
+### Demo Accounts Created
+
+The seed script creates the following accounts (only if they don't already exist):
+
+**Admin:**
+- Email: `admin@lexiconnect.local`
+- Password: `Admin@123`
+
+**Lawyers:**
+- `llawyer@lexiconnect.local` / `Lawyer@123`
+- `lawyer2@lexiconnect.local` / `Lawyer@123`
+- `lawyer3@lexiconnect.local` / `Lawyer@123`
+
+**Clients:**
+- `client@lexiconnect.local` / `Client@123`
+- `client2@lexiconnect.local` / `Client@123`
+
+The script also creates **4 sample bookings** with mixed statuses (pending, confirmed, cancelled).
+
+**Note:** The seed script is **idempotent** - it will not create duplicate accounts or bookings. It's safe to run multiple times.
+
+---
+
 ## 🔀 Git Workflow (University Assessed)
 
 * `main` → Stable, release-ready code
