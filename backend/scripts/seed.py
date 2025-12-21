@@ -1,6 +1,6 @@
 """
 Safe idempotent seed script for FastAPI + SQLAlchemy.
-Creates demo accounts (admin, lawyers, clients) and sample bookings if they don't exist.
+Creates demo accounts (admin, lawyers, clients), sample bookings, and sample disputes if they don't exist.
 Does NOT wipe existing data.
 
 Usage:
@@ -10,7 +10,7 @@ Usage:
 """
 import sys
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 # Add backend directory to path for imports
 backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -19,6 +19,7 @@ sys.path.insert(0, backend_dir)
 from app.database import SessionLocal
 from app.models.user import User, UserRole
 from app.models.booking import Booking
+from app.modules.disputes.models import Dispute
 from app.routers.auth import get_password_hash, get_user_by_email
 
 
@@ -27,7 +28,7 @@ def get_or_create_user(db, email, password, full_name, role):
     existing = get_user_by_email(db, email)
     if existing:
         return existing, False
-    
+
     hashed_password = get_password_hash(password)
     new_user = User(
         full_name=full_name,
@@ -63,14 +64,14 @@ def seed_users(db):
             "full_name": "Client One",
             "role": UserRole.client,
         },
-        # Additional clients (at least 2 total)
+        # Additional clients
         {
             "email": "client2@lexiconnect.local",
             "password": "Client@123",
             "full_name": "Client Two",
             "role": UserRole.client,
         },
-        # Additional lawyers (at least 3 total)
+        # Additional lawyers
         {
             "email": "lawyer2@lexiconnect.local",
             "password": "Lawyer@123",
@@ -84,11 +85,11 @@ def seed_users(db):
             "role": UserRole.lawyer,
         },
     ]
-    
+
     created = []
     existing = []
     users_dict = {}
-    
+
     for user_data in users_to_create:
         user, was_created = get_or_create_user(
             db,
@@ -102,7 +103,7 @@ def seed_users(db):
             created.append(user_data["email"])
         else:
             existing.append(user_data["email"])
-    
+
     return {
         "created": created,
         "existing": existing,
@@ -111,20 +112,19 @@ def seed_users(db):
 
 
 def seed_bookings(db, users_dict):
-    """Seed demo bookings. Returns dict with created/existing counts."""
-    # Get client and lawyer users
+    """Seed demo bookings. Returns dict with created/existing counts + booking objects."""
     client1 = users_dict.get("client@lexiconnect.local")
     client2 = users_dict.get("client2@lexiconnect.local")
     lawyer1 = users_dict.get("lawyer@lexiconnect.local")
     lawyer2 = users_dict.get("lawyer2@lexiconnect.local")
     lawyer3 = users_dict.get("lawyer3@lexiconnect.local")
-    
+
     if not all([client1, client2, lawyer1, lawyer2, lawyer3]):
         print("⚠️  Warning: Not all required users exist. Skipping bookings.")
-        return {"created": [], "existing": []}
-    
-    # Define bookings to create
-    now = datetime.utcnow()
+        return {"created": [], "existing": [], "bookings": []}
+
+    now = datetime.now(timezone.utc)
+
     bookings_to_create = [
         {
             "client_id": client1.id,
@@ -154,93 +154,134 @@ def seed_bookings(db, users_dict):
             "client_id": client2.id,
             "lawyer_id": lawyer3.id,
             "branch_id": None,
-            "scheduled_at": now + timedelta(days=-1),  # Past booking
+            "scheduled_at": now + timedelta(days=-1),
             "note": "Completed consultation",
             "status": "cancelled",
         },
     ]
-    
+
     created = []
     existing = []
-    
+    booking_objs = []
+
     for booking_data in bookings_to_create:
-        # Check if booking already exists (simple check: same client, lawyer, scheduled_at)
         existing_booking = db.query(Booking).filter(
             Booking.client_id == booking_data["client_id"],
             Booking.lawyer_id == booking_data["lawyer_id"],
             Booking.scheduled_at == booking_data["scheduled_at"],
         ).first()
-        
+
         if existing_booking:
             existing.append(f"Booking {existing_booking.id}")
+            booking_objs.append(existing_booking)
             continue
-        
+
         new_booking = Booking(**booking_data)
         db.add(new_booking)
-        created.append(f"Client {booking_data['client_id']} -> Lawyer {booking_data['lawyer_id']} ({booking_data['status']})")
-    
-    return {
-        "created": created,
-        "existing": existing,
-    }
+        db.flush()
+        booking_objs.append(new_booking)
+
+        created.append(
+            f"Booking {new_booking.id} (Client {booking_data['client_id']} -> Lawyer {booking_data['lawyer_id']} | {booking_data['status']})"
+        )
+
+    return {"created": created, "existing": existing, "bookings": booking_objs}
+
+
+def seed_disputes(db, booking_objs):
+    """Seed demo disputes linked to bookings. Idempotent."""
+    if not booking_objs:
+        print("⚠️  Warning: No bookings found. Skipping disputes.")
+        return {"created": [], "existing": []}
+
+    sample_bookings = booking_objs[:2]
+
+    created = []
+    existing = []
+
+    for bk in sample_bookings:
+        title = f"Dispute about booking #{bk.id}"
+
+        already = db.query(Dispute).filter(
+            Dispute.booking_id == bk.id,
+            Dispute.title == title,
+        ).first()
+
+        if already:
+            existing.append(f"Dispute {already.id} (booking {bk.id})")
+            continue
+
+        d = Dispute(
+            booking_id=bk.id,
+            client_id=bk.client_id,
+            title=title,
+            description=f"Seeded dispute: client raised an issue regarding booking {bk.id}.",
+            status="PENDING",
+            admin_note=None,
+        )
+        db.add(d)
+        db.flush()
+        created.append(f"Dispute {d.id} (booking {bk.id})")
+
+    return {"created": created, "existing": existing}
 
 
 def main():
-    """Main seed function."""
     print("🌱 Starting seed script...")
     print("=" * 60)
-    
+
     db = SessionLocal()
     try:
-        # Seed users
         print("\n📦 Seeding users...")
         users_result = seed_users(db)
-        
-        # Commit users first so bookings can reference them
         db.commit()
-        
-        # Refresh users to get their IDs
+
         for email in users_result["users"]:
             db.refresh(users_result["users"][email])
-        
-        
-        # Seed bookings
+
         print("\n📅 Seeding bookings...")
         bookings_result = seed_bookings(db, users_result["users"])
-
-        
-        # Commit bookings
         db.commit()
-        
-        # Print summary
+
+        for b in bookings_result["bookings"]:
+            db.refresh(b)
+
+        print("\n⚖️ Seeding disputes...")
+        disputes_result = seed_disputes(db, bookings_result["bookings"])
+        db.commit()
+
         print("\n" + "=" * 60)
         print("✅ Seed Summary")
         print("=" * 60)
-        
+
         print(f"\n👥 Users:")
         print(f"   Created: {len(users_result['created'])}")
-        if users_result['created']:
-            for email in users_result['created']:
-                print(f"     ✓ {email}")
+        for email in users_result["created"]:
+            print(f"     ✓ {email}")
         print(f"   Already existed: {len(users_result['existing'])}")
-        if users_result['existing']:
-            for email in users_result['existing']:
-                print(f"     - {email}")
-        
+        for email in users_result["existing"]:
+            print(f"     - {email}")
+
         print(f"\n📋 Bookings:")
         print(f"   Created: {len(bookings_result['created'])}")
-        if bookings_result['created']:
-            for booking in bookings_result['created']:
-                print(f"     ✓ {booking}")
+        for item in bookings_result["created"]:
+            print(f"     ✓ {item}")
         print(f"   Already existed: {len(bookings_result['existing'])}")
-        if bookings_result['existing']:
-            for booking in bookings_result['existing']:
-                print(f"     - {booking}")
-        
+        for item in bookings_result["existing"]:
+            print(f"     - {item}")
+
+        print(f"\n⚖️ Disputes:")
+        print(f"   Created: {len(disputes_result['created'])}")
+        for item in disputes_result["created"]:
+            print(f"     ✓ {item}")
+        print(f"   Already existed: {len(disputes_result['existing'])}")
+        for item in disputes_result["existing"]:
+            print(f"     - {item}")
+
         print("\n" + "=" * 60)
         print("✅ Seed completed successfully!")
         print("=" * 60)
-        
+
     except Exception as e:
         db.rollback()
         print(f"\n❌ Error during seeding: {e}")
