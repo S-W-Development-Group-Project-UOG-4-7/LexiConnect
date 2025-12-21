@@ -6,7 +6,8 @@ import ManageBookings from "../pages/ManageBookings";
 import BranchManagement from "../pages/BranchManagement";
 import ServicePackages from "../pages/ServicePackages";
 import ChecklistTemplates from "../pages/ChecklistTemplates";
-import LawyerKYC from "../pages/LawyerKYC";
+import { LawyerKYC } from "../features/lawyer_kyc";
+
 
 
 import AvailabilityEditor from "../pages/AvailabilityEditor";
@@ -101,7 +102,7 @@ const AppRoutes = () => {
       <Route
         path="/booking/:lawyerId"
         element={<Navigate to="/client/booking/:lawyerId" replace />}
-      />
+      />cd
       <Route path="/booking" element={<Navigate to="/client/booking" replace />} />
       <Route
         path="/manage-bookings"
