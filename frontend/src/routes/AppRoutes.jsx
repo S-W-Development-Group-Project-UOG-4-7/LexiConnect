@@ -28,8 +28,7 @@ import DisputeDetailPage from "../features/disputes/DisputeDetailPage";
 // import AdminDisputesListPage from "../features/disputes/AdminDisputesListPage";
 // import AdminDisputeDetailPage from "../features/disputes/AdminDisputeDetailPage";
 
-// OPTIONAL (only keep if file exists)
-// import LawyerIncomingBookingsPage from "../features/bookings/LawyerIncomingBookingsPage";
+import LawyerIncomingBookingsPage from "../features/bookings/LawyerIncomingBookingsPage";
 
 const DashboardRedirect = () => {
   const role = getRole() || localStorage.getItem("role");
@@ -92,9 +91,7 @@ const AppRoutes = () => {
         <Route path="/lawyer/services" element={<ServicePackages />} />
         <Route path="/lawyer/checklist" element={<ChecklistTemplates />} />
         <Route path="/lawyer/kyc" element={<LawyerKYC />} />
-
-        {/* Enable this only if the page file exists */}
-        {/* <Route path="/lawyer/bookings/incoming" element={<LawyerIncomingBookingsPage />} /> */}
+        <Route path="/lawyer/bookings/incoming" element={<LawyerIncomingBookingsPage />} />
       </Route>
 
       {/* Admin area */}
