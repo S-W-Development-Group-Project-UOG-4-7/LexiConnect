@@ -48,7 +48,7 @@ export const cancelBooking = async (id) => {
 };
 
 /**
- * List incoming booking requests for lawyer (status: PENDING)
+ * List incoming booking requests for lawyer (status: pending)
  * Lawyer only endpoint
  * @returns {Promise<Array>} Array of pending booking objects
  */
@@ -60,10 +60,42 @@ export const lawyerListIncomingBookings = async () => {
 /**
  * Confirm a booking request (lawyer only)
  * Only the assigned lawyer can confirm, only if status is PENDING
+ * @param {number} bookingId - Booking ID
+ * @returns {Promise<Object>} Confirmed booking object
+ */
+export const lawyerConfirmBooking = async (bookingId) => {
+  const { data } = await api.patch(`/api/bookings/${bookingId}/confirm`);
+  return data;
+};
+
+/**
+ * Reject a booking request (lawyer only)
+ * Only the assigned lawyer can reject, only if status is PENDING
+ * @param {number} bookingId - Booking ID
+ * @returns {Promise<Object>} Rejected booking object
+ */
+export const lawyerRejectBooking = async (bookingId) => {
+  const { data } = await api.patch(`/api/bookings/${bookingId}/reject`);
+  return data;
+};
+
+/**
+ * Get incoming booking requests for lawyer (status: pending)
+ * Lawyer only endpoint
+ * @returns {Promise<Array>} Array of pending booking objects
+ */
+export const getLawyerIncomingBookings = async () => {
+  const { data } = await api.get("/api/bookings/lawyer/incoming");
+  return data;
+};
+
+/**
+ * Confirm a booking request (lawyer only)
+ * Only the assigned lawyer can confirm, only if status is PENDING
  * @param {number} id - Booking ID
  * @returns {Promise<Object>} Confirmed booking object
  */
-export const lawyerConfirmBooking = async (id) => {
+export const confirmBooking = async (id) => {
   const { data } = await api.patch(`/api/bookings/${id}/confirm`);
   return data;
 };
@@ -74,7 +106,7 @@ export const lawyerConfirmBooking = async (id) => {
  * @param {number} id - Booking ID
  * @returns {Promise<Object>} Rejected booking object
  */
-export const lawyerRejectBooking = async (id) => {
+export const rejectBooking = async (id) => {
   const { data } = await api.patch(`/api/bookings/${id}/reject`);
   return data;
 };
