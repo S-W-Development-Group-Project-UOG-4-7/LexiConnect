@@ -6,6 +6,7 @@ const LawyerLayout = () => {
     { to: "/lawyer/dashboard", label: "Dashboard" },
     { to: "/lawyer/availability", label: "Availability" },
     { to: "/lawyer/token-queue", label: "Token Queue" },
+    { to: "/lawyer/bookings/incoming", label: "Incoming Bookings" },
     { to: "/lawyer/branches", label: "Branches" },
     { to: "/lawyer/services", label: "Services" },
     { to: "/lawyer/checklist", label: "Checklist" },

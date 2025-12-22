@@ -20,17 +20,24 @@ import LawyerLayout from "../layouts/LawyerLayout";
 import AdminLayout from "../layouts/AdminLayout";
 import { getRole } from "../services/auth";
 
+import DocumentsList from "../features/documents/pages/DocumentsList";
+import DocumentUpload from "../features/documents/pages/DocumentUpload";
+
+
+import DocumentsListPlaceholder from "../features/documents/pages/DocumentsListPlaceholder";
+import DocumentUploadPlaceholder from "../features/documents/pages/DocumentUploadPlaceholder";
+
+
 // Disputes (client)
 import SubmitDisputePage from "../features/disputes/SubmitDisputePage";
 import ClientMyDisputesPage from "../features/disputes/ClientMyDisputesPage";
 import DisputeDetailPage from "../features/disputes/DisputeDetailPage";
 
-// OPTIONAL (only keep if you actually create these files)
-// import AdminDisputesListPage from "../features/disputes/AdminDisputesListPage";
-// import AdminDisputeDetailPage from "../features/disputes/AdminDisputeDetailPage";
+// Admin disputes
+import AdminDisputesListPage from "../features/disputes/AdminDisputesListPage";
+import AdminDisputeDetailPage from "../features/disputes/AdminDisputeDetailPage";
 
-// OPTIONAL (only keep if file exists)
-// import LawyerIncomingBookingsPage from "../features/bookings/LawyerIncomingBookingsPage";
+import LawyerIncomingBookingsPage from "../features/bookings/LawyerIncomingBookingsPage";
 
 const DashboardRedirect = () => {
   const role = getRole() || localStorage.getItem("role");
@@ -57,6 +64,12 @@ const AppRoutes = () => {
       </Route>
 
       {/* Client area */}
+
+      <Route path="/client/bookings/:bookingId/documents" element={<DocumentsListPlaceholder />} />
+      <Route path="/client/bookings/:bookingId/documents/upload" element={<DocumentUploadPlaceholder />} />
+      <Route path="/client/bookings/:bookingId/documents" element={<DocumentsList />} />
+      <Route path="/client/bookings/:bookingId/documents/upload" element={<DocumentUpload />} />
+
       <Route
         element={
           <ProtectedRoute allowedRoles={["client"]}>
@@ -93,6 +106,7 @@ const AppRoutes = () => {
         <Route path="/lawyer/services" element={<ServicePackages />} />
         <Route path="/lawyer/checklist" element={<ChecklistTemplates />} />
         <Route path="/lawyer/kyc" element={<LawyerKYC />} />
+        <Route path="/lawyer/bookings/incoming" element={<LawyerIncomingBookingsPage />} />
         
         {/* Enable this only if the page file exists */}
         {/* <Route path="/lawyer/bookings/incoming" element={<LawyerIncomingBookingsPage />} /> */}
@@ -109,10 +123,10 @@ const AppRoutes = () => {
         <Route path="/admin/dashboard" element={<div>Admin Dashboard Page (Methsarani)</div>} />
         <Route path="/admin/kyc-approval" element={<div>KYC Approval Page (Methsarani)</div>} />
         <Route path="/admin/audit-log" element={<div>Audit Log Page (Methsarani)</div>} />
-
-        {/* Enable these only if the page files exist */}
-        {/* <Route path="/admin/disputes" element={<AdminDisputesListPage />} /> */}
-        {/* <Route path="/admin/disputes/:id" element={<AdminDisputeDetailPage />} /> */}
+        
+        {/* Dispute management */}
+        <Route path="/admin/disputes" element={<AdminDisputesListPage />} />
+        <Route path="/admin/disputes/:id" element={<AdminDisputeDetailPage />} />
       </Route>
 
       {/* Legacy paths redirect to new client routes */}

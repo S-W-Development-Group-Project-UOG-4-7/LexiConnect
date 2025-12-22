@@ -1,0 +1,44 @@
+from typing import Optional, List
+
+from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException
+from sqlalchemy.orm import Session
+
+from app.database import get_db
+from .schema import DocumentOut
+from .service import save_upload, create_document, list_documents, get_document, delete_document
+
+router = APIRouter(prefix="/api/documents", tags=["Documents"])
+
+
+@router.post("", response_model=DocumentOut)
+def upload_document(
+    booking_id: int = Form(...),
+    file_name: str = Form(...),
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+):
+    file_path = save_upload(file)
+    doc = create_document(db, booking_id=booking_id, file_name=file_name, file_path=file_path)
+    return doc
+
+
+@router.get("", response_model=List[DocumentOut])
+def get_documents(booking_id: Optional[int] = None, db: Session = Depends(get_db)):
+    # Allow /api/documents?booking_id=30
+    return list_documents(db, booking_id=booking_id)
+
+
+@router.get("/{doc_id}", response_model=DocumentOut)
+def get_document_by_id(doc_id: int, db: Session = Depends(get_db)):
+    doc = get_document(db, doc_id)
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+    return doc
+
+
+@router.delete("/{doc_id}", status_code=204)
+def delete_document_by_id(doc_id: int, db: Session = Depends(get_db)):
+    ok = delete_document(db, doc_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Document not found")
+    return None
