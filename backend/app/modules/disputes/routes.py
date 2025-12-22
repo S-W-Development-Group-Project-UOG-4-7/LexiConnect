@@ -4,7 +4,7 @@ print("✅ LOADED disputes routes from:", __file__)
 
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -84,6 +84,25 @@ def list_my_disputes(
         .order_by(Dispute.id.desc())
         .all()
     )
+    return disputes
+
+
+# 2b) GET /api/disputes (admin only, with optional status filter)
+@router.get("", response_model=List[DisputeOut])
+def list_disputes(
+    status: Optional[str] = Query(None, description="Filter by status (PENDING, RESOLVED)"),
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    if not _is_admin(current_user):
+        raise HTTPException(status_code=403, detail="Only admins can view all disputes")
+
+    query = db.query(Dispute)
+
+    if status:
+        query = query.filter(Dispute.status == status.upper())
+
+    disputes = query.order_by(Dispute.id.desc()).all()
     return disputes
 
 
