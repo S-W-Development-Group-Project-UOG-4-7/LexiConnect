@@ -1,17 +1,14 @@
-# Standard library imports
+# Load environment variables first
 from dotenv import load_dotenv
+load_dotenv()
 
 # Third-party imports
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
-from app.modules.kyc.router import router as kyc_router
-
-
-# Load environment variables before other imports
-load_dotenv()
 
 # Local application imports
+from app.modules.kyc.router import router as kyc_router
 from .api.v1 import admin as admin_v1, booking as booking_v1
 from .database import Base, engine, SessionLocal
 from .models import branch, kyc_submission, lawyer
@@ -23,7 +20,6 @@ from .routers import (
     branches,
     dev,
     documents,
- 
     lawyers,
 )
 from .seed import seed_demo_users
@@ -71,15 +67,16 @@ def health_check():
 app.include_router(auth.router)
 app.include_router(lawyers.router)
 app.include_router(bookings.router)
-# documents router will be mounted under /bookings
+
+# Documents
 app.include_router(documents.router)
 app.include_router(documents.router, prefix="/bookings")
+
 app.include_router(admin.router)
 app.include_router(availability.router)
 app.include_router(branches.router)
-app.include_router(dev.router)          # DEV-ONLY endpoints
+app.include_router(dev.router)  # DEV-ONLY endpoints
 app.include_router(kyc_router)
-
 
 # API v1 routers
 app.include_router(admin_v1.router)
@@ -106,7 +103,6 @@ def custom_openapi():
     }
 
     openapi_schema["security"] = [{"BearerAuth": []}]
-
     app.openapi_schema = openapi_schema
     return openapi_schema
 
