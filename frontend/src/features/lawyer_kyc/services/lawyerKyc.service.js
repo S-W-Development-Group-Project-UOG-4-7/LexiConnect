@@ -7,5 +7,5 @@ export const submitKyc = (data) => {
 
 
 export const getMyKyc = () => {
-  return axios.get("/api/kyc/me");
+  return api.get("/kyc/my");
 };
