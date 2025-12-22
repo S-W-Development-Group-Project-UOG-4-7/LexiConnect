@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { listMyBookings, cancelBooking } from "../services/bookings";
 
 const ManageBookings = () => {
@@ -6,6 +7,7 @@ const ManageBookings = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [actionId, setActionId] = useState(null);
+  const navigate = useNavigate();
 
   const fetchBookings = async () => {
     setError("");
@@ -101,15 +103,23 @@ const ManageBookings = () => {
                   </div>
                 </div>
 
-                {booking.status !== "cancelled" && (
+                <div className="flex gap-2">
                   <button
-                    onClick={() => handleCancel(booking.id)}
-                    disabled={actionId === booking.id}
-                    className="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-red-800 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg font-medium transition-colors"
+                    onClick={() => navigate(`/client/bookings/${booking.id}/documents/upload`)}
+                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
                   >
-                    {actionId === booking.id ? "Cancelling..." : "Cancel"}
+                    Documents
                   </button>
-                )}
+                  {booking.status !== "cancelled" && (
+                    <button
+                      onClick={() => handleCancel(booking.id)}
+                      disabled={actionId === booking.id}
+                      className="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-red-800 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg font-medium transition-colors"
+                    >
+                      {actionId === booking.id ? "Cancelling..." : "Cancel"}
+                    </button>
+                  )}
+                </div>
               </div>
             ))}
           </div>

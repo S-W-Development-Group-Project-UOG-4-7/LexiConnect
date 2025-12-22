@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
+from app.modules.documents.routes import router as documents_router
 
 # Load environment variables before other imports
 load_dotenv()
