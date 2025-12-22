@@ -25,9 +25,9 @@ import SubmitDisputePage from "../features/disputes/SubmitDisputePage";
 import ClientMyDisputesPage from "../features/disputes/ClientMyDisputesPage";
 import DisputeDetailPage from "../features/disputes/DisputeDetailPage";
 
-// OPTIONAL (only keep if you actually create these files)
-// import AdminDisputesListPage from "../features/disputes/AdminDisputesListPage";
-// import AdminDisputeDetailPage from "../features/disputes/AdminDisputeDetailPage";
+// Admin disputes
+import AdminDisputesListPage from "../features/disputes/AdminDisputesListPage";
+import AdminDisputeDetailPage from "../features/disputes/AdminDisputeDetailPage";
 
 import LawyerIncomingBookingsPage from "../features/bookings/LawyerIncomingBookingsPage";
 
@@ -109,10 +109,10 @@ const AppRoutes = () => {
         <Route path="/admin/dashboard" element={<div>Admin Dashboard Page (Methsarani)</div>} />
         <Route path="/admin/kyc-approval" element={<div>KYC Approval Page (Methsarani)</div>} />
         <Route path="/admin/audit-log" element={<div>Audit Log Page (Methsarani)</div>} />
-
-        {/* Enable these only if the page files exist */}
-        {/* <Route path="/admin/disputes" element={<AdminDisputesListPage />} /> */}
-        {/* <Route path="/admin/disputes/:id" element={<AdminDisputeDetailPage />} /> */}
+        
+        {/* Dispute management */}
+        <Route path="/admin/disputes" element={<AdminDisputesListPage />} />
+        <Route path="/admin/disputes/:id" element={<AdminDisputeDetailPage />} />
       </Route>
 
       {/* Legacy paths redirect to new client routes */}

@@ -5,6 +5,7 @@ const AdminLayout = () => {
   const navItems = [
     { to: "/admin/dashboard", label: "Dashboard" },
     { to: "/admin/kyc-approval", label: "KYC Approval" },
+    { to: "/admin/disputes", label: "Disputes" },
     { to: "/admin/audit-log", label: "Audit Log" },
   ];
 
