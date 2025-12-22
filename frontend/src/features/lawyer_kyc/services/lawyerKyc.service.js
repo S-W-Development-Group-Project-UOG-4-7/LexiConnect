@@ -1,8 +1,10 @@
-import axios from "../../../lib/axios";
+import api from "../../../services/api";
+
 
 export const submitKyc = (data) => {
-  return axios.post("/api/kyc", data);
+  return api.post("/kyc/", data);
 };
+
 
 export const getMyKyc = () => {
   return axios.get("/api/kyc/me");
