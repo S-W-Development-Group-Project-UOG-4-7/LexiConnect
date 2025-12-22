@@ -71,6 +71,8 @@ function LawyerKYC() {
   }[kycStatus];
 
   return (
+
+    
     <div className="min-h-screen bg-[#1e1f23] py-8 px-4">
       <div className="max-w-6xl mx-auto space-y-6">
         <div className={`rounded-md px-4 py-3 ${bannerClasses}`}>
