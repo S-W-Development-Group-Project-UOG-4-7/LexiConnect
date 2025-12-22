@@ -87,10 +87,10 @@ def list_my_disputes(
     return disputes
 
 
-# 2b) GET /api/disputes (admin only, with optional status filter)
+# 3) GET /api/disputes (admin only)
 @router.get("", response_model=List[DisputeOut])
 def list_disputes(
-    status: Optional[str] = Query(None, description="Filter by status (PENDING, RESOLVED)"),
+    status: Optional[str] = Query(None, description="Filter by status (PENDING or RESOLVED)"),
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
@@ -99,14 +99,21 @@ def list_disputes(
 
     query = db.query(Dispute)
 
+    # Apply status filter if provided
     if status:
-        query = query.filter(Dispute.status == status.upper())
+        status_upper = status.upper()
+        if status_upper not in ("PENDING", "RESOLVED"):
+            raise HTTPException(
+                status_code=400,
+                detail="Status filter must be either 'PENDING' or 'RESOLVED'",
+            )
+        query = query.filter(Dispute.status == status_upper)
 
     disputes = query.order_by(Dispute.id.desc()).all()
     return disputes
 
 
-# 3) GET /api/disputes/{id} (only owner OR admin)
+# 4) GET /api/disputes/{id} (only owner OR admin)
 @router.get("/{dispute_id}", response_model=DisputeOut)
 def get_dispute(
     dispute_id: int,
@@ -121,7 +128,7 @@ def get_dispute(
     raise HTTPException(status_code=403, detail="Not allowed to view this dispute")
 
 
-# 4) PATCH /api/disputes/{id}
+# 5) PATCH /api/disputes/{id}
 @router.patch("/{dispute_id}", response_model=DisputeOut)
 def update_dispute(
     dispute_id: int,
