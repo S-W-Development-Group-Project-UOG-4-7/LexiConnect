@@ -20,6 +20,14 @@ import LawyerLayout from "../layouts/LawyerLayout";
 import AdminLayout from "../layouts/AdminLayout";
 import { getRole } from "../services/auth";
 
+import DocumentsList from "../features/documents/pages/DocumentsList";
+import DocumentUpload from "../features/documents/pages/DocumentUpload";
+
+
+import DocumentsListPlaceholder from "../features/documents/pages/DocumentsListPlaceholder";
+import DocumentUploadPlaceholder from "../features/documents/pages/DocumentUploadPlaceholder";
+
+
 // Disputes (client)
 import SubmitDisputePage from "../features/disputes/SubmitDisputePage";
 import ClientMyDisputesPage from "../features/disputes/ClientMyDisputesPage";
@@ -56,6 +64,12 @@ const AppRoutes = () => {
       </Route>
 
       {/* Client area */}
+
+      <Route path="/client/bookings/:bookingId/documents" element={<DocumentsListPlaceholder />} />
+      <Route path="/client/bookings/:bookingId/documents/upload" element={<DocumentUploadPlaceholder />} />
+      <Route path="/client/bookings/:bookingId/documents" element={<DocumentsList />} />
+      <Route path="/client/bookings/:bookingId/documents/upload" element={<DocumentUpload />} />
+
       <Route
         element={
           <ProtectedRoute allowedRoles={["client"]}>
