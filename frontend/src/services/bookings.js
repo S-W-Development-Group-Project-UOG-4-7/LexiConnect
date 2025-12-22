@@ -46,3 +46,35 @@ export const cancelBooking = async (id) => {
   const { data } = await api.patch(`/api/bookings/${id}/cancel`);
   return data;
 };
+
+/**
+ * List incoming booking requests for lawyer (status: PENDING)
+ * Lawyer only endpoint
+ * @returns {Promise<Array>} Array of pending booking objects
+ */
+export const lawyerListIncomingBookings = async () => {
+  const { data } = await api.get("/api/bookings/lawyer/incoming");
+  return data;
+};
+
+/**
+ * Confirm a booking request (lawyer only)
+ * Only the assigned lawyer can confirm, only if status is PENDING
+ * @param {number} id - Booking ID
+ * @returns {Promise<Object>} Confirmed booking object
+ */
+export const lawyerConfirmBooking = async (id) => {
+  const { data } = await api.patch(`/api/bookings/${id}/confirm`);
+  return data;
+};
+
+/**
+ * Reject a booking request (lawyer only)
+ * Only the assigned lawyer can reject, only if status is PENDING
+ * @param {number} id - Booking ID
+ * @returns {Promise<Object>} Rejected booking object
+ */
+export const lawyerRejectBooking = async (id) => {
+  const { data } = await api.patch(`/api/bookings/${id}/reject`);
+  return data;
+};
