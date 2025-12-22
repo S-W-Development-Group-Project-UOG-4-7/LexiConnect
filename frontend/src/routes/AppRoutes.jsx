@@ -28,8 +28,7 @@ import DisputeDetailPage from "../features/disputes/DisputeDetailPage";
 // import AdminDisputesListPage from "../features/disputes/AdminDisputesListPage";
 // import AdminDisputeDetailPage from "../features/disputes/AdminDisputeDetailPage";
 
-// OPTIONAL (only keep if file exists)
-// import LawyerIncomingBookingsPage from "../features/bookings/LawyerIncomingBookingsPage";
+import LawyerIncomingBookingsPage from "../features/bookings/LawyerIncomingBookingsPage";
 
 const DashboardRedirect = () => {
   const role = getRole() || localStorage.getItem("role");
