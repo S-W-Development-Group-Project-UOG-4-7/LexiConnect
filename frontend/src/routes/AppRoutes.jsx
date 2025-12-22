@@ -92,6 +92,9 @@ const AppRoutes = () => {
         <Route path="/lawyer/checklist" element={<ChecklistTemplates />} />
         <Route path="/lawyer/kyc" element={<LawyerKYC />} />
         <Route path="/lawyer/bookings/incoming" element={<LawyerIncomingBookingsPage />} />
+
+        {/* Enable this only if the page file exists */}
+        {/* <Route path="/lawyer/bookings/incoming" element={<LawyerIncomingBookingsPage />} /> */}
       </Route>
 
       {/* Admin area */}

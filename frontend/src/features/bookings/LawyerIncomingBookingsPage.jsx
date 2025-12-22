@@ -20,18 +20,11 @@ const LawyerIncomingBookingsPage = () => {
       const data = await lawyerListIncomingBookings();
       setBookings(data || []);
     } catch (err) {
-      // Handle 404 specifically with friendly message
-      if (err?.response?.status === 404) {
-        setError("Incoming bookings endpoint not available.");
-      } else {
-        // Show actual API errors for other cases
-        const message =
-          err?.response?.data?.detail ||
-          err?.response?.data?.message ||
-          err?.message ||
-          "Failed to load incoming bookings.";
-        setError(message);
-      }
+      const message =
+        err?.response?.data?.detail ||
+        err?.response?.data?.message ||
+        "Failed to load incoming bookings.";
+      setError(message);
     } finally {
       setLoading(false);
     }
