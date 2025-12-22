@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, List
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
@@ -21,7 +21,7 @@ def create_document(payload: DocumentCreate, db: Session = Depends(get_db)):
     return DocumentOut.model_validate(doc)
 
 
-@router.get("", response_model=list[DocumentOut])
+@router.get("", response_model=List[DocumentOut])
 def list_documents(booking_id: Optional[int] = None, db: Session = Depends(get_db)):
     query = db.query(Document)
     if booking_id is not None:
