@@ -23,6 +23,7 @@ from .routers import (
     documents,
     kyc,
     lawyers,
+    token_queue,
 )
 from .seed import seed_demo_users
 
@@ -77,6 +78,7 @@ app.include_router(availability.router)
 app.include_router(branches.router)
 app.include_router(kyc.router)
 app.include_router(dev.router)          # DEV-ONLY endpoints
+app.include_router(token_queue.router)
 
 # API v1 routers
 app.include_router(admin_v1.router)
