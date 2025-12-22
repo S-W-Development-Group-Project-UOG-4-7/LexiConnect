@@ -17,5 +17,8 @@ export const adminListDisputes = (status = "PENDING") =>
   api.get(`/api/disputes${status ? `?status=${status}` : ''}`);
 
 // Admin: Update dispute (admin version)
-export const adminUpdateDispute = (id, payload) =>
-  api.patch(`/api/disputes/${id}`, payload);
+
+export const adminUpdateDispute = async (id, payload) => {
+  // payload must not be empty
+  return api.patch(`/api/disputes/${id}`, payload);
+};

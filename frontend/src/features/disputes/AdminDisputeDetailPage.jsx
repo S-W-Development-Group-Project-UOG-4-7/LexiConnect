@@ -31,10 +31,41 @@ export default function AdminDisputeDetailPage() {
     load();
   }, [id]);
 
-  const resolve = async () => {
+  // This button should RESOLVE. So always send RESOLVED.
+  const resolveDispute = async () => {
     setErr("");
+
+    const payload = {
+      status: "RESOLVED",
+      admin_note: adminNote?.trim() || "",
+    };
+
     try {
-      await adminUpdateDispute(id, { status, admin_note: adminNote });
+      await adminUpdateDispute(id, payload);
+      await load();
+      alert("Dispute resolved!");
+    } catch (e) {
+      setErr(e?.response?.data?.detail || e.message || "Failed to resolve dispute");
+    }
+  };
+
+  // Optional: allow admin to save without resolving (if you want).
+  const saveChanges = async () => {
+    setErr("");
+
+    const payload = {
+      status,
+      admin_note: adminNote?.trim() || "",
+    };
+
+    // prevent empty/no-op payload (common cause of your backend error)
+    if (!payload.status && !payload.admin_note) {
+      setErr("Please set a status or add an admin note.");
+      return;
+    }
+
+    try {
+      await adminUpdateDispute(id, payload);
       await load();
       alert("Updated!");
     } catch (e) {
@@ -48,21 +79,26 @@ export default function AdminDisputeDetailPage() {
 
   return (
     <div className="p-6">
-      <button className="mb-4 px-3 py-2 rounded border border-white/10" onClick={() => nav(-1)}>
+      <button
+        className="mb-4 px-3 py-2 rounded border border-white/10"
+        onClick={() => nav(-1)}
+      >
         ← Back
       </button>
 
       <h1 className="text-2xl font-bold mb-2">Dispute #{data.id}</h1>
-      <div className="text-sm opacity-70 mb-4">{data.status}</div>
+      <div className="text-sm opacity-70 mb-4">Current Status: {data.status}</div>
 
       <div className="p-4 rounded bg-white/5 border border-white/10 mb-4">
         <div className="font-semibold">{data.title}</div>
         <div className="opacity-80 mt-2 whitespace-pre-wrap">{data.description}</div>
-        <div className="text-xs opacity-60 mt-2">Client ID: {data.client_id} | Booking ID: {data.booking_id ?? "None"}</div>
+        <div className="text-xs opacity-60 mt-2">
+          Client ID: {data.client_id} | Booking ID: {data.booking_id ?? "None"}
+        </div>
       </div>
 
       <div className="p-4 rounded bg-white/5 border border-white/10">
-        <div className="font-semibold mb-2">Resolve / Update</div>
+        <div className="font-semibold mb-2">Admin Action</div>
 
         <label className="block text-sm mb-1 opacity-70">Status</label>
         <select
@@ -82,9 +118,21 @@ export default function AdminDisputeDetailPage() {
           onChange={(e) => setAdminNote(e.target.value)}
         />
 
-        <button onClick={resolve} className="mt-3 px-4 py-2 rounded bg-white/10 hover:bg-white/20">
-          Save
-        </button>
+        <div className="flex gap-3 mt-3">
+          <button
+            onClick={saveChanges}
+            className="px-4 py-2 rounded bg-white/10 hover:bg-white/20"
+          >
+            Save Changes
+          </button>
+
+          <button
+            onClick={resolveDispute}
+            className="px-4 py-2 rounded bg-green-600/40 hover:bg-green-600/60 border border-white/10"
+          >
+            Resolve
+          </button>
+        </div>
       </div>
     </div>
   );
