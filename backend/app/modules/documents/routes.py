@@ -1,49 +1,44 @@
 from typing import Optional, List
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-
-from .models import Document
-from .schemas import DocumentCreate, DocumentOut
-
+from .schema import DocumentOut
+from .service import save_upload, create_document, list_documents, get_document, delete_document
 
 router = APIRouter(prefix="/api/documents", tags=["Documents"])
 
 
-@router.post("", response_model=DocumentOut, status_code=status.HTTP_201_CREATED)
-def create_document(payload: DocumentCreate, db: Session = Depends(get_db)):
-    doc = Document(**payload.model_dump())
-    db.add(doc)
-    db.commit()
-    db.refresh(doc)
-    return DocumentOut.model_validate(doc)
+@router.post("", response_model=DocumentOut)
+def upload_document(
+    booking_id: int = Form(...),
+    file_name: str = Form(...),
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+):
+    file_path = save_upload(file)
+    doc = create_document(db, booking_id=booking_id, file_name=file_name, file_path=file_path)
+    return doc
 
 
 @router.get("", response_model=List[DocumentOut])
-def list_documents(booking_id: Optional[int] = None, db: Session = Depends(get_db)):
-    query = db.query(Document)
-    if booking_id is not None:
-        query = query.filter(Document.booking_id == booking_id)
-    documents = query.order_by(Document.created_at.desc()).all()
-    return [DocumentOut.model_validate(d) for d in documents]
+def get_documents(booking_id: Optional[int] = None, db: Session = Depends(get_db)):
+    # Allow /api/documents?booking_id=30
+    return list_documents(db, booking_id=booking_id)
 
 
-@router.get("/{document_id}", response_model=DocumentOut)
-def get_document(document_id: int, db: Session = Depends(get_db)):
-    doc = db.query(Document).filter(Document.id == document_id).first()
+@router.get("/{doc_id}", response_model=DocumentOut)
+def get_document_by_id(doc_id: int, db: Session = Depends(get_db)):
+    doc = get_document(db, doc_id)
     if not doc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
-    return DocumentOut.model_validate(doc)
+        raise HTTPException(status_code=404, detail="Document not found")
+    return doc
 
 
-@router.delete("/{document_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_document(document_id: int, db: Session = Depends(get_db)):
-    doc = db.query(Document).filter(Document.id == document_id).first()
-    if not doc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
-
-    db.delete(doc)
-    db.commit()
+@router.delete("/{doc_id}", status_code=204)
+def delete_document_by_id(doc_id: int, db: Session = Depends(get_db)):
+    ok = delete_document(db, doc_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Document not found")
     return None

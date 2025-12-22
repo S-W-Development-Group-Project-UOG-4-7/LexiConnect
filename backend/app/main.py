@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
+from app.modules.documents.routes import router as documents_router
 
 # Load environment variables before other imports
 load_dotenv()
@@ -25,6 +26,9 @@ from .routers import (
     lawyers,
 )
 from .seed import seed_demo_users
+
+# ✅ ADD THIS IMPORT (Disputes router)
+from app.modules.disputes.routes import router as disputes_router
 
 # Create all database tables
 Base.metadata.create_all(bind=engine)
@@ -69,18 +73,23 @@ def health_check():
 app.include_router(auth.router)
 app.include_router(lawyers.router)
 app.include_router(bookings.router)
+
 # documents router will be mounted under /bookings
 app.include_router(documents.router)
 app.include_router(documents.router, prefix="/bookings")
+
 app.include_router(admin.router)
 app.include_router(availability.router)
 app.include_router(branches.router)
 app.include_router(kyc.router)
-app.include_router(dev.router)          # DEV-ONLY endpoints
+app.include_router(dev.router)  # DEV-ONLY endpoints
 
 # API v1 routers
 app.include_router(admin_v1.router)
 app.include_router(booking_v1.router)
+
+# ✅ ADD THIS INCLUDE (Disputes API)
+app.include_router(disputes_router, prefix="/api/disputes", tags=["Disputes"])
 
 # ---- Custom OpenAPI (JWT Bearer Auth in Swagger) ----
 def custom_openapi():
