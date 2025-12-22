@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { submitKyc, getMyKyc } from "../services/lawyerKyc.service";
 
 function LawyerKYC() {
   const [kycStatus, setKycStatus] = useState("not_submitted");
@@ -11,6 +12,22 @@ function LawyerKYC() {
     fileName: "",
   });
 
+  useEffect(() => {
+    const fetchMyKyc = async () => {
+      try {
+        const res = await getMyKyc();
+        if (res?.data?.status) {
+          setKycStatus(res.data.status);
+        }
+      } catch (err) {
+        // No KYC yet → stay as not_submitted
+        console.log("No KYC submitted yet");
+      }
+    };
+
+    fetchMyKyc();
+  }, []);
+  
   const isPending = kycStatus === "pending";
   const isApproved = kycStatus === "approved";
   const isRejected = kycStatus === "rejected";
@@ -32,9 +49,14 @@ function LawyerKYC() {
     setForm((prev) => ({ ...prev, fileName: file ? file.name : "" }));
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    setKycStatus("pending");
+    try {
+      await submitKyc(form);
+      setKycStatus("pending");
+    } catch (err) {
+      console.error(err);
+    }
   };
 
   const handleResubmit = () => {
