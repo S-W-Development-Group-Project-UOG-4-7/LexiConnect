@@ -1,13 +1,13 @@
 from sqlalchemy import Column, Integer, String, DateTime, ForeignKey
 from sqlalchemy.sql import func
-from ..database import Base
+from app.database import Base
 
 
 class KYCSubmission(Base):
     __tablename__ = "kyc_submissions"
 
     id = Column(Integer, primary_key=True, index=True)
-    lawyer_id = Column(Integer, ForeignKey("lawyers.id"))
+    lawyer_id = Column(Integer, ForeignKey("lawyers.id"), nullable=False)
 
     full_name = Column(String, nullable=False)
     nic_number = Column(String, nullable=False)
