@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import api from "../services/api";
+import { getUserFromToken } from "../services/auth";
 
 const Login = () => {
   const navigate = useNavigate();
@@ -14,9 +15,31 @@ const Login = () => {
     setError("");
     setLoading(true);
     try {
-      const { data } = await api.post("/auth/login", { email, password });
+      // OAuth2PasswordRequestForm expects form-urlencoded with username and password
+      const formData = new URLSearchParams();
+      formData.append("username", email); // OAuth2 uses 'username' field for email
+      formData.append("password", password);
+      
+      const { data } = await api.post("/auth/login", formData, {
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+      });
       localStorage.setItem("token", data.access_token);
-      navigate("/dashboard");
+      
+      // Extract role from response if available, otherwise decode JWT
+      let role = data.role || null;
+      if (!role) {
+        const payload = getUserFromToken();
+        role = payload?.role || null;
+      }
+      
+      // Store role in localStorage if we have it
+      if (role) {
+        localStorage.setItem("role", role);
+      }
+      
+      navigate("/client/dashboard");
     } catch (err) {
       const message =
         err?.response?.data?.detail ||
@@ -29,217 +52,108 @@ const Login = () => {
   };
 
   return (
-    <div className="login-page">
-      <div className="login-card">
-        <div className="logo-block">
-          <div className="logo-mark">⚖️</div>
-          <div className="logo-text">
-            <div className="brand">LexiConnect</div>
-            <div className="tagline">Legal Excellence Platform</div>
+    <div className="w-full max-w-md mx-auto rounded-2xl border border-amber-500/30 bg-slate-800/90 backdrop-blur-sm shadow-[0_20px_60px_rgba(0,0,0,0.5)] p-8 text-white">
+      {/* Logo Section */}
+      <div className="flex items-center justify-center gap-3 mb-4">
+        <div className="text-3xl">⚖️</div>
+        <div className="text-center">
+          <div className="text-xl font-bold text-white">
+            LexiConnect
           </div>
+          <div className="text-xs text-slate-400 mt-0.5">Legal Excellence Platform</div>
         </div>
+      </div>
 
-        <h2 className="title">Welcome Back</h2>
-        <p className="subtitle">Access your legal services portal</p>
+      {/* Welcome Message */}
+      <h2 className="text-center text-2xl font-bold text-white mb-1">
+        Welcome Back
+      </h2>
+      <p className="text-center text-sm text-slate-300 mb-6">
+        Access your legal services portal
+      </p>
 
-        <form onSubmit={handleSubmit} className="form">
-          <label className="label">
-            Email Address
+      {/* Form */}
+      <form onSubmit={handleSubmit} className="space-y-4">
+        {/* Email Input */}
+        <label className="block text-sm text-white">
+          Email Address
+          <div className="mt-2 relative">
+            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-white text-base">✉</span>
             <input
+              className="w-full rounded-lg bg-slate-700/80 border border-slate-600/50 pl-10 pr-4 py-3 text-sm text-white placeholder:text-slate-400 outline-none focus:border-amber-400/50 focus:ring-2 focus:ring-amber-400/20 transition-colors"
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="your.email@example.com"
               required
             />
-          </label>
-          <label className="label">
-            Password
+          </div>
+        </label>
+
+        {/* Password Input */}
+        <label className="block text-sm text-white">
+          Password
+          <div className="mt-2 relative">
+            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-white text-base">🔒</span>
             <input
+              className="w-full rounded-lg bg-slate-700/80 border border-slate-600/50 pl-10 pr-4 py-3 text-sm text-white placeholder:text-slate-400 outline-none focus:border-amber-400/50 focus:ring-2 focus:ring-amber-400/20 transition-colors"
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="••••••••"
               required
             />
-          </label>
+          </div>
+        </label>
 
-          {error && <div className="error">{error}</div>}
+        {/* Error Message */}
+        {error && (
+          <div className="rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+            {error}
+          </div>
+        )}
 
-          <button type="submit" disabled={loading}>
-            {loading ? "Signing in..." : "Access Platform"}
-          </button>
-        </form>
+        {/* Submit Button */}
+        <button
+          type="submit"
+          disabled={loading}
+          className="w-full rounded-lg bg-gradient-to-r from-amber-400 via-amber-500 to-amber-600 py-3 font-semibold text-white shadow-lg hover:shadow-xl hover:shadow-amber-500/25 active:scale-[0.98] disabled:opacity-70 transition-all"
+        >
+          {loading ? "Signing in..." : "Access Platform"}
+        </button>
+      </form>
 
-        <div className="footer-text">
-          Don't have an account?{" "}
-          <Link to="/register" className="link">
-            Register Now
-          </Link>
-        </div>
-
-        <div className="demo-box">
-          <div className="demo-title">✨ Demo Accounts:</div>
-          <ul>
-            <li>Client: any email / any password</li>
-            <li>Lawyer: lawyer@example.com / any password</li>
-            <li>Admin: admin@lexiconnect.com / any password</li>
-          </ul>
-        </div>
+      {/* Registration Link */}
+      <div className="mt-5 text-center text-sm text-white">
+        Don't have an account?{" "}
+        <Link to="/register" className="font-semibold text-amber-400 hover:text-amber-300 hover:underline transition-colors">
+          Register Now
+        </Link>
       </div>
 
-      <style jsx>{`
-        :root {
-          color-scheme: dark;
-        }
-        .login-page {
-          min-height: 100vh;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          padding: 24px;
-          background: radial-gradient(circle at 20% 20%, rgba(255, 215, 128, 0.05), transparent 25%),
-            radial-gradient(circle at 80% 30%, rgba(255, 215, 128, 0.05), transparent 25%),
-            radial-gradient(circle at 50% 80%, rgba(255, 215, 128, 0.05), transparent 25%),
-            #0f172a;
-        }
-        .login-card {
-          width: min(520px, 90vw);
-          background: linear-gradient(135deg, rgba(31, 41, 63, 0.95), rgba(20, 26, 40, 0.95));
-          border: 1px solid rgba(255, 255, 255, 0.06);
-          box-shadow: 0 20px 60px rgba(0, 0, 0, 0.45);
-          border-radius: 18px;
-          padding: 36px 36px 30px;
-          backdrop-filter: blur(8px);
-          color: #e5e7eb;
-        }
-        .logo-block {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-          justify-content: center;
-          margin-bottom: 12px;
-        }
-        .logo-mark {
-          font-size: 28px;
-        }
-        .logo-text .brand {
-          font-size: 20px;
-          font-weight: 700;
-          color: #f7d560;
-        }
-        .logo-text .tagline {
-          font-size: 12px;
-          color: #9ca3af;
-        }
-        .title {
-          text-align: center;
-          margin: 8px 0 4px;
-          font-size: 22px;
-          font-weight: 700;
-          color: #f9fafb;
-        }
-        .subtitle {
-          text-align: center;
-          color: #cbd5e1;
-          margin-bottom: 22px;
-          font-size: 14px;
-        }
-        .form {
-          display: flex;
-          flex-direction: column;
-          gap: 14px;
-        }
-        .label {
-          display: flex;
-          flex-direction: column;
-          gap: 6px;
-          font-size: 14px;
-          color: #cbd5e1;
-        }
-        input {
-          background: #0b1220;
-          border: 1px solid rgba(255, 255, 255, 0.08);
-          border-radius: 10px;
-          padding: 12px 14px;
-          color: #f8fafc;
-          font-size: 14px;
-          transition: border-color 0.2s, box-shadow 0.2s;
-        }
-        input:focus {
-          outline: none;
-          border-color: #f5c147;
-          box-shadow: 0 0 0 3px rgba(245, 193, 71, 0.2);
-        }
-        button {
-          margin-top: 4px;
-          padding: 12px 14px;
-          border: none;
-          border-radius: 10px;
-          background: linear-gradient(90deg, #f5c147, #f1a93c);
-          color: #1f2937;
-          font-weight: 700;
-          cursor: pointer;
-          transition: transform 0.1s ease, box-shadow 0.2s ease, opacity 0.2s ease;
-        }
-        button:hover {
-          transform: translateY(-1px);
-          box-shadow: 0 10px 25px rgba(245, 193, 71, 0.25);
-        }
-        button:disabled {
-          opacity: 0.7;
-          cursor: not-allowed;
-          transform: none;
-          box-shadow: none;
-        }
-        .error {
-          background: rgba(239, 68, 68, 0.1);
-          border: 1px solid rgba(239, 68, 68, 0.4);
-          color: #fecdd3;
-          padding: 10px 12px;
-          border-radius: 10px;
-          font-size: 13px;
-        }
-        .footer-text {
-          margin-top: 16px;
-          text-align: center;
-          color: #cbd5e1;
-          font-size: 14px;
-        }
-        .link {
-          color: #f5c147;
-          font-weight: 600;
-          text-decoration: none;
-        }
-        .link:hover {
-          text-decoration: underline;
-        }
-        .demo-box {
-          margin-top: 18px;
-          padding: 12px 14px;
-          background: rgba(255, 255, 255, 0.03);
-          border: 1px solid rgba(255, 255, 255, 0.06);
-          border-radius: 12px;
-          color: #e5e7eb;
-          font-size: 13px;
-        }
-        .demo-title {
-          margin-bottom: 6px;
-          color: #f5c147;
-          font-weight: 600;
-        }
-        .demo-box ul {
-          margin: 0;
-          padding-left: 18px;
-          color: #cbd5e1;
-        }
-        .demo-box li {
-          margin-bottom: 4px;
-        }
-      `}</style>
+      {/* Demo Accounts Section */}
+      <div className="mt-6 rounded-lg bg-slate-700/50 border border-slate-600/30 px-4 py-3 text-sm">
+        <div className="font-semibold text-amber-400 mb-2 flex items-center gap-1.5">
+          <span>✨</span>
+          <span>Demo Accounts:</span>
+        </div>
+        <ul className="list-none pl-0 text-slate-300 space-y-1">
+          <li className="flex items-center gap-2">
+            <span className="text-amber-400 text-xs">•</span>
+            <span>Client: any email / any password</span>
+          </li>
+          <li className="flex items-center gap-2">
+            <span className="text-amber-400 text-xs">•</span>
+            <span>Lawyer: lawyer@example.com / any password</span>
+          </li>
+          <li className="flex items-center gap-2">
+            <span className="text-amber-400 text-xs">•</span>
+            <span>Admin: admin@lexiconnect.com / any password</span>
+          </li>
+        </ul>
+      </div>
     </div>
   );
 };
 
 export default Login;
-

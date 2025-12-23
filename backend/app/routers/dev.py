@@ -89,3 +89,4 @@ def seed_users(db: Session = Depends(get_db)):
         },
     }
 
+

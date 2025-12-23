@@ -12,11 +12,11 @@ const LandingRedirect = () => {
     }
     const role = getRole();
     if (role === "client") {
-      navigate("/search", { replace: true });
+      navigate("/client/search", { replace: true });
     } else if (role === "lawyer") {
-      navigate("/availability", { replace: true });
+      navigate("/lawyer/availability", { replace: true });
     } else if (role === "admin") {
-      navigate("/admin", { replace: true });
+      navigate("/admin/dashboard", { replace: true });
     } else {
       navigate("/login", { replace: true });
     }

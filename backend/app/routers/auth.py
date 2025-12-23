@@ -2,14 +2,14 @@ from datetime import datetime, timedelta
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordBearer
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models.user import User, UserRole
-from app.schemas.auth import LoginRequest, Token
+from app.schemas.auth import Token
 from app.schemas.user import UserCreate, UserOut
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -20,7 +20,7 @@ ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login", scheme_name="BearerAuth")
 
 
 def get_password_hash(password: str) -> str:
@@ -51,6 +51,12 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
 
 
 async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)) -> User:
+    # TEMP DEBUG: Check if Authorization header was received
+    print(f"[DEBUG get_current_user] Token received: {token is not None}")
+    print(f"[DEBUG get_current_user] Token is empty: {not token if token else True}")
+    print(f"[DEBUG get_current_user] Token length: {len(token) if token else 0}")
+    print(f"[DEBUG get_current_user] Token value (first 20 chars): {token[:20] if token and len(token) > 20 else token}")
+    
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
@@ -91,8 +97,9 @@ def register(user_in: UserCreate, db: Session = Depends(get_db)):
 
 
 @router.post("/login", response_model=Token)
-def login(login_req: LoginRequest, db: Session = Depends(get_db)):
-    user = authenticate_user(db, login_req.email, login_req.password)
+def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+    # OAuth2PasswordRequestForm uses 'username' field, but we use email
+    user = authenticate_user(db, form_data.username, form_data.password)
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password")
 

@@ -1,0 +1,23 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15
+    container_name: lexiconnect_db
+    environment:
+      POSTGRES_DB: lexiconnect
+      POSTGRES_USER: lexiconnect
+      POSTGRES_PASSWORD: lexiconnect
+    ports:
+      - "5432:5432"
+    volumes:
+      - lexiconnect_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lexiconnect"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  lexiconnect_db_data:
+
