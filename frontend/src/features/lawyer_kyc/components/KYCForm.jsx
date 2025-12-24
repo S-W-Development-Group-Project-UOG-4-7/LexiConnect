@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import axios from "axios";
+import { submitKyc, getMyKyc } from "../services/lawyerKyc.service";
 
 function KYCForm() {
   const [formData, setFormData] = useState({
@@ -16,17 +16,12 @@ function KYCForm() {
 
   // Load existing KYC
   useEffect(() => {
-    axios
-      .get("http://127.0.0.1:8000/api/kyc/me")
-      .then((res) => {
-        setKycStatus(res.data.status);
-      })
-      .catch(() => {
-        setKycStatus("not_submitted");
-      })
+    getMyKyc()
+      .then((res) => setKycStatus(res.data.status))
+      .catch(() => setKycStatus("not_submitted"))
       .finally(() => setLoading(false));
   }, []);
-
+  
   // Handle text input changes
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -46,10 +41,10 @@ function KYCForm() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-
-    await axios.post("http://127.0.0.1:8000/api/kyc", formData);
+    await submitKyc(formData);
     setKycStatus("pending");
   };
+  
 
   if (loading) return <p>Loading...</p>;
 
