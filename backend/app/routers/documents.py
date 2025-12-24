@@ -55,5 +55,4 @@ def upload_document(
 def list_documents(booking_id: int, db: Session = Depends(get_db)):
     if booking_id <= 0:
         raise HTTPException(status_code=400, detail="Invalid booking_id.")
-
     return db.query(Document).filter(Document.booking_id == booking_id).all()
