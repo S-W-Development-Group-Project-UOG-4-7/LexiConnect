@@ -23,6 +23,7 @@ class User(Base):
     hashed_password = Column(String, nullable=False)
     role = Column(SQLEnum(UserRole), nullable=False, default=UserRole.client)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    lawyer = relationship("Lawyer", back_populates="user", uselist=False)
 
     # Relationship placeholder; links to bookings where the user is the client
     bookings = relationship(

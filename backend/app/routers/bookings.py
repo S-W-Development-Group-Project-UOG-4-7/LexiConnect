@@ -118,3 +118,110 @@ def cancel_booking(
     db.commit()
     db.refresh(booking)
     return BookingCancelOut.model_validate(booking)
+
+
+@router.get("/lawyer/incoming", response_model=list[BookingOut])
+def list_lawyer_incoming_bookings(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """List incoming booking requests for the current lawyer (status: pending).
+    Only available for lawyers.
+    """
+    if current_user.role != "lawyer":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only lawyers can view incoming bookings",
+        )
+
+    bookings = (
+        db.query(Booking)
+        .filter(
+            Booking.lawyer_id == current_user.id,
+            Booking.status == "pending",
+        )
+        .order_by(Booking.created_at.desc())
+        .all()
+    )
+
+    return [BookingOut.model_validate(b) for b in bookings]
+
+
+@router.patch("/{booking_id}/confirm", response_model=BookingOut)
+def confirm_booking(
+    booking_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Confirm a booking request. Only the assigned lawyer can confirm pending bookings."""
+    if current_user.role != "lawyer":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only lawyers can confirm bookings",
+        )
+
+    booking = db.query(Booking).filter(Booking.id == booking_id).first()
+    if not booking:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Booking not found",
+        )
+
+    # Check if user is the assigned lawyer
+    if booking.lawyer_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You can only confirm bookings assigned to you",
+        )
+
+    # Check if booking is pending
+    if booking.status != "pending":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Cannot confirm booking with status '{booking.status}'. Only pending bookings can be confirmed.",
+        )
+
+    booking.status = "confirmed"
+    db.commit()
+    db.refresh(booking)
+    return BookingOut.model_validate(booking)
+
+
+@router.patch("/{booking_id}/reject", response_model=BookingOut)
+def reject_booking(
+    booking_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Reject a booking request. Only the assigned lawyer can reject pending bookings."""
+    if current_user.role != "lawyer":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only lawyers can reject bookings",
+        )
+
+    booking = db.query(Booking).filter(Booking.id == booking_id).first()
+    if not booking:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Booking not found",
+        )
+
+    # Check if user is the assigned lawyer
+    if booking.lawyer_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You can only reject bookings assigned to you",
+        )
+
+    # Check if booking is pending
+    if booking.status != "pending":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Cannot reject booking with status '{booking.status}'. Only pending bookings can be rejected.",
+        )
+
+    booking.status = "rejected"
+    db.commit()
+    db.refresh(booking)
+    return BookingOut.model_validate(booking)

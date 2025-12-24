@@ -1,15 +1,17 @@
-# Standard library imports
+# Load environment variables first
 from dotenv import load_dotenv
+load_dotenv()
 
 # Third-party imports
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
 
-# Load environment variables before other imports
-load_dotenv()
-
 # Local application imports
+from app.modules.documents.routes import router as documents_router
+from app.modules.kyc.router import router as kyc_router
+from app.modules.disputes.routes import router as disputes_router
+
 from .api.v1 import admin as admin_v1, booking as booking_v1
 from .database import Base, engine, SessionLocal
 from .models import branch, kyc_submission, lawyer
@@ -21,7 +23,6 @@ from .routers import (
     branches,
     dev,
     documents,
-    kyc,
     lawyers,
     token_queue,
 )
@@ -70,17 +71,25 @@ def health_check():
 app.include_router(auth.router)
 app.include_router(lawyers.router)
 app.include_router(bookings.router)
+
+# Documents router mounted under /bookings
 app.include_router(documents.router, prefix="/bookings")
+
 app.include_router(admin.router)
 app.include_router(availability.router)
 app.include_router(branches.router)
-app.include_router(kyc.router)
-app.include_router(dev.router)          # DEV-ONLY endpoints
+
+# KYC, dev-only, token queue
+app.include_router(kyc_router)
+app.include_router(dev.router)  # DEV-ONLY endpoints
 app.include_router(token_queue.router)
 
 # API v1 routers
 app.include_router(admin_v1.router)
 app.include_router(booking_v1.router)
+
+# Disputes API
+app.include_router(disputes_router, prefix="/api/disputes", tags=["Disputes"])
 
 # ---- Custom OpenAPI (JWT Bearer Auth in Swagger) ----
 def custom_openapi():
@@ -103,7 +112,6 @@ def custom_openapi():
     }
 
     openapi_schema["security"] = [{"BearerAuth": []}]
-
     app.openapi_schema = openapi_schema
     return openapi_schema
 
