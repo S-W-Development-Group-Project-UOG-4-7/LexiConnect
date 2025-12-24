@@ -1,68 +1,55 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import api from '../services/api';
 import Header from '../components/Header';
 import './SearchLawyers.css';
 
 const SearchLawyers = () => {
+  const navigate = useNavigate();
   const [filters, setFilters] = useState({
-    district: 'All Districts',
+    district: '',
     city: '',
-    specialization: 'All Specializations',
-    language: 'All Languages'
+    specialization: '',
+    language: ''
   });
+  const [lawyers, setLawyers] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
 
-  const lawyers = [
-    {
-      id: 1,
-      name: 'Priya Jayawardena',
-      verified: true,
-      degree: 'LLB (Hons), Attorney-at-Law',
-      rating: 4.8,
-      reviews: 45,
-      specializations: ['Corporate Law', 'Contract Law'],
-      location: { city: 'Colombo', district: 'Colombo' },
-      languages: ['English', 'Sinhala', 'Tamil'],
-      image: '👩‍💼'
-    },
-    {
-      id: 2,
-      name: 'Rohan Perera',
-      verified: true,
-      degree: 'LLB, LLM',
-      rating: 4.6,
-      reviews: 32,
-      specializations: ['Criminal Law', 'Family Law'],
-      location: { city: 'Kandy', district: 'Kandy' },
-      languages: ['English', 'Sinhala'],
-      image: '👨‍💼'
-    },
-    {
-      id: 3,
-      name: 'Nimalka Fernando',
-      verified: true,
-      degree: 'LLB (Hons), Attorney-at-Law',
-      rating: 4.9,
-      reviews: 56,
-      specializations: ['Property Law', 'Tax Law'],
-      location: { city: 'Galle', district: 'Galle' },
-      languages: ['English', 'Sinhala', 'Tamil'],
-      image: '👩‍💼'
-    },
-    {
-      id: 4,
-      name: 'Arjun Silva',
-      verified: false,
-      degree: 'LLB',
-      rating: 4.7,
-      reviews: 25,
-      specializations: ['Immigration Law', 'Corporate Law'],
-      location: { city: 'Nugegoda', district: 'Colombo' },
-      languages: ['English'],
-      image: '👨‍💼'
+  const fetchLawyers = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const params = {};
+      if (filters.district && filters.district !== 'All Districts') params.district = filters.district;
+      if (filters.city) params.city = filters.city;
+      if (filters.specialization && filters.specialization !== 'All Specializations') params.specialization = filters.specialization;
+      if (filters.language && filters.language !== 'All Languages') params.language = filters.language;
+
+      const response = await api.get('/api/v1/lawyers/search', { params });
+      setLawyers(response.data);
+    } catch (err) {
+      setError('Failed to fetch lawyers. Please try again.');
+      console.error('Error fetching lawyers:', err);
+    } finally {
+      setLoading(false);
     }
-  ];
+  };
+
+  useEffect(() => {
+    fetchLawyers();
+  }, []);
 
   const handleFilterChange = (field, value) => {
     setFilters(prev => ({ ...prev, [field]: value }));
+  };
+
+  const handleSearch = () => {
+    fetchLawyers();
+  };
+
+  const handleViewProfile = (lawyerId) => {
+    navigate(`/lawyers/${lawyerId}`);
   };
 
   return (
@@ -74,8 +61,7 @@ const SearchLawyers = () => {
         <div className="search-container">
           {/* Header Section */}
           <section className="search-header">
-            <h1 className="search-title">FIND LEGAL EXPERTS</h1>
-            <h2 className="search-subtitle">Search Lawyers</h2>
+            <h1 className="search-title">Find a Lawyer</h1>
             <p className="search-description">
               Discover verified legal professionals tailored to your needs.
             </p>
@@ -145,10 +131,38 @@ const SearchLawyers = () => {
                 </select>
               </div>
             </div>
+            <div className="search-button-container">
+              <button
+                className="btn btn-primary search-btn"
+                onClick={handleSearch}
+                disabled={loading}
+              >
+                {loading ? 'Searching...' : 'Search'}
+              </button>
+            </div>
           </section>
 
           {/* Lawyers List */}
           <section className="lawyers-list">
+            {loading && (
+              <div className="loading-state">
+                <p>Loading lawyers...</p>
+              </div>
+            )}
+
+            {error && (
+              <div className="error-state">
+                <p>{error}</p>
+              </div>
+            )}
+
+            {!loading && !error && lawyers.length === 0 && (
+              <div className="empty-state">
+                <p>No lawyers found</p>
+              </div>
+            )}
+
+            {!loading && !error && lawyers.length > 0 && lawyers.map((lawyer) => (
             {lawyers.map((lawyer) => (
               <div key={lawyer.id} className="lawyer-card">
                 <div className="lawyer-avatar">
