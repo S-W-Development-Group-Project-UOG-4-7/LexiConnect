@@ -7,26 +7,31 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
 
-# Local application imports
-from app.modules.documents.routes import router as documents_router
+# Safe module routers
 from app.modules.kyc.router import router as kyc_router
 from app.modules.disputes.routes import router as disputes_router
 
 from .api.v1 import admin as admin_v1, booking as booking_v1
 from .database import Base, engine, SessionLocal
-from .models import branch, kyc_submission, lawyer
+
+# Ensure models are loaded
+from .models import branch, kyc_submission, lawyer  # noqa
+
+from .seed import seed_demo_users
+
+# IMPORTANT:
+# - documents module disabled (missing Document model)
+# - old availability router disabled (missing availability_v2 model)
+
 from .routers import (
     admin,
     auth,
-    availability,
     bookings,
     branches,
     dev,
-    documents,
     lawyers,
     token_queue,
 )
-from .seed import seed_demo_users
 
 # Create all database tables
 Base.metadata.create_all(bind=engine)
@@ -55,7 +60,6 @@ app.add_middleware(
 # ---- Startup seed ----
 @app.on_event("startup")
 def startup_seed_users():
-    """Seed demo users on application startup if enabled."""
     db = SessionLocal()
     try:
         seed_demo_users(db)
@@ -72,16 +76,18 @@ app.include_router(auth.router)
 app.include_router(lawyers.router)
 app.include_router(bookings.router)
 
-# Documents router mounted under /bookings
-app.include_router(documents.router, prefix="/bookings")
+# ❌ Documents router disabled
+# app.include_router(documents.router, prefix="/bookings")
 
 app.include_router(admin.router)
-app.include_router(availability.router)
 app.include_router(branches.router)
+
+# ❌ Old availability router disabled
+# app.include_router(availability.router)
 
 # KYC, dev-only, token queue
 app.include_router(kyc_router)
-app.include_router(dev.router)  # DEV-ONLY endpoints
+app.include_router(dev.router)
 app.include_router(token_queue.router)
 
 # API v1 routers
@@ -114,6 +120,5 @@ def custom_openapi():
     openapi_schema["security"] = [{"BearerAuth": []}]
     app.openapi_schema = openapi_schema
     return openapi_schema
-
 
 app.openapi = custom_openapi
