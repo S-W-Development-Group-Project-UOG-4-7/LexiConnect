@@ -6,6 +6,7 @@ from datetime import date, datetime, time
 
 from ..database import get_db
 from ..models.lawyer_availability import WeeklyAvailability, BlackoutDate, WeekDay
+from ..models.availability_template_simple import AvailabilityTemplate
 from ..models.lawyer import Lawyer
 from ..models.branch import Branch
 from ..schemas.lawyer_availability import (
@@ -16,6 +17,22 @@ from ..schemas.lawyer_availability import (
 )
 
 router = APIRouter(prefix="/api/lawyer-availability", tags=["Lawyer Availability"])
+
+
+# Helper functions for availability_templates
+def day_to_int(day_str: str) -> int:
+    days = {"monday": 0, "tuesday": 1, "wednesday": 2, "thursday": 3, "friday": 4, "saturday": 5, "sunday": 6}
+    return days.get(day_str.lower(), 0)
+
+def format_time_to_string(time_obj: time) -> str:
+    """Convert time object to HH:MM AM/PM string"""
+    hours = time_obj.hour
+    minutes = time_obj.minute
+    period = "AM" if hours < 12 else "PM"
+    hours_12 = hours % 12
+    if hours_12 == 0:
+        hours_12 = 12
+    return f"{hours_12}:{minutes:02d} {period}"
 
 
 # Helper functions
@@ -42,6 +59,17 @@ def parse_time_string(time_str: str) -> time:
 def time_to_minutes(t: time) -> int:
     """Convert time object to minutes since midnight"""
     return t.hour * 60 + t.minute
+
+
+def format_time_to_string(t: time) -> str:
+    """Convert time object to HH:MM AM/PM string"""
+    hour = t.hour
+    minute = t.minute
+    period = 'AM' if hour < 12 else 'PM'
+    hour12 = hour % 12
+    if hour12 == 0:
+        hour12 = 12
+    return f"{hour12}:{minute:02d} {period}"
 
 
 # Weekly Availability Endpoints
@@ -76,7 +104,7 @@ def create_weekly_availability(
     lawyer_id: int = Query(..., description="Lawyer ID"),
     db: Session = Depends(get_db)
 ):
-    """Create a new weekly availability slot"""
+    """Create a new weekly availability slot in availability_templates table"""
     
     # Verify lawyer exists
     lawyer = db.query(Lawyer).filter(Lawyer.id == lawyer_id).first()
@@ -86,62 +114,43 @@ def create_weekly_availability(
             detail="Lawyer not found"
         )
     
-    # Verify branch exists
-    branch = db.query(Branch).filter(Branch.id == slot_data.branch_id).first()
-    if not branch:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Branch not found"
-        )
-    
     # Parse times
     start_time = parse_time_string(slot_data.start_time)
     end_time = parse_time_string(slot_data.end_time)
     
-    # Check for overlapping slots
-    existing = db.query(WeeklyAvailability).filter(
-        and_(
-            WeeklyAvailability.lawyer_id == lawyer_id,
-            WeeklyAvailability.day_of_week == slot_data.day_of_week,
-            WeeklyAvailability.is_active == True,
-            or_(
-                and_(
-                    WeeklyAvailability.start_time <= start_time,
-                    WeeklyAvailability.end_time > start_time
-                ),
-                and_(
-                    WeeklyAvailability.start_time < end_time,
-                    WeeklyAvailability.end_time >= end_time
-                ),
-                and_(
-                    WeeklyAvailability.start_time >= start_time,
-                    WeeklyAvailability.end_time <= end_time
-                )
-            )
-        )
-    ).first()
+    # Calculate slot minutes
+    start_minutes = start_time.hour * 60 + start_time.minute
+    end_minutes = end_time.hour * 60 + end_time.minute
+    slot_minutes = end_minutes - start_minutes
     
-    if existing:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Time slot overlaps with existing slot"
-        )
+    # Convert day string to integer
+    day_int = day_to_int(slot_data.day_of_week)
     
-    # Create new slot
-    slot = WeeklyAvailability(
+    # Create availability template
+    template = AvailabilityTemplate(
         lawyer_id=lawyer_id,
-        branch_id=slot_data.branch_id,
-        day_of_week=slot_data.day_of_week,
+        day_of_week=day_int,
         start_time=start_time,
         end_time=end_time,
-        max_bookings=slot_data.max_bookings
+        slot_minutes=slot_minutes
     )
     
-    db.add(slot)
+    db.add(template)
     db.commit()
-    db.refresh(slot)
+    db.refresh(template)
     
-    return slot
+    # Return in expected format
+    return WeeklyAvailabilityResponse(
+        id=str(template.id),
+        lawyer_id=template.lawyer_id,
+        day_of_week=slot_data.day_of_week,
+        start_time=slot_data.start_time,
+        end_time=slot_data.end_time,
+        branch_id=1,  # Default branch since templates don't have branch_id
+        max_bookings=slot_minutes // 60,  # Convert minutes to hours as booking count
+        is_active=template.is_active,
+        created_at=template.created_at
+    )
 
 
 @router.put("/weekly/{slot_id}", response_model=WeeklyAvailabilityResponse)
@@ -455,8 +464,11 @@ def get_lawyer_complete_availability(
             detail="Lawyer not found"
         )
     
-    # Get weekly availability
-    weekly_slots = db.query(WeeklyAvailability).filter(
+    # Get weekly availability with branch relationship
+    from sqlalchemy.orm import joinedload
+    weekly_slots = db.query(WeeklyAvailability).options(
+        joinedload(WeeklyAvailability.branch)
+    ).filter(
         and_(
             WeeklyAvailability.lawyer_id == lawyer_id,
             WeeklyAvailability.is_active == True

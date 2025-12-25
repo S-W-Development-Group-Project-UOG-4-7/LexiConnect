@@ -1,7 +1,9 @@
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import ValidationInfo
 from typing import List, Optional
 from datetime import date, datetime, time
 from enum import Enum
+import re
 
 
 class WeekDayEnum(str, Enum):
@@ -19,6 +21,28 @@ class AvailabilityTypeEnum(str, Enum):
     PARTIAL_TIME = "partial_time"
 
 
+TIME_PATTERN = re.compile(r"^\d{1,2}:\d{2}\s?(AM|PM|am|pm)$")
+
+
+def normalize_time_str(v: str) -> str:
+    v = v.strip()
+    if not TIME_PATTERN.match(v):
+        raise ValueError("Time must be in format HH:MM AM/PM")
+    return v.upper()
+
+
+def time_to_minutes(time_str: str) -> int:
+    time_part, period = time_str.split()
+    hours, minutes = map(int, time_part.split(":"))
+    period = period.upper()
+
+    if period == "PM" and hours != 12:
+        hours += 12
+    elif period == "AM" and hours == 12:
+        hours = 0
+    return hours * 60 + minutes
+
+
 # Weekly Availability Schemas
 class WeeklyAvailabilityBase(BaseModel):
     day_of_week: WeekDayEnum
@@ -27,36 +51,18 @@ class WeeklyAvailabilityBase(BaseModel):
     branch_id: int
     max_bookings: int = Field(default=5, ge=1, le=50)
 
-    @validator('start_time', 'end_time')
-    def validate_time_format(cls, v):
-        """Validate time format HH:MM AM/PM"""
-        import re
-        pattern = r'^\d{1,2}:\d{2}\s?(AM|PM|am|pm)$'
-        if not re.match(pattern, v.strip()):
-            raise ValueError('Time must be in format HH:MM AM/PM')
-        return v.strip().upper()
+    @field_validator("start_time", "end_time")
+    @classmethod
+    def validate_time_format(cls, v: str) -> str:
+        return normalize_time_str(v)
 
-    @validator('end_time')
-    def validate_time_order(cls, v, values):
-        if 'start_time' in values:
-            # Convert to comparable format
-            def time_to_minutes(time_str):
-                time_part = time_str.split()[0]
-                period = time_str.split()[1]
-                hours, minutes = map(int, time_part.split(':'))
-                if period == 'PM' and hours != 12:
-                    hours += 12
-                elif period == 'AM' and hours == 12:
-                    hours = 0
-                return hours * 60 + minutes
-            
-            start_minutes = time_to_minutes(values['start_time'])
-            end_minutes = time_to_minutes(v)
-            
-            if end_minutes <= start_minutes:
-                raise ValueError('End time must be after start time')
-        
-        return v
+    @model_validator(mode="after")
+    def validate_time_order(self):
+        start_minutes = time_to_minutes(self.start_time)
+        end_minutes = time_to_minutes(self.end_time)
+        if end_minutes <= start_minutes:
+            raise ValueError("End time must be after start time")
+        return self
 
 
 class WeeklyAvailabilityCreate(WeeklyAvailabilityBase):
@@ -71,16 +77,49 @@ class WeeklyAvailabilityUpdate(BaseModel):
     max_bookings: Optional[int] = Field(default=None, ge=1, le=50)
     is_active: Optional[bool] = None
 
+    @field_validator("start_time", "end_time")
+    @classmethod
+    def validate_optional_time_format(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return v
+        return normalize_time_str(v)
 
-class WeeklyAvailabilityResponse(WeeklyAvailabilityBase):
+    @model_validator(mode="after")
+    def validate_optional_time_order(self):
+        if self.start_time and self.end_time:
+            if time_to_minutes(self.end_time) <= time_to_minutes(self.start_time):
+                raise ValueError("End time must be after start time")
+        return self
+
+
+class WeeklyAvailabilityResponse(BaseModel):
     id: int
     lawyer_id: int
+    day_of_week: WeekDayEnum
+    start_time: str
+    end_time: str
+    branch_id: int
+    max_bookings: int
     is_active: bool
     created_at: datetime
     updated_at: Optional[datetime] = None
-    
-    class Config:
-        from_attributes = True
+    branch: Optional["BranchInfo"] = None
+
+    @field_validator("start_time", "end_time", mode="before")
+    @classmethod
+    def convert_time_to_string(cls, v):
+        """Convert time object to HH:MM AM/PM string if needed"""
+        if isinstance(v, time):
+            hour = v.hour
+            minute = v.minute
+            period = "AM" if hour < 12 else "PM"
+            hour12 = hour % 12
+            if hour12 == 0:
+                hour12 = 12
+            return f"{hour12}:{minute:02d} {period}"
+        return v
+
+    model_config = {"from_attributes": True}
 
 
 # Blackout Date Schemas
@@ -91,41 +130,29 @@ class BlackoutDateBase(BaseModel):
     end_time: Optional[str] = None
     reason: Optional[str] = None
 
-    @validator('start_time', 'end_time')
-    def validate_partial_time_fields(cls, v, values, field):
-        if values.get('availability_type') == AvailabilityTypeEnum.PARTIAL_TIME:
+    @field_validator("start_time", "end_time")
+    @classmethod
+    def validate_partial_time_fields(cls, v: Optional[str], info: ValidationInfo) -> Optional[str]:
+        # info.data has other already-validated fields in many cases
+        availability_type = info.data.get("availability_type")
+        if availability_type == AvailabilityTypeEnum.PARTIAL_TIME:
             if v is None:
-                raise ValueError(f'{field.name} is required for partial time availability')
-            # Validate time format
-            import re
-            pattern = r'^\d{1,2}:\d{2}\s?(AM|PM|am|pm)$'
-            if not re.match(pattern, v.strip()):
-                raise ValueError('Time must be in format HH:MM AM/PM')
-            return v.strip().upper()
-        return v
+                # field name available via info.field_name
+                raise ValueError(f"{info.field_name} is required for partial time availability")
+            return normalize_time_str(v)
+        # FULL_DAY: allow None or any string? keep consistent: normalize if string provided
+        if v is None:
+            return v
+        return normalize_time_str(v)
 
-    @validator('end_time')
-    def validate_partial_time_order(cls, v, values):
-        if (values.get('availability_type') == AvailabilityTypeEnum.PARTIAL_TIME and 
-            'start_time' in values and v is not None):
-            
-            def time_to_minutes(time_str):
-                time_part = time_str.split()[0]
-                period = time_str.split()[1]
-                hours, minutes = map(int, time_part.split(':'))
-                if period == 'PM' and hours != 12:
-                    hours += 12
-                elif period == 'AM' and hours == 12:
-                    hours = 0
-                return hours * 60 + minutes
-            
-            start_minutes = time_to_minutes(values['start_time'])
-            end_minutes = time_to_minutes(v)
-            
-            if end_minutes <= start_minutes:
-                raise ValueError('End time must be after start time')
-        
-        return v
+    @model_validator(mode="after")
+    def validate_partial_time_order(self):
+        if self.availability_type == AvailabilityTypeEnum.PARTIAL_TIME:
+            if self.start_time is None or self.end_time is None:
+                raise ValueError("start_time and end_time are required for partial time availability")
+            if time_to_minutes(self.end_time) <= time_to_minutes(self.start_time):
+                raise ValueError("End time must be after start time")
+        return self
 
 
 class BlackoutDateCreate(BlackoutDateBase):
@@ -140,6 +167,21 @@ class BlackoutDateUpdate(BaseModel):
     reason: Optional[str] = None
     is_active: Optional[bool] = None
 
+    @field_validator("start_time", "end_time")
+    @classmethod
+    def validate_optional_partial_fields(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return v
+        return normalize_time_str(v)
+
+    @model_validator(mode="after")
+    def validate_update_time_order(self):
+        # Only validate order if both times provided
+        if self.start_time and self.end_time:
+            if time_to_minutes(self.end_time) <= time_to_minutes(self.start_time):
+                raise ValueError("End time must be after start time")
+        return self
+
 
 class BlackoutDateResponse(BlackoutDateBase):
     id: int
@@ -147,9 +189,8 @@ class BlackoutDateResponse(BlackoutDateBase):
     is_active: bool
     created_at: datetime
     updated_at: Optional[datetime] = None
-    
-    class Config:
-        from_attributes = True
+
+    model_config = {"from_attributes": True}
 
 
 # Combined Response Schemas
@@ -174,15 +215,14 @@ class BulkBlackoutDateCreate(BaseModel):
     dates: List[BlackoutDateCreate]
 
 
-# Branch Info for dropdown
+# Branch Info for dropdown (defined early for forward reference)
 class BranchInfo(BaseModel):
     id: int
     name: str
     city: str
     district: str
-    
-    class Config:
-        from_attributes = True
+
+    model_config = {"from_attributes": True}
 
 
 # Status Summary

@@ -15,10 +15,13 @@ const LawyerAvailabilityDashboard = () => {
   const [blackoutDates, setBlackoutDates] = useState([]);
   const [branches, setBranches] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+  const [saving, setSaving] = useState({});
   const [error, setError] = useState(null);
-  const [success, setSuccess] = useState(false);
-  const [hasChanges, setHasChanges] = useState(false);
+  const [success, setSuccess] = useState(null);
+  const [stats, setStats] = useState({
+    activeBlackouts: 0,
+    dailyCapacity: 0
+  });
 
   const [newBlackout, setNewBlackout] = useState({
     date: '',
@@ -30,17 +33,43 @@ const LawyerAvailabilityDashboard = () => {
 
   const weekDays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
+  // Helper function to convert time object to HH:MM AM/PM format
+  const formatTime = (timeStr) => {
+    if (!timeStr) return '';
+    // If already in HH:MM AM/PM format, return as is
+    if (typeof timeStr === 'string' && (timeStr.includes('AM') || timeStr.includes('PM'))) {
+      return timeStr;
+    }
+    // If it's a time string like "09:00:00", convert it
+    if (typeof timeStr === 'string' && timeStr.includes(':')) {
+      const [hours, minutes] = timeStr.split(':');
+      const hour = parseInt(hours, 10);
+      const ampm = hour >= 12 ? 'PM' : 'AM';
+      const hour12 = hour % 12 || 12;
+      return `${hour12}:${minutes.padStart(2, '0')} ${ampm}`;
+    }
+    return timeStr;
+  };
+
   // API helper functions
   const getAuthHeaders = () => {
-    const token = localStorage.getItem('authToken');
-    return {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${token}`
+    const token = localStorage.getItem('token') || localStorage.getItem('authToken');
+    const headers = {
+      'Content-Type': 'application/json'
     };
+    
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    
+    return headers;
   };
 
   const apiRequest = async (url, options = {}) => {
-    const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}${url}`, {
+    const baseURL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+    const fullUrl = `${baseURL}${url}`;
+    console.log('Making request to:', fullUrl); // Debug log
+    const response = await fetch(fullUrl, {
       ...options,
       headers: {
         ...getAuthHeaders(),
@@ -49,11 +78,26 @@ const LawyerAvailabilityDashboard = () => {
     });
 
     if (!response.ok) {
-      const err = await response.json().catch(() => ({ detail: 'Network error' }));
+      const errorText = await response.text();
+      console.error('Error response:', errorText); // Debug log
+      let err;
+      try {
+        err = JSON.parse(errorText);
+      } catch {
+        err = { detail: errorText || `HTTP ${response.status}` };
+      }
       throw new Error(err.detail || `HTTP ${response.status}`);
     }
 
-    return response.json();
+    const responseText = await response.text();
+    console.log('Response text:', responseText); // Debug log
+    
+    try {
+      return JSON.parse(responseText);
+    } catch (e) {
+      console.error('Failed to parse JSON:', e, 'Response was:', responseText);
+      throw new Error('Invalid JSON response from server');
+    }
   };
 
   // Load data from API
@@ -75,11 +119,12 @@ const LawyerAvailabilityDashboard = () => {
           .filter(slot => slot.day_of_week.toLowerCase() === day.toLowerCase())
           .map(slot => ({
             id: slot.id,
-            startTime: slot.start_time,
-            endTime: slot.end_time,
-            branch: slot.branch.name,
+            startTime: formatTime(slot.start_time),
+            endTime: formatTime(slot.end_time),
+            branch: slot.branch?.name || branchesData.find(b => b.id === slot.branch_id)?.name || 'Unknown',
             branchId: slot.branch_id,
-            maxBookings: slot.max_bookings
+            maxBookings: slot.max_bookings,
+            isUnsaved: false
           }));
       });
 
@@ -91,14 +136,18 @@ const LawyerAvailabilityDashboard = () => {
           year: 'numeric'
         }),
         availability: blackout.availability_type === 'full_day' ? 'Full Day' : 'Partial Time',
-        startTime: blackout.start_time || '',
-        endTime: blackout.end_time || '',
+        startTime: formatTime(blackout.start_time) || '',
+        endTime: formatTime(blackout.end_time) || '',
         reason: blackout.reason || ''
       }));
 
       setTimeSlots(transformedSlots);
       setBlackoutDates(transformedBlackouts);
       setBranches(branchesData);
+      setStats({
+        activeBlackouts: availabilityData.active_blackouts || transformedBlackouts.length,
+        dailyCapacity: availabilityData.total_daily_capacity || 0
+      });
     } catch (err) {
       setError(err.message);
       console.error('Failed to load availability data:', err);
@@ -107,68 +156,69 @@ const LawyerAvailabilityDashboard = () => {
     }
   };
 
-  const saveAvailability = async () => {
+  // Save a single time slot immediately
+  const saveTimeSlot = async (day, slot) => {
+    const lawyerId = localStorage.getItem('lawyerId') || '1';
+    const slotKey = `${day}-${slot.id}`;
+    
     try {
-      setSaving(true);
+      setSaving(prev => ({ ...prev, [slotKey]: true }));
       setError(null);
 
-      const lawyerId = localStorage.getItem('lawyerId') || '1';
+      const slotData = {
+        day_of_week: day.toLowerCase(),
+        start_time: slot.startTime,
+        end_time: slot.endTime,
+        branch_id: slot.branchId || branches.find(b => b.name === slot.branch)?.id || 1,
+        max_bookings: slot.maxBookings
+      };
+      
+      console.log('Saving slot data:', slotData); // Debug log
 
-      const weeklySlotsForApi = [];
-      Object.entries(timeSlots).forEach(([day, slots]) => {
-        slots.forEach(slot => {
-          if (!slot.id || slot.id.toString().startsWith('new-')) {
-            weeklySlotsForApi.push({
-              day_of_week: day.toLowerCase(),
-              start_time: slot.startTime,
-              end_time: slot.endTime,
-              branch_id: slot.branchId || branches.find(b => b.name === slot.branch)?.id,
-              max_bookings: slot.maxBookings
-            });
-          }
+      let savedSlot;
+      if (slot.id && !slot.id.toString().startsWith('new-')) {
+        // Update existing slot
+        savedSlot = await apiRequest(`/api/lawyer-availability/weekly/${slot.id}`, {
+          method: 'PUT',
+          body: JSON.stringify(slotData)
         });
-      });
-
-      const blackoutDatesForApi = [];
-      blackoutDates.forEach(blackout => {
-        if (!blackout.id || blackout.id.toString().startsWith('new-')) {
-          const [month, day, year] = blackout.date.split('/');
-          const dateObj = new Date(`${year}-${month}-${day}`);
-
-          blackoutDatesForApi.push({
-            date: dateObj.toISOString().split('T')[0],
-            availability_type: blackout.availability === 'Full Day' ? 'full_day' : 'partial_time',
-            start_time: blackout.availability === 'Partial Time' ? blackout.startTime : null,
-            end_time: blackout.availability === 'Partial Time' ? blackout.endTime : null,
-            reason: blackout.reason
-          });
-        }
-      });
-
-      if (weeklySlotsForApi.length > 0) {
-        await apiRequest(`/api/lawyer-availability/weekly/bulk?lawyer_id=${lawyerId}`, {
+      } else {
+        // Create new slot
+        savedSlot = await apiRequest(`/api/lawyer-availability/weekly?lawyer_id=${lawyerId}`, {
           method: 'POST',
-          body: JSON.stringify({ slots: weeklySlotsForApi })
+          body: JSON.stringify(slotData)
         });
       }
 
-      if (blackoutDatesForApi.length > 0) {
-        await apiRequest(`/api/lawyer-availability/blackout/bulk?lawyer_id=${lawyerId}`, {
-          method: 'POST',
-          body: JSON.stringify({ dates: blackoutDatesForApi })
-        });
-      }
+      // Update local state with saved slot
+      setTimeSlots(prev => ({
+        ...prev,
+        [day]: prev[day].map(s => 
+          s.id === slot.id ? {
+            ...s,
+            id: savedSlot.id,
+            startTime: formatTime(savedSlot.start_time),
+            endTime: formatTime(savedSlot.end_time),
+            branchId: savedSlot.branch_id,
+            isUnsaved: false
+          } : s
+        )
+      }));
 
-      setSuccess(true);
-      setHasChanges(false);
-      setTimeout(() => setSuccess(false), 3000);
-
+      setSuccess(`Time slot saved successfully!`);
+      setTimeout(() => setSuccess(null), 3000);
+      
+      // Reload to get updated stats
       await loadAvailabilityData();
     } catch (err) {
       setError(err.message);
-      console.error('Failed to save availability:', err);
+      console.error('Failed to save time slot:', err);
     } finally {
-      setSaving(false);
+      setSaving(prev => {
+        const newState = { ...prev };
+        delete newState[slotKey];
+        return newState;
+      });
     }
   };
 
@@ -196,78 +246,217 @@ const LawyerAvailabilityDashboard = () => {
       endTime: '05:00 PM',
       branch: branches[0]?.name || 'Colombo',
       branchId: branches[0]?.id,
-      maxBookings: 5
+      maxBookings: 5,
+      isUnsaved: true
     };
+    
+    // Add to UI immediately
     setTimeSlots(prev => ({
       ...prev,
       [day]: [...prev[day], newSlot]
     }));
-    setHasChanges(true);
   };
 
-  const deleteTimeSlot = (day, slotId) => {
-    setTimeSlots(prev => ({
-      ...prev,
-      [day]: prev[day].filter(slot => slot.id !== slotId)
-    }));
-    setHasChanges(true);
+  const deleteTimeSlot = async (day, slotId) => {
+    // Don't delete if it's a new unsaved slot
+    if (slotId.toString().startsWith('new-')) {
+      setTimeSlots(prev => ({
+        ...prev,
+        [day]: prev[day].filter(slot => slot.id !== slotId)
+      }));
+      return;
+    }
+
+    try {
+      setSaving(prev => ({ ...prev, [`delete-${slotId}`]: true }));
+      setError(null);
+
+      await apiRequest(`/api/lawyer-availability/weekly/${slotId}`, {
+        method: 'DELETE'
+      });
+
+      // Remove from UI
+      setTimeSlots(prev => ({
+        ...prev,
+        [day]: prev[day].filter(slot => slot.id !== slotId)
+      }));
+
+      setSuccess('Time slot deleted successfully!');
+      setTimeout(() => setSuccess(null), 3000);
+      
+      // Reload to get updated stats
+      await loadAvailabilityData();
+    } catch (err) {
+      setError(err.message);
+      console.error('Failed to delete time slot:', err);
+    } finally {
+      setSaving(prev => {
+        const newState = { ...prev };
+        delete newState[`delete-${slotId}`];
+        return newState;
+      });
+    }
   };
 
   const updateSlot = (day, slotId, field, value) => {
-    setTimeSlots(prev => ({
-      ...prev,
-      [day]: prev[day].map(slot =>
-        slot.id === slotId ? { ...slot, [field]: value } : slot
-      )
-    }));
-    setHasChanges(true);
-  };
-
-  const addBlackoutDate = () => {
-    if (!newBlackout.date) return;
-
-    const blackout = {
-      id: `new-${Date.now()}`,
-      date: newBlackout.date,
-      availability: newBlackout.availability,
-      startTime: newBlackout.availability === 'Full Day' ? '' : newBlackout.startTime,
-      endTime: newBlackout.availability === 'Full Day' ? '' : newBlackout.endTime,
-      reason: newBlackout.reason
-    };
-
-    setBlackoutDates(prev => [...prev, blackout]);
-    setNewBlackout({
-      date: '',
-      availability: 'Full Day',
-      startTime: '09:00 AM',
-      endTime: '05:00 PM',
-      reason: ''
+    // Update UI immediately
+    setTimeSlots(prev => {
+      const newSlots = {
+        ...prev,
+        [day]: prev[day].map(slot => {
+          if (slot.id === slotId) {
+            return { ...slot, [field]: value, isUnsaved: true };
+          }
+          return slot;
+        })
+      };
+      return newSlots;
     });
-    setHasChanges(true);
   };
 
-  const deleteBlackoutDate = (id) => {
-    setBlackoutDates(prev => prev.filter(blackout => blackout.id !== id));
-    setHasChanges(true);
+  const addBlackoutDate = async () => {
+    if (!newBlackout.date) {
+      setError('Please select a date');
+      return;
+    }
+
+    const lawyerId = localStorage.getItem('lawyerId') || '1';
+    
+    try {
+      setSaving(prev => ({ ...prev, 'blackout': true }));
+      setError(null);
+
+      // Format date for API
+      const dateObj = new Date(newBlackout.date);
+      const formattedDate = dateObj.toISOString().split('T')[0];
+
+      const blackoutData = {
+        date: formattedDate,
+        availability_type: newBlackout.availability === 'Full Day' ? 'full_day' : 'partial_time',
+        start_time: newBlackout.availability === 'Partial Time' ? newBlackout.startTime : null,
+        end_time: newBlackout.availability === 'Partial Time' ? newBlackout.endTime : null,
+        reason: newBlackout.reason || null
+      };
+
+      const savedBlackout = await apiRequest(`/api/lawyer-availability/blackout?lawyer_id=${lawyerId}`, {
+        method: 'POST',
+        body: JSON.stringify(blackoutData)
+      });
+
+      // Add to UI
+      const formattedBlackout = {
+        id: savedBlackout.id,
+        date: new Date(savedBlackout.date).toLocaleDateString('en-US', {
+          month: '2-digit',
+          day: '2-digit',
+          year: 'numeric'
+        }),
+        availability: savedBlackout.availability_type === 'full_day' ? 'Full Day' : 'Partial Time',
+        startTime: formatTime(savedBlackout.start_time) || '',
+        endTime: formatTime(savedBlackout.end_time) || '',
+        reason: savedBlackout.reason || ''
+      };
+
+      setBlackoutDates(prev => [...prev, formattedBlackout]);
+      setNewBlackout({
+        date: '',
+        availability: 'Full Day',
+        startTime: '09:00 AM',
+        endTime: '05:00 PM',
+        reason: ''
+      });
+
+      setSuccess('Blackout date added successfully!');
+      setTimeout(() => setSuccess(null), 3000);
+      
+      // Reload to get updated stats
+      await loadAvailabilityData();
+    } catch (err) {
+      setError(err.message);
+      console.error('Failed to add blackout date:', err);
+    } finally {
+      setSaving(prev => {
+        const newState = { ...prev };
+        delete newState['blackout'];
+        return newState;
+      });
+    }
+  };
+
+  const deleteBlackoutDate = async (id) => {
+    // Don't delete if it's a new unsaved blackout
+    if (id.toString().startsWith('new-')) {
+      setBlackoutDates(prev => prev.filter(blackout => blackout.id !== id));
+      return;
+    }
+
+    try {
+      setSaving(prev => ({ ...prev, [`delete-blackout-${id}`]: true }));
+      setError(null);
+
+      await apiRequest(`/api/lawyer-availability/blackout/${id}`, {
+        method: 'DELETE'
+      });
+
+      // Remove from UI
+      setBlackoutDates(prev => prev.filter(blackout => blackout.id !== id));
+
+      setSuccess('Blackout date deleted successfully!');
+      setTimeout(() => setSuccess(null), 3000);
+      
+      // Reload to get updated stats
+      await loadAvailabilityData();
+    } catch (err) {
+      setError(err.message);
+      console.error('Failed to delete blackout date:', err);
+    } finally {
+      setSaving(prev => {
+        const newState = { ...prev };
+        delete newState[`delete-blackout-${id}`];
+        return newState;
+      });
+    }
   };
 
   const getTotalWeeklyHours = () => {
     let totalHours = 0;
     Object.values(timeSlots).forEach(slots => {
       slots.forEach(slot => {
-        const start = parseInt(slot.startTime.split(':')[0], 10);
-        const end = parseInt(slot.endTime.split(':')[0], 10);
-        const startPeriod = slot.startTime.includes('PM') && start !== 12 ? start + 12 : start;
-        const endPeriod = slot.endTime.includes('PM') && end !== 12 ? end + 12 : end;
-        totalHours += Math.max(0, endPeriod - startPeriod);
+        try {
+          const timeMatch = slot.startTime.match(/(\d+):(\d+)\s*(AM|PM)/i);
+          if (timeMatch) {
+            let startHour = parseInt(timeMatch[1], 10);
+            const startMin = parseInt(timeMatch[2], 10);
+            const startPeriod = timeMatch[3].toUpperCase();
+            
+            if (startPeriod === 'PM' && startHour !== 12) startHour += 12;
+            if (startPeriod === 'AM' && startHour === 12) startHour = 0;
+            
+            const endMatch = slot.endTime.match(/(\d+):(\d+)\s*(AM|PM)/i);
+            if (endMatch) {
+              let endHour = parseInt(endMatch[1], 10);
+              const endMin = parseInt(endMatch[2], 10);
+              const endPeriod = endMatch[3].toUpperCase();
+              
+              if (endPeriod === 'PM' && endHour !== 12) endHour += 12;
+              if (endPeriod === 'AM' && endHour === 12) endHour = 0;
+              
+              const startMinutes = startHour * 60 + startMin;
+              const endMinutes = endHour * 60 + endMin;
+              totalHours += (endMinutes - startMinutes) / 60;
+            }
+          }
+        } catch (e) {
+          // Ignore parsing errors
+        }
       });
     });
-    return totalHours;
+    return Math.round(totalHours * 10) / 10;
   };
 
   const getTotalDailyCapacity = () => {
-    return Object.values(timeSlots).reduce(
-      (total, slots) => total + slots.reduce((dayTotal, slot) => dayTotal + slot.maxBookings, 0),
+    return stats.dailyCapacity || Object.values(timeSlots).reduce(
+      (total, slots) => total + slots.reduce((dayTotal, slot) => dayTotal + (slot.maxBookings || 0), 0),
       0
     );
   };
@@ -313,36 +502,11 @@ const LawyerAvailabilityDashboard = () => {
         {/* Main Content */}
         <main className="flex-1 p-8">
           <div className="max-w-5xl mx-auto">
-            {/* Page Header with Save Button */}
+            {/* Page Header */}
             <div className="mb-8">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h1 className="text-3xl font-bold text-slate-900 mb-2">Manage Availability</h1>
-                  <p className="text-slate-600">Set your weekly consultation schedule and manage unavailable dates.</p>
-                </div>
-
-                {hasChanges && (
-                  <div className="flex items-center space-x-3">
-                    <span className="text-sm text-amber-600 font-medium">Unsaved changes</span>
-                    <button
-                      onClick={saveAvailability}
-                      disabled={saving}
-                      className="flex items-center space-x-2 px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:bg-blue-400 transition-all duration-200 shadow-sm hover:shadow-md disabled:shadow-none"
-                    >
-                      {saving ? (
-                        <>
-                          <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                          <span className="text-sm font-semibold">Saving...</span>
-                        </>
-                      ) : (
-                        <>
-                          <SaveIcon />
-                          <span className="text-sm font-semibold">Save Changes</span>
-                        </>
-                      )}
-                    </button>
-                  </div>
-                )}
+              <div>
+                <h1 className="text-3xl font-bold text-slate-900 mb-2">Manage Availability</h1>
+                <p className="text-slate-600">Set your weekly consultation schedule and manage unavailable dates. Changes are saved automatically.</p>
               </div>
             </div>
 
@@ -377,10 +541,20 @@ const LawyerAvailabilityDashboard = () => {
 
                         <button
                           onClick={() => addTimeSlot(day)}
-                          className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-all duration-200 shadow-sm hover:shadow-md"
+                          disabled={saving[`add-${day}`]}
+                          className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-all duration-200 shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                          <PlusIcon />
-                          <span className="text-sm font-semibold">Add Time Slot</span>
+                          {saving[`add-${day}`] ? (
+                            <>
+                              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                              <span className="text-sm font-semibold">Adding...</span>
+                            </>
+                          ) : (
+                            <>
+                              <PlusIcon />
+                              <span className="text-sm font-semibold">Add Time Slot</span>
+                            </>
+                          )}
                         </button>
                       </div>
 
@@ -447,11 +621,33 @@ const LawyerAvailabilityDashboard = () => {
                                 <span className="text-sm text-slate-600 font-medium">max</span>
                               </div>
 
+                              {slot.isUnsaved && (
+                                <button
+                                  onClick={() => saveTimeSlot(day, slot)}
+                                  disabled={saving[`${day}-${slot.id}`]}
+                                  className="flex items-center space-x-2 px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-all duration-200 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                  {saving[`${day}-${slot.id}`] ? (
+                                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                  ) : (
+                                    <>
+                                      <SaveIcon />
+                                      <span>Save</span>
+                                    </>
+                                  )}
+                                </button>
+                              )}
+
                               <button
                                 onClick={() => deleteTimeSlot(day, slot.id)}
-                                className="p-3 text-red-500 hover:bg-red-50 rounded-xl transition-all duration-200"
+                                disabled={saving[`delete-${slot.id}`]}
+                                className="p-3 text-red-500 hover:bg-red-50 rounded-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                               >
-                                <TrashIcon />
+                                {saving[`delete-${slot.id}`] ? (
+                                  <div className="w-4 h-4 border-2 border-red-500 border-t-transparent rounded-full animate-spin"></div>
+                                ) : (
+                                  <TrashIcon />
+                                )}
                               </button>
                             </div>
                           ))}
@@ -541,9 +737,10 @@ const LawyerAvailabilityDashboard = () => {
                   <div className="col-span-2 flex items-end">
                     <button
                       onClick={addBlackoutDate}
-                      className="w-full px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-all duration-200 font-semibold text-sm shadow-sm hover:shadow-md"
+                      disabled={saving['blackout']}
+                      className="w-full px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-all duration-200 font-semibold text-sm shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      Add Blackout
+                      {saving['blackout'] ? 'Adding...' : 'Add Blackout'}
                     </button>
                   </div>
                 </div>
@@ -580,9 +777,14 @@ const LawyerAvailabilityDashboard = () => {
                         </div>
                         <button
                           onClick={() => deleteBlackoutDate(blackout.id)}
-                          className="p-3 text-red-500 hover:bg-red-50 rounded-xl transition-all duration-200"
+                          disabled={saving[`delete-blackout-${blackout.id}`]}
+                          className="p-3 text-red-500 hover:bg-red-50 rounded-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                          <TrashIcon />
+                          {saving[`delete-blackout-${blackout.id}`] ? (
+                            <div className="w-4 h-4 border-2 border-red-500 border-t-transparent rounded-full animate-spin"></div>
+                          ) : (
+                            <TrashIcon />
+                          )}
                         </button>
                       </div>
                     ))
@@ -648,7 +850,7 @@ const LawyerAvailabilityDashboard = () => {
               <div className="flex justify-between items-center p-4 bg-gradient-to-r from-amber-50 to-orange-50 rounded-xl border border-amber-200">
                 <div>
                   <div className="text-sm text-slate-600 font-medium">Active Blackouts</div>
-                  <div className="text-xl font-bold text-slate-900">{blackoutDates.length}</div>
+                  <div className="text-xl font-bold text-slate-900">{stats.activeBlackouts || blackoutDates.length}</div>
                 </div>
                 <div className="p-3 bg-white rounded-lg shadow-sm">
                   <AlertCircleIcon />

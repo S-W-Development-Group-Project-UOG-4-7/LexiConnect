@@ -1,5 +1,4 @@
 from sqlalchemy import Column, Integer, String, ForeignKey
-from sqlalchemy.orm import relationship
 from ..database import Base
 
 class Branch(Base):
@@ -11,5 +10,3 @@ class Branch(Base):
     district = Column(String, nullable=False)
     city = Column(String, nullable=False)
     address = Column(String, nullable=False)
-
-    weekly_availability = relationship("WeeklyAvailability", back_populates="branch", cascade="all, delete-orphan")

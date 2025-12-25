@@ -39,10 +39,6 @@ class WeeklyAvailability(Base):
     is_active = Column(Boolean, default=True, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
-    
-    # Relationships
-    lawyer = relationship("Lawyer", back_populates="weekly_availability")
-    branch = relationship("Branch", back_populates="weekly_availability")
 
 
 class BlackoutDate(Base):
@@ -65,9 +61,6 @@ class BlackoutDate(Base):
     is_active = Column(Boolean, default=True, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
-    
-    # Relationships
-    lawyer = relationship("Lawyer", back_populates="blackout_dates")
 
 
 class AvailabilityException(Base):
