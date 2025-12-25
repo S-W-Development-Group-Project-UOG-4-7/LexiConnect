@@ -12,5 +12,4 @@ class Branch(Base):
     city = Column(String, nullable=False)
     address = Column(String, nullable=False)
 
-    # optional:
-    # lawyer = relationship("Lawyer", back_populates="branches")
+    weekly_availability = relationship("WeeklyAvailability", back_populates="branch", cascade="all, delete-orphan")

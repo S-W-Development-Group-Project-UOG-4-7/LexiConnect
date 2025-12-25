@@ -12,3 +12,5 @@ class Lawyer(Base):
     email = Column(String, unique=True, index=True)
 
     user = relationship("User", back_populates="lawyer")
+    weekly_availability = relationship("WeeklyAvailability", back_populates="lawyer", cascade="all, delete-orphan")
+    blackout_dates = relationship("BlackoutDate", back_populates="lawyer", cascade="all, delete-orphan")

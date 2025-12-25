@@ -1,31 +1,24 @@
-import React, { useState } from 'react';
-import { Calendar, Clock, MapPin, Users, Plus, Trash2, Info, CheckCircle, AlertCircle, ChevronDown } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Calendar, Clock, MapPin, Users, Plus, Trash2, Info, CheckCircle, AlertCircle, Save, X } from 'lucide-react';
 
 const LawyerAvailabilityDashboard = () => {
   const [timeSlots, setTimeSlots] = useState({
-    Monday: [
-      { id: 1, startTime: '08:00 AM', endTime: '12:00 PM', branch: 'Colombo', maxBookings: 5 },
-      { id: 2, startTime: '01:00 PM', endTime: '04:00 PM', branch: 'Colombo', maxBookings: 4 }
-    ],
-    Tuesday: [
-      { id: 3, startTime: '09:00 AM', endTime: '12:00 PM', branch: 'Online', maxBookings: 10 },
-      { id: 4, startTime: '03:00 PM', endTime: '05:00 PM', branch: 'Colombo', maxBookings: 5 }
-    ],
+    Monday: [],
+    Tuesday: [],
     Wednesday: [],
-    Thursday: [
-      { id: 5, startTime: '08:00 AM', endTime: '05:00 PM', branch: 'Kandy', maxBookings: 3 }
-    ],
-    Friday: [
-      { id: 6, startTime: '08:00 AM', endTime: '12:00 PM', branch: 'Colombo', maxBookings: 5 }
-    ],
+    Thursday: [],
+    Friday: [],
     Saturday: [],
     Sunday: []
   });
 
-  const [blackoutDates, setBlackoutDates] = useState([
-    { id: 1, date: '12/25/2025', availability: 'Full Day', startTime: '', endTime: '', reason: 'Christmas Holiday' },
-    { id: 2, date: '01/01/2026', availability: 'Full Day', startTime: '', endTime: '', reason: 'New Year Day' }
-  ]);
+  const [blackoutDates, setBlackoutDates] = useState([]);
+  const [branches, setBranches] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState(null);
+  const [success, setSuccess] = useState(false);
+  const [hasChanges, setHasChanges] = useState(false);
 
   const [newBlackout, setNewBlackout] = useState({
     date: '',
@@ -35,10 +28,155 @@ const LawyerAvailabilityDashboard = () => {
     reason: ''
   });
 
-  const branches = ['Colombo', 'Online', 'Kandy'];
   const weekDays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
-  // Icons using lucide-react
+  // API helper functions
+  const getAuthHeaders = () => {
+    const token = localStorage.getItem('authToken');
+    return {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`
+    };
+  };
+
+  const apiRequest = async (url, options = {}) => {
+    const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}${url}`, {
+      ...options,
+      headers: {
+        ...getAuthHeaders(),
+        ...options.headers
+      }
+    });
+
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({ detail: 'Network error' }));
+      throw new Error(err.detail || `HTTP ${response.status}`);
+    }
+
+    return response.json();
+  };
+
+  // Load data from API
+  const loadAvailabilityData = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      const lawyerId = localStorage.getItem('lawyerId') || '1';
+
+      const [availabilityData, branchesData] = await Promise.all([
+        apiRequest(`/api/lawyer-availability/lawyer/${lawyerId}`),
+        apiRequest('/api/lawyer-availability/branches')
+      ]);
+
+      const transformedSlots = {};
+      weekDays.forEach(day => {
+        transformedSlots[day] = availabilityData.weekly_slots
+          .filter(slot => slot.day_of_week.toLowerCase() === day.toLowerCase())
+          .map(slot => ({
+            id: slot.id,
+            startTime: slot.start_time,
+            endTime: slot.end_time,
+            branch: slot.branch.name,
+            branchId: slot.branch_id,
+            maxBookings: slot.max_bookings
+          }));
+      });
+
+      const transformedBlackouts = availabilityData.blackout_dates.map(blackout => ({
+        id: blackout.id,
+        date: new Date(blackout.date).toLocaleDateString('en-US', {
+          month: '2-digit',
+          day: '2-digit',
+          year: 'numeric'
+        }),
+        availability: blackout.availability_type === 'full_day' ? 'Full Day' : 'Partial Time',
+        startTime: blackout.start_time || '',
+        endTime: blackout.end_time || '',
+        reason: blackout.reason || ''
+      }));
+
+      setTimeSlots(transformedSlots);
+      setBlackoutDates(transformedBlackouts);
+      setBranches(branchesData);
+    } catch (err) {
+      setError(err.message);
+      console.error('Failed to load availability data:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const saveAvailability = async () => {
+    try {
+      setSaving(true);
+      setError(null);
+
+      const lawyerId = localStorage.getItem('lawyerId') || '1';
+
+      const weeklySlotsForApi = [];
+      Object.entries(timeSlots).forEach(([day, slots]) => {
+        slots.forEach(slot => {
+          if (!slot.id || slot.id.toString().startsWith('new-')) {
+            weeklySlotsForApi.push({
+              day_of_week: day.toLowerCase(),
+              start_time: slot.startTime,
+              end_time: slot.endTime,
+              branch_id: slot.branchId || branches.find(b => b.name === slot.branch)?.id,
+              max_bookings: slot.maxBookings
+            });
+          }
+        });
+      });
+
+      const blackoutDatesForApi = [];
+      blackoutDates.forEach(blackout => {
+        if (!blackout.id || blackout.id.toString().startsWith('new-')) {
+          const [month, day, year] = blackout.date.split('/');
+          const dateObj = new Date(`${year}-${month}-${day}`);
+
+          blackoutDatesForApi.push({
+            date: dateObj.toISOString().split('T')[0],
+            availability_type: blackout.availability === 'Full Day' ? 'full_day' : 'partial_time',
+            start_time: blackout.availability === 'Partial Time' ? blackout.startTime : null,
+            end_time: blackout.availability === 'Partial Time' ? blackout.endTime : null,
+            reason: blackout.reason
+          });
+        }
+      });
+
+      if (weeklySlotsForApi.length > 0) {
+        await apiRequest(`/api/lawyer-availability/weekly/bulk?lawyer_id=${lawyerId}`, {
+          method: 'POST',
+          body: JSON.stringify({ slots: weeklySlotsForApi })
+        });
+      }
+
+      if (blackoutDatesForApi.length > 0) {
+        await apiRequest(`/api/lawyer-availability/blackout/bulk?lawyer_id=${lawyerId}`, {
+          method: 'POST',
+          body: JSON.stringify({ dates: blackoutDatesForApi })
+        });
+      }
+
+      setSuccess(true);
+      setHasChanges(false);
+      setTimeout(() => setSuccess(false), 3000);
+
+      await loadAvailabilityData();
+    } catch (err) {
+      setError(err.message);
+      console.error('Failed to save availability:', err);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  useEffect(() => {
+    loadAvailabilityData();
+  }, []);
+
+  // Icons
   const TrashIcon = () => <Trash2 className="w-4 h-4" />;
   const PlusIcon = () => <Plus className="w-4 h-4" />;
   const ClockIcon = () => <Clock className="w-4 h-4" />;
@@ -48,19 +186,23 @@ const LawyerAvailabilityDashboard = () => {
   const CheckCircleIcon = () => <CheckCircle className="w-5 h-5" />;
   const InfoIcon = () => <Info className="w-5 h-5" />;
   const AlertCircleIcon = () => <AlertCircle className="w-5 h-5" />;
+  const SaveIcon = () => <Save className="w-4 h-4" />;
+  const XIcon = () => <X className="w-4 h-4" />;
 
   const addTimeSlot = (day) => {
     const newSlot = {
-      id: Date.now(),
+      id: `new-${Date.now()}`,
       startTime: '09:00 AM',
       endTime: '05:00 PM',
-      branch: 'Colombo',
+      branch: branches[0]?.name || 'Colombo',
+      branchId: branches[0]?.id,
       maxBookings: 5
     };
     setTimeSlots(prev => ({
       ...prev,
       [day]: [...prev[day], newSlot]
     }));
+    setHasChanges(true);
   };
 
   const deleteTimeSlot = (day, slotId) => {
@@ -68,29 +210,31 @@ const LawyerAvailabilityDashboard = () => {
       ...prev,
       [day]: prev[day].filter(slot => slot.id !== slotId)
     }));
+    setHasChanges(true);
   };
 
   const updateSlot = (day, slotId, field, value) => {
     setTimeSlots(prev => ({
       ...prev,
-      [day]: prev[day].map(slot => 
+      [day]: prev[day].map(slot =>
         slot.id === slotId ? { ...slot, [field]: value } : slot
       )
     }));
+    setHasChanges(true);
   };
 
   const addBlackoutDate = () => {
     if (!newBlackout.date) return;
-    
+
     const blackout = {
-      id: Date.now(),
+      id: `new-${Date.now()}`,
       date: newBlackout.date,
       availability: newBlackout.availability,
       startTime: newBlackout.availability === 'Full Day' ? '' : newBlackout.startTime,
       endTime: newBlackout.availability === 'Full Day' ? '' : newBlackout.endTime,
       reason: newBlackout.reason
     };
-    
+
     setBlackoutDates(prev => [...prev, blackout]);
     setNewBlackout({
       date: '',
@@ -99,18 +243,20 @@ const LawyerAvailabilityDashboard = () => {
       endTime: '05:00 PM',
       reason: ''
     });
+    setHasChanges(true);
   };
 
   const deleteBlackoutDate = (id) => {
     setBlackoutDates(prev => prev.filter(blackout => blackout.id !== id));
+    setHasChanges(true);
   };
 
   const getTotalWeeklyHours = () => {
     let totalHours = 0;
     Object.values(timeSlots).forEach(slots => {
       slots.forEach(slot => {
-        const start = parseInt(slot.startTime.split(':')[0]);
-        const end = parseInt(slot.endTime.split(':')[0]);
+        const start = parseInt(slot.startTime.split(':')[0], 10);
+        const end = parseInt(slot.endTime.split(':')[0], 10);
         const startPeriod = slot.startTime.includes('PM') && start !== 12 ? start + 12 : start;
         const endPeriod = slot.endTime.includes('PM') && end !== 12 ? end + 12 : end;
         totalHours += Math.max(0, endPeriod - startPeriod);
@@ -120,21 +266,84 @@ const LawyerAvailabilityDashboard = () => {
   };
 
   const getTotalDailyCapacity = () => {
-    return Object.values(timeSlots).reduce((total, slots) => 
-      total + slots.reduce((dayTotal, slot) => dayTotal + slot.maxBookings, 0), 0
+    return Object.values(timeSlots).reduce(
+      (total, slots) => total + slots.reduce((dayTotal, slot) => dayTotal + slot.maxBookings, 0),
+      0
     );
   };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
+      {/* Error/Success Messages */}
+      {error && (
+        <div className="fixed top-4 right-4 z-50 max-w-md">
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4 shadow-lg">
+            <div className="flex items-start space-x-3">
+              <AlertCircleIcon />
+              <div className="flex-1">
+                <h4 className="text-red-800 font-semibold">Error</h4>
+                <p className="text-red-700 text-sm mt-1">{error}</p>
+              </div>
+              <button onClick={() => setError(null)} className="text-red-500 hover:text-red-700">
+                <XIcon />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {success && (
+        <div className="fixed top-4 right-4 z-50 max-w-md">
+          <div className="bg-green-50 border border-green-200 rounded-lg p-4 shadow-lg">
+            <div className="flex items-start space-x-3">
+              <CheckCircleIcon />
+              <div className="flex-1">
+                <h4 className="text-green-800 font-semibold">Success</h4>
+                <p className="text-green-700 text-sm mt-1">Availability saved successfully!</p>
+              </div>
+              <button onClick={() => setSuccess(false)} className="text-green-500 hover:text-green-700">
+                <XIcon />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="flex">
         {/* Main Content */}
         <main className="flex-1 p-8">
           <div className="max-w-5xl mx-auto">
-            {/* Page Header */}
+            {/* Page Header with Save Button */}
             <div className="mb-8">
-              <h1 className="text-3xl font-bold text-slate-900 mb-2">Manage Availability</h1>
-              <p className="text-slate-600">Set your weekly consultation schedule and manage unavailable dates.</p>
+              <div className="flex items-center justify-between">
+                <div>
+                  <h1 className="text-3xl font-bold text-slate-900 mb-2">Manage Availability</h1>
+                  <p className="text-slate-600">Set your weekly consultation schedule and manage unavailable dates.</p>
+                </div>
+
+                {hasChanges && (
+                  <div className="flex items-center space-x-3">
+                    <span className="text-sm text-amber-600 font-medium">Unsaved changes</span>
+                    <button
+                      onClick={saveAvailability}
+                      disabled={saving}
+                      className="flex items-center space-x-2 px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:bg-blue-400 transition-all duration-200 shadow-sm hover:shadow-md disabled:shadow-none"
+                    >
+                      {saving ? (
+                        <>
+                          <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                          <span className="text-sm font-semibold">Saving...</span>
+                        </>
+                      ) : (
+                        <>
+                          <SaveIcon />
+                          <span className="text-sm font-semibold">Save Changes</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Weekly Consultation Schedule */}
@@ -146,102 +355,112 @@ const LawyerAvailabilityDashboard = () => {
                   <span>Auto-recurring weekly</span>
                 </div>
               </div>
-              
-              <div className="space-y-6">
-                {weekDays.map((day) => (
-                  <div key={day} className="border-b border-slate-100 pb-6 last:border-b-0">
-                    <div className="flex items-center justify-between mb-4">
-                      <div className="flex items-center space-x-3">
-                        <h3 className="font-semibold text-slate-900">{day}</h3>
-                        {timeSlots[day].length > 0 && (
-                          <span className="px-3 py-1 bg-blue-100 text-blue-700 text-xs font-semibold rounded-full">
-                            {timeSlots[day].length} slot{timeSlots[day].length !== 1 ? 's' : ''}
-                          </span>
-                        )}
-                      </div>
-                      <button
-                        onClick={() => addTimeSlot(day)}
-                        className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-all duration-200 shadow-sm hover:shadow-md"
-                      >
-                        <PlusIcon />
-                        <span className="text-sm font-semibold">Add Time Slot</span>
-                      </button>
-                    </div>
 
-                    {timeSlots[day].length === 0 ? (
-                      <div className="text-center py-12 bg-slate-50 rounded-xl border-2 border-dashed border-slate-200">
-                        <p className="text-slate-500">No availability set for {day}</p>
-                      </div>
-                    ) : (
-                      <div className="space-y-4">
-                        {timeSlots[day].map((slot) => (
-                          <div key={slot.id} className="flex items-center space-x-4 p-5 bg-gradient-to-r from-slate-50 to-blue-50 rounded-xl border border-slate-200">
-                            <div className="flex items-center space-x-3 flex-1">
-                              <div className="p-2 bg-white rounded-lg shadow-sm">
-                                <ClockIcon />
-                              </div>
-                              <div className="flex items-center space-x-2">
-                                <input
-                                  type="text"
-                                  value={slot.startTime}
-                                  onChange={(e) => updateSlot(day, slot.id, 'startTime', e.target.value)}
-                                  placeholder="08:00 AM"
-                                  className="w-24 px-3 py-2 text-sm font-medium bg-slate-800 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                />
-                                <span className="text-slate-400 font-medium">-</span>
-                                <input
-                                  type="text"
-                                  value={slot.endTime}
-                                  onChange={(e) => updateSlot(day, slot.id, 'endTime', e.target.value)}
-                                  placeholder="05:00 PM"
-                                  className="w-24 px-3 py-2 text-sm font-medium bg-slate-800 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                />
-                              </div>
-                            </div>
+              {loading ? (
+                <div className="flex items-center justify-center py-12">
+                  <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                  <span className="ml-3 text-slate-600">Loading availability...</span>
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  {weekDays.map((day) => (
+                    <div key={day} className="border-b border-slate-100 pb-6 last:border-b-0">
+                      <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center space-x-3">
+                          <h3 className="font-semibold text-slate-900">{day}</h3>
+                          {timeSlots[day].length > 0 && (
+                            <span className="px-3 py-1 bg-blue-100 text-blue-700 text-xs font-semibold rounded-full">
+                              {timeSlots[day].length} slot{timeSlots[day].length !== 1 ? 's' : ''}
+                            </span>
+                          )}
+                        </div>
 
-                            <div className="flex items-center space-x-3">
-                              <div className="p-2 bg-white rounded-lg shadow-sm">
-                                <MapPinIcon />
+                        <button
+                          onClick={() => addTimeSlot(day)}
+                          className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-all duration-200 shadow-sm hover:shadow-md"
+                        >
+                          <PlusIcon />
+                          <span className="text-sm font-semibold">Add Time Slot</span>
+                        </button>
+                      </div>
+
+                      {timeSlots[day].length === 0 ? (
+                        <div className="text-center py-12 bg-slate-50 rounded-xl border-2 border-dashed border-slate-200">
+                          <p className="text-slate-500">No availability set for {day}</p>
+                        </div>
+                      ) : (
+                        <div className="space-y-4">
+                          {timeSlots[day].map((slot) => (
+                            <div key={slot.id} className="flex items-center space-x-4 p-5 bg-gradient-to-r from-slate-50 to-blue-50 rounded-xl border border-slate-200">
+                              <div className="flex items-center space-x-3 flex-1">
+                                <div className="p-2 bg-white rounded-lg shadow-sm">
+                                  <ClockIcon />
+                                </div>
+                                <div className="flex items-center space-x-2">
+                                  <input
+                                    type="text"
+                                    value={slot.startTime}
+                                    onChange={(e) => updateSlot(day, slot.id, 'startTime', e.target.value)}
+                                    className="w-24 px-3 py-2 text-sm font-medium bg-slate-800 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                  />
+                                  <span className="text-slate-400 font-medium">-</span>
+                                  <input
+                                    type="text"
+                                    value={slot.endTime}
+                                    onChange={(e) => updateSlot(day, slot.id, 'endTime', e.target.value)}
+                                    className="w-24 px-3 py-2 text-sm font-medium bg-slate-800 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                  />
+                                </div>
                               </div>
-                              <select
-                                value={slot.branch}
-                                onChange={(e) => updateSlot(day, slot.id, 'branch', e.target.value)}
-                                className="px-4 py-2 text-sm font-medium bg-slate-800 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+
+                              <div className="flex items-center space-x-3">
+                                <div className="p-2 bg-white rounded-lg shadow-sm">
+                                  <MapPinIcon />
+                                </div>
+                                <select
+                                  value={slot.branchId || branches.find(b => b.name === slot.branch)?.id || ''}
+                                  onChange={(e) => {
+                                    const branch = branches.find(b => b.id === parseInt(e.target.value, 10));
+                                    updateSlot(day, slot.id, 'branch', branch?.name || slot.branch);
+                                    updateSlot(day, slot.id, 'branchId', branch?.id);
+                                  }}
+                                  className="px-4 py-2 text-sm font-medium bg-slate-800 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                >
+                                  <option value="">Select branch</option>
+                                  {branches.map((branch) => (
+                                    <option key={branch.id} value={branch.id}>{branch.name}</option>
+                                  ))}
+                                </select>
+                              </div>
+
+                              <div className="flex items-center space-x-3">
+                                <div className="p-2 bg-white rounded-lg shadow-sm">
+                                  <UsersIcon />
+                                </div>
+                                <input
+                                  type="number"
+                                  value={slot.maxBookings}
+                                  onChange={(e) => updateSlot(day, slot.id, 'maxBookings', parseInt(e.target.value, 10) || 0)}
+                                  className="w-20 px-3 py-2 text-sm font-medium bg-slate-800 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                  min="1"
+                                />
+                                <span className="text-sm text-slate-600 font-medium">max</span>
+                              </div>
+
+                              <button
+                                onClick={() => deleteTimeSlot(day, slot.id)}
+                                className="p-3 text-red-500 hover:bg-red-50 rounded-xl transition-all duration-200"
                               >
-                                {branches.map((branch) => (
-                                  <option key={branch} value={branch}>{branch}</option>
-                                ))}
-                              </select>
+                                <TrashIcon />
+                              </button>
                             </div>
-
-                            <div className="flex items-center space-x-3">
-                              <div className="p-2 bg-white rounded-lg shadow-sm">
-                                <UsersIcon />
-                              </div>
-                              <input
-                                type="number"
-                                value={slot.maxBookings}
-                                onChange={(e) => updateSlot(day, slot.id, 'maxBookings', parseInt(e.target.value) || 0)}
-                                placeholder="5"
-                                className="w-20 px-3 py-2 text-sm font-medium bg-slate-800 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                min="1"
-                              />
-                              <span className="text-sm text-slate-600 font-medium">max</span>
-                            </div>
-
-                            <button
-                              onClick={() => deleteTimeSlot(day, slot.id)}
-                              className="p-3 text-red-500 hover:bg-red-50 rounded-xl transition-all duration-200"
-                            >
-                              <TrashIcon />
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Blackout Dates Section */}
@@ -272,7 +491,7 @@ const LawyerAvailabilityDashboard = () => {
                       </div>
                     </div>
                   </div>
-                  
+
                   <div className="col-span-3">
                     <label className="block text-sm font-medium text-slate-700 mb-2">Availability</label>
                     <select
@@ -293,7 +512,6 @@ const LawyerAvailabilityDashboard = () => {
                           type="text"
                           value={newBlackout.startTime}
                           onChange={(e) => setNewBlackout(prev => ({ ...prev, startTime: e.target.value }))}
-                          placeholder="09:00 AM"
                           className="w-full px-4 py-2 text-sm font-medium bg-slate-800 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
                         />
                       </div>
@@ -303,7 +521,6 @@ const LawyerAvailabilityDashboard = () => {
                           type="text"
                           value={newBlackout.endTime}
                           onChange={(e) => setNewBlackout(prev => ({ ...prev, endTime: e.target.value }))}
-                          placeholder="05:00 PM"
                           className="w-full px-4 py-2 text-sm font-medium bg-slate-800 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
                         />
                       </div>
@@ -333,36 +550,45 @@ const LawyerAvailabilityDashboard = () => {
               </div>
 
               {/* Blackout Dates List */}
-              <div className="space-y-3">
-                {blackoutDates.length === 0 ? (
-                  <div className="text-center py-12 bg-slate-50 rounded-xl border-2 border-dashed border-slate-200">
-                    <p className="text-slate-500">No blackout dates set</p>
-                  </div>
-                ) : (
-                  blackoutDates.map((blackout) => (
-                    <div key={blackout.id} className="flex items-center justify-between p-4 bg-gradient-to-r from-red-50 to-pink-50 rounded-xl border border-red-200">
-                      <div className="flex items-center space-x-4">
-                        <div className="p-2 bg-white rounded-lg shadow-sm">
-                          <CalendarIcon />
-                        </div>
-                        <div>
-                          <div className="font-semibold text-slate-900">{blackout.date}</div>
-                          <div className="text-sm text-slate-600">
-                            {blackout.availability === 'Full Day' ? 'Full Day' : `${blackout.startTime} - ${blackout.endTime}`}
-                            {blackout.reason && ` • ${blackout.reason}`}
+              {loading ? (
+                <div className="flex items-center justify-center py-12">
+                  <div className="w-8 h-8 border-2 border-amber-600 border-t-transparent rounded-full animate-spin"></div>
+                  <span className="ml-3 text-slate-600">Loading blackout dates...</span>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {blackoutDates.length === 0 ? (
+                    <div className="text-center py-12 bg-slate-50 rounded-xl border-2 border-dashed border-slate-200">
+                      <p className="text-slate-500">No blackout dates set</p>
+                    </div>
+                  ) : (
+                    blackoutDates.map((blackout) => (
+                      <div key={blackout.id} className="flex items-center justify-between p-4 bg-gradient-to-r from-red-50 to-pink-50 rounded-xl border border-red-200">
+                        <div className="flex items-center space-x-4">
+                          <div className="p-2 bg-white rounded-lg shadow-sm">
+                            <CalendarIcon />
+                          </div>
+                          <div>
+                            <div className="font-semibold text-slate-900">{blackout.date}</div>
+                            <div className="text-sm text-slate-600">
+                              {blackout.availability === 'Full Day'
+                                ? 'Full Day'
+                                : `${blackout.startTime} - ${blackout.endTime}`}
+                              {blackout.reason && ` • ${blackout.reason}`}
+                            </div>
                           </div>
                         </div>
+                        <button
+                          onClick={() => deleteBlackoutDate(blackout.id)}
+                          className="p-3 text-red-500 hover:bg-red-50 rounded-xl transition-all duration-200"
+                        >
+                          <TrashIcon />
+                        </button>
                       </div>
-                      <button
-                        onClick={() => deleteBlackoutDate(blackout.id)}
-                        className="p-3 text-red-500 hover:bg-red-50 rounded-xl transition-all duration-200"
-                      >
-                        <TrashIcon />
-                      </button>
-                    </div>
-                  ))
-                )}
-              </div>
+                    ))
+                  )}
+                </div>
+              )}
             </div>
           </div>
         </main>
@@ -382,6 +608,7 @@ const LawyerAvailabilityDashboard = () => {
                   <p className="text-sm text-slate-600">Set your regular availability patterns</p>
                 </div>
               </div>
+
               <div className="flex items-start space-x-4">
                 <div className="p-2 bg-green-100 rounded-lg">
                   <CheckCircleIcon />
@@ -391,6 +618,7 @@ const LawyerAvailabilityDashboard = () => {
                   <p className="text-sm text-slate-600">Schedule repeats weekly automatically</p>
                 </div>
               </div>
+
               <div className="flex items-start space-x-4">
                 <div className="p-2 bg-amber-100 rounded-lg">
                   <AlertCircleIcon />
@@ -416,6 +644,7 @@ const LawyerAvailabilityDashboard = () => {
                   <ClockIcon />
                 </div>
               </div>
+
               <div className="flex justify-between items-center p-4 bg-gradient-to-r from-amber-50 to-orange-50 rounded-xl border border-amber-200">
                 <div>
                   <div className="text-sm text-slate-600 font-medium">Active Blackouts</div>
@@ -425,6 +654,7 @@ const LawyerAvailabilityDashboard = () => {
                   <AlertCircleIcon />
                 </div>
               </div>
+
               <div className="flex justify-between items-center p-4 bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl border border-green-200">
                 <div>
                   <div className="text-sm text-slate-600 font-medium">Daily Capacity</div>
