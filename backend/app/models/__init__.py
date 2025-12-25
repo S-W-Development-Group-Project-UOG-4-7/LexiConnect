@@ -12,7 +12,6 @@ from app.models.kyc_submission import KYCSubmission
 from app.models.lawyer import Lawyer
 from app.models.lawyer_kyc import LawyerKYC
 from app.models.user import User
-notepad pages\Availability.tsx
 
 
 
