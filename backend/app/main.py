@@ -15,7 +15,7 @@ from .api.v1 import admin as admin_v1, booking as booking_v1
 from .database import Base, engine, SessionLocal
 
 # Ensure models are loaded
-from .models import branch, kyc_submission, lawyer  # noqa
+from .models import branch, kyc_submission, lawyer, lawyer_availability  # noqa
 
 from .seed import seed_demo_users
 
@@ -31,6 +31,7 @@ from .routers import (
     dev,
     lawyers,
     token_queue,
+    lawyer_availability,
 )
 
 # Create all database tables
@@ -44,6 +45,10 @@ app = FastAPI(
 )
 
 # ---- CORS for React (Vite) frontend ----
+# NOTE:
+# - Allow both localhost + 127.0.0.1
+# - Allow common Vite ports (5173+)
+# - Dev-only: allow all methods/headers
 origins = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
@@ -54,6 +59,7 @@ origins = [
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
+    allow_origin_regex=r"^http:\/\/(localhost|127\.0\.0\.1):\d+$",  # <--- makes dev painless
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -98,6 +104,9 @@ app.include_router(booking_v1.router)
 
 # Disputes API
 app.include_router(disputes_router, prefix="/api/disputes", tags=["Disputes"])
+
+# Lawyer Availability API
+app.include_router(lawyer_availability.router)
 
 # ---- Custom OpenAPI (JWT Bearer Auth in Swagger) ----
 def custom_openapi():
