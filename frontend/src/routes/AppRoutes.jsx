@@ -10,6 +10,7 @@ import { LawyerKYC } from "../features/lawyer_kyc";
 
 
 import AvailabilityEditor from "../pages/AvailabilityEditor";
+import LawyerAvailabilityDashboard from "../components/LawyerAvailabilityDashboard";
 import TokenQueue from "../pages/TokenQueue";
 import NotAuthorized from "../pages/NotAuthorized";
 import LandingRedirect from "../pages/LandingRedirect";
@@ -100,7 +101,7 @@ const AppRoutes = () => {
         }
       >
         <Route path="/lawyer/dashboard" element={<div>Lawyer Dashboard (placeholder)</div>} />
-        <Route path="/lawyer/availability" element={<AvailabilityEditor />} />
+        <Route path="/lawyer/availability" element={<LawyerAvailabilityDashboard />} />
         <Route path="/lawyer/token-queue" element={<TokenQueue />} />
         <Route path="/lawyer/branches" element={<BranchManagement />} />
         <Route path="/lawyer/services" element={<ServicePackages />} />
