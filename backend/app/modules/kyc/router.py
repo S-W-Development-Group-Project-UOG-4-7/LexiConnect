@@ -67,6 +67,7 @@ def submit_kyc(
 def get_my_kyc(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
+    
 ):
     if current_user.role != "lawyer":
         raise HTTPException(status_code=403, detail="Only lawyers can view KYC")
