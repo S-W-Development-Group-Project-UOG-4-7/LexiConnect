@@ -51,7 +51,7 @@ def submit_kyc(
         bar_council_id=payload.bar_council_id,
         address=payload.address,
         contact_number=payload.contact_number,
-        bar_certificate_pdf=payload.bar_certificate_pdf,
+        bar_certificate_url=payload.bar_certificate_url,
         status="pending",
     )
 
