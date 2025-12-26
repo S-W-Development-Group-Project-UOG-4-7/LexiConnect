@@ -10,6 +10,7 @@ from fastapi.openapi.utils import get_openapi
 # Safe module routers
 from app.modules.kyc.router import router as kyc_router
 from app.modules.disputes.routes import router as disputes_router
+from app.modules.branches.router import router as branches_router
 
 from .api.v1 import admin as admin_v1, booking as booking_v1
 from .database import Base, engine, SessionLocal
@@ -27,7 +28,6 @@ from .routers import (
     admin,
     auth,
     bookings,
-    branches,
     dev,
     lawyers,
     token_queue,
@@ -94,7 +94,7 @@ app.include_router(bookings.router)
 # app.include_router(documents.router, prefix="/bookings")
 
 app.include_router(admin.router)
-app.include_router(branches.router)
+app.include_router(branches_router)
 app.include_router(kyc_router)
 app.include_router(dev.router)          # DEV-ONLY endpoints
 app.include_router(disputes_router)
