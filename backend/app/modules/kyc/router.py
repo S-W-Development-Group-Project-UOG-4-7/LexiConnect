@@ -12,7 +12,7 @@ from app.models.lawyer import Lawyer
 router = APIRouter(prefix="/api/kyc", tags=["KYC"])
 
 
-@router.post("", status_code=status.HTTP_201_CREATED)
+@router.post("", status_code=status.HTTP_201_CREATED, response_model=KYCResponse)
 def submit_kyc(
     payload: KYCSubmitRequest,
     db: Session = Depends(get_db),
