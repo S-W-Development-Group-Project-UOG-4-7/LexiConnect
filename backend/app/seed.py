@@ -6,6 +6,7 @@ import os
 from sqlalchemy.orm import Session
 
 from app.models.user import User, UserRole
+from app.models.lawyer import Lawyer
 from app.routers.auth import get_password_hash, get_user_by_email
 
 
@@ -68,4 +69,26 @@ def seed_demo_users(db: Session):
         print(f"[SEED] Seeded {created_count} demo user(s). Skipped {skipped_count} existing user(s).")
     else:
         print(f"[SEED] All demo users already exist. Skipped {skipped_count} user(s).")
+
+    # Create corresponding Lawyer records for lawyer users
+    seed_lawyer_records(db)
+
+
+def seed_lawyer_records(db: Session):
+    """Create Lawyer records for users with lawyer role"""
+    lawyer_users = db.query(User).filter(User.role == UserRole.lawyer).all()
+    
+    for user in lawyer_users:
+        # Check if Lawyer record already exists
+        existing_lawyer = db.query(Lawyer).filter(Lawyer.email == user.email).first()
+        if not existing_lawyer:
+            lawyer = Lawyer(
+                name=user.full_name,
+                email=user.email
+            )
+            db.add(lawyer)
+            print(f"[SEED] Created Lawyer record for {user.email}")
+    
+    db.commit()
+    print("[SEED] Lawyer records seeded.")
 

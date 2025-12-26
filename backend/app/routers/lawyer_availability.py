@@ -104,7 +104,7 @@ def create_weekly_availability(
     lawyer_id: int = Query(..., description="Lawyer ID"),
     db: Session = Depends(get_db)
 ):
-    """Create a new weekly availability slot in availability_templates table"""
+    """Create a new weekly availability slot"""
     
     # Verify lawyer exists
     lawyer = db.query(Lawyer).filter(Lawyer.id == lawyer_id).first()
@@ -114,43 +114,58 @@ def create_weekly_availability(
             detail="Lawyer not found"
         )
     
+    # Verify branch exists
+    branch = db.query(Branch).filter(Branch.id == slot_data.branch_id).first()
+    if not branch:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Branch not found"
+        )
+    
     # Parse times
     start_time = parse_time_string(slot_data.start_time)
     end_time = parse_time_string(slot_data.end_time)
     
-    # Calculate slot minutes
-    start_minutes = start_time.hour * 60 + start_time.minute
-    end_minutes = end_time.hour * 60 + end_time.minute
-    slot_minutes = end_minutes - start_minutes
+    # Check for overlapping slots
+    existing = db.query(WeeklyAvailability).filter(
+        and_(
+            WeeklyAvailability.lawyer_id == lawyer_id,
+            WeeklyAvailability.day_of_week == slot_data.day_of_week,
+            WeeklyAvailability.is_active == True,
+            or_(
+                and_(
+                    WeeklyAvailability.start_time <= start_time,
+                    WeeklyAvailability.end_time > start_time
+                ),
+                and_(
+                    WeeklyAvailability.start_time < end_time,
+                    WeeklyAvailability.end_time >= end_time
+                )
+            )
+        )
+    ).first()
     
-    # Convert day string to integer
-    day_int = day_to_int(slot_data.day_of_week)
+    if existing:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Time slot overlaps with existing availability"
+        )
     
-    # Create availability template
-    template = AvailabilityTemplate(
+    # Create new availability slot
+    new_slot = WeeklyAvailability(
         lawyer_id=lawyer_id,
-        day_of_week=day_int,
+        branch_id=slot_data.branch_id,
+        day_of_week=slot_data.day_of_week,
         start_time=start_time,
         end_time=end_time,
-        slot_minutes=slot_minutes
+        max_bookings=slot_data.max_bookings
     )
     
-    db.add(template)
+    db.add(new_slot)
     db.commit()
-    db.refresh(template)
+    db.refresh(new_slot)
     
-    # Return in expected format
-    return WeeklyAvailabilityResponse(
-        id=str(template.id),
-        lawyer_id=template.lawyer_id,
-        day_of_week=slot_data.day_of_week,
-        start_time=slot_data.start_time,
-        end_time=slot_data.end_time,
-        branch_id=1,  # Default branch since templates don't have branch_id
-        max_bookings=slot_minutes // 60,  # Convert minutes to hours as booking count
-        is_active=template.is_active,
-        created_at=template.created_at
-    )
+    return new_slot
 
 
 @router.put("/weekly/{slot_id}", response_model=WeeklyAvailabilityResponse)
