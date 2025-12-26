@@ -51,6 +51,49 @@ const LawyerAvailabilityDashboard = () => {
     return timeStr;
   };
 
+  // Helper function to get lawyer ID dynamically
+  const getLawyerId = async () => {
+    // First try to get from localStorage
+    const storedLawyerId = localStorage.getItem('lawyerId');
+    if (storedLawyerId) {
+      return storedLawyerId;
+    }
+
+    // Try to get from JWT token
+    const token = localStorage.getItem('token') || localStorage.getItem('authToken');
+    if (token) {
+      try {
+        // Simple JWT decode (for development only)
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        if (payload.lawyer_id) {
+          localStorage.setItem('lawyerId', payload.lawyer_id);
+          return payload.lawyer_id;
+        }
+        if (payload.id && payload.role === 'lawyer') {
+          localStorage.setItem('lawyerId', payload.id);
+          return payload.id;
+        }
+      } catch (e) {
+        console.log('Failed to decode JWT:', e);
+      }
+    }
+
+    // Fallback: fetch first lawyer from backend
+    try {
+      const lawyers = await apiRequest('/lawyers/');
+      if (lawyers && Array.isArray(lawyers) && lawyers.length > 0) {
+        const firstLawyerId = lawyers[0].id.toString();
+        localStorage.setItem('lawyerId', firstLawyerId);
+        return firstLawyerId;
+      }
+    } catch (e) {
+      console.log('Failed to fetch lawyers:', e);
+    }
+
+    // Final fallback
+    return '1';
+  };
+
   // API helper functions
   const getAuthHeaders = () => {
     const token = localStorage.getItem('token') || localStorage.getItem('authToken');
@@ -66,16 +109,21 @@ const LawyerAvailabilityDashboard = () => {
   };
 
   const apiRequest = async (url, options = {}) => {
-    const baseURL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
-    const fullUrl = `${baseURL}${url}`;
+    // Use relative URL - Vite proxy will handle forwarding to backend
+    const fullUrl = url;  // No base URL needed with proxy
     console.log('Making request to:', fullUrl); // Debug log
-    const response = await fetch(fullUrl, {
+    
+    // Add cache-busting for GET requests to avoid 304 issues
+    const requestOptions = {
       ...options,
       headers: {
         ...getAuthHeaders(),
         ...options.headers
-      }
-    });
+      },
+      cache: options.method === 'GET' ? 'no-store' : 'default'
+    };
+    
+    const response = await fetch(fullUrl, requestOptions);
 
     if (!response.ok) {
       const errorText = await response.text();
@@ -89,8 +137,30 @@ const LawyerAvailabilityDashboard = () => {
       throw new Error(err.detail || `HTTP ${response.status}`);
     }
 
+    // Handle empty responses (204, 304, or Content-Length: 0)
+    const contentType = response.headers.get('content-type') || '';
+    const contentLength = response.headers.get('content-length') || '0';
+    
+    if (response.status === 204 || response.status === 304 || contentLength === '0') {
+      console.log('Empty response detected, returning null');
+      return null;
+    }
+    
+    // Only parse JSON if content-type includes application/json
+    if (!contentType.includes('application/json')) {
+      const responseText = await response.text();
+      console.error('Non-JSON response:', responseText);
+      throw new Error('Server returned non-JSON response');
+    }
+
     const responseText = await response.text();
     console.log('Response text:', responseText); // Debug log
+    
+    // Handle empty JSON responses
+    if (!responseText.trim()) {
+      console.log('Empty JSON response, returning null');
+      return null;
+    }
     
     try {
       return JSON.parse(responseText);
@@ -106,29 +176,45 @@ const LawyerAvailabilityDashboard = () => {
       setLoading(true);
       setError(null);
 
-      const lawyerId = localStorage.getItem('lawyerId') || '1';
+      const lawyerId = await getLawyerId();
+      console.log('Using lawyer ID:', lawyerId); // Debug log
 
-      const [availabilityData, branchesData] = await Promise.all([
-        apiRequest(`/api/lawyer-availability/lawyer/${lawyerId}`),
-        apiRequest('/api/lawyer-availability/branches')
+      const [availabilityData, branchesData, blackoutData] = await Promise.all([
+        apiRequest(`/api/lawyer-availability/weekly?lawyer_id=${lawyerId}`),
+        apiRequest('/api/lawyer-availability/branches'),
+        apiRequest(`/api/lawyer-availability/blackout?lawyer_id=${lawyerId}`)
       ]);
+
+      // Store branches data for dropdown
+      setBranches(branchesData || []);
+
+      // Transform weekly slots response to match expected format
+      const weeklySlots = availabilityData.map(slot => ({
+        id: slot.id,
+        day_of_week: slot.day_of_week,
+        start_time: slot.start_time,
+        end_time: slot.end_time,
+        max_bookings: slot.max_bookings,
+        is_active: slot.is_active
+      }));
 
       const transformedSlots = {};
       weekDays.forEach(day => {
-        transformedSlots[day] = availabilityData.weekly_slots
+        transformedSlots[day] = weeklySlots
           .filter(slot => slot.day_of_week.toLowerCase() === day.toLowerCase())
           .map(slot => ({
             id: slot.id,
             startTime: formatTime(slot.start_time),
             endTime: formatTime(slot.end_time),
-            branch: slot.branch?.name || branchesData.find(b => b.id === slot.branch_id)?.name || 'Unknown',
-            branchId: slot.branch_id,
+            branch: branchesData.find(b => b.id === slot.branch_id)?.name || 'Default Branch',
+            branchId: slot.branch_id || 1,
             maxBookings: slot.max_bookings,
             isUnsaved: false
           }));
       });
 
-      const transformedBlackouts = availabilityData.blackout_dates.map(blackout => ({
+      // Transform blackout dates response
+      const transformedBlackouts = (blackoutData || []).map(blackout => ({
         id: blackout.id,
         date: new Date(blackout.date).toLocaleDateString('en-US', {
           month: '2-digit',
@@ -143,10 +229,9 @@ const LawyerAvailabilityDashboard = () => {
 
       setTimeSlots(transformedSlots);
       setBlackoutDates(transformedBlackouts);
-      setBranches(branchesData);
       setStats({
-        activeBlackouts: availabilityData.active_blackouts || transformedBlackouts.length,
-        dailyCapacity: availabilityData.total_daily_capacity || 0
+        activeBlackouts: 0,
+        dailyCapacity: weeklySlots.length
       });
     } catch (err) {
       setError(err.message);
@@ -158,7 +243,7 @@ const LawyerAvailabilityDashboard = () => {
 
   // Save a single time slot immediately
   const saveTimeSlot = async (day, slot) => {
-    const lawyerId = localStorage.getItem('lawyerId') || '1';
+    const lawyerId = await getLawyerId();
     const slotKey = `${day}-${slot.id}`;
     
     try {
@@ -169,9 +254,14 @@ const LawyerAvailabilityDashboard = () => {
         day_of_week: day.toLowerCase(),
         start_time: slot.startTime,
         end_time: slot.endTime,
-        branch_id: slot.branchId || branches.find(b => b.name === slot.branch)?.id || 1,
+        branch_id: slot.branchId, // Require explicit branch selection
         max_bookings: slot.maxBookings
       };
+      
+      // Validate branch selection
+      if (!slotData.branch_id || slotData.branch_id === '') {
+        throw new Error('Please select a branch before saving');
+      }
       
       console.log('Saving slot data:', slotData); // Debug log
 
@@ -211,7 +301,12 @@ const LawyerAvailabilityDashboard = () => {
       // Reload to get updated stats
       await loadAvailabilityData();
     } catch (err) {
-      setError(err.message);
+      // Handle specific branch not found error
+      if (err.message.includes('Branch not found')) {
+        setError('Branch not found. Please select a valid branch from the dropdown.');
+      } else {
+        setError(err.message);
+      }
       console.error('Failed to save time slot:', err);
     } finally {
       setSaving(prev => {
@@ -244,8 +339,8 @@ const LawyerAvailabilityDashboard = () => {
       id: `new-${Date.now()}`,
       startTime: '09:00 AM',
       endTime: '05:00 PM',
-      branch: branches[0]?.name || 'Colombo',
-      branchId: branches[0]?.id,
+      branch: '', // No default branch
+      branchId: null, // Require selection
       maxBookings: 5,
       isUnsaved: true
     };
@@ -384,6 +479,8 @@ const LawyerAvailabilityDashboard = () => {
   };
 
   const deleteBlackoutDate = async (id) => {
+    console.log('Deleting blackout with ID:', id); // Debug log
+    
     // Don't delete if it's a new unsaved blackout
     if (id.toString().startsWith('new-')) {
       setBlackoutDates(prev => prev.filter(blackout => blackout.id !== id));
@@ -394,9 +491,13 @@ const LawyerAvailabilityDashboard = () => {
       setSaving(prev => ({ ...prev, [`delete-blackout-${id}`]: true }));
       setError(null);
 
+      console.log('Making DELETE request to:', `/api/lawyer-availability/blackout/${id}`); // Debug log
+      
       await apiRequest(`/api/lawyer-availability/blackout/${id}`, {
         method: 'DELETE'
       });
+
+      console.log('DELETE request successful'); // Debug log
 
       // Remove from UI
       setBlackoutDates(prev => prev.filter(blackout => blackout.id !== id));
@@ -407,8 +508,8 @@ const LawyerAvailabilityDashboard = () => {
       // Reload to get updated stats
       await loadAvailabilityData();
     } catch (err) {
+      console.error('Delete blackout error:', err); // Debug log
       setError(err.message);
-      console.error('Failed to delete blackout date:', err);
     } finally {
       setSaving(prev => {
         const newState = { ...prev };
@@ -624,8 +725,9 @@ const LawyerAvailabilityDashboard = () => {
                               {slot.isUnsaved && (
                                 <button
                                   onClick={() => saveTimeSlot(day, slot)}
-                                  disabled={saving[`${day}-${slot.id}`]}
+                                  disabled={saving[`${day}-${slot.id}`] || !slot.branchId}
                                   className="flex items-center space-x-2 px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-all duration-200 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                                  title={!slot.branchId ? 'Please select a branch' : 'Save time slot'}
                                 >
                                   {saving[`${day}-${slot.id}`] ? (
                                     <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
