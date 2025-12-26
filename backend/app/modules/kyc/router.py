@@ -29,17 +29,7 @@ def submit_kyc(
         raise HTTPException(status_code=403, detail="Only lawyers can submit KYC")
 
     # 🔑 Find lawyer record linked to this user
-    lawyer = (
-        db.query(Lawyer)
-        .filter(Lawyer.email == current_user.email)
-        .first()
-    )
-
-    if not lawyer:
-        raise HTTPException(
-            status_code=400,
-            detail="Lawyer profile not found for this user"
-        )
+    lawyer = get_lawyer_for_user(db, current_user)
 
     # Check if KYC already exists
     existing = (
@@ -86,15 +76,7 @@ def get_my_kyc(
     if current_user.role != "lawyer":
         raise HTTPException(status_code=403, detail="Only lawyers can view KYC")
 
-    lawyer = (
-        db.query(Lawyer)
-        .filter(Lawyer.email == current_user.email)
-        .first()
-    )
-
-    if not lawyer:
-        raise HTTPException(status_code=404, detail="Lawyer profile not found")
-
+    lawyer = get_lawyer_for_user(db, current_user)
     kyc = (
         db.query(KYCSubmission)
         .filter(KYCSubmission.lawyer_id == lawyer.id)
