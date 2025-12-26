@@ -7,6 +7,7 @@ import BranchManagement from "../pages/BranchManagement";
 import ServicePackages from "../pages/ServicePackages";
 import ChecklistTemplates from "../pages/ChecklistTemplates";
 import { LawyerKYC } from "../features/lawyer_kyc";
+import LandingPage from "../pages/LandingPage";
 
 
 import AvailabilityEditor from "../pages/AvailabilityEditor";
@@ -52,7 +53,8 @@ const DashboardRedirect = () => {
 const AppRoutes = () => {
   return (
     <Routes>
-      <Route path="/" element={<LandingRedirect />} />
+      <Route path="/" element={<LandingPage />} />
+
 
       {/* Dashboard redirect */}
       <Route path="/dashboard" element={<DashboardRedirect />} />
@@ -65,10 +67,12 @@ const AppRoutes = () => {
 
       {/* Client area */}
 
-      <Route path="/client/bookings/:bookingId/documents" element={<DocumentsListPlaceholder />} />
-      <Route path="/client/bookings/:bookingId/documents/upload" element={<DocumentUploadPlaceholder />} />
+
       <Route path="/client/bookings/:bookingId/documents" element={<DocumentsList />} />
       <Route path="/client/bookings/:bookingId/documents/upload" element={<DocumentUpload />} />
+
+      
+
 
       <Route
         element={

@@ -6,6 +6,7 @@ from fastapi import UploadFile
 from app.models.document import Document
 
 
+
 UPLOAD_DIR = "uploads/documents"
 
 def save_upload(file: UploadFile) -> str:

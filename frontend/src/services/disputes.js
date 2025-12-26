@@ -14,8 +14,8 @@ export const updateDispute = (id, payload) => api.patch(`/api/disputes/${id}`, p
 
 // Admin: List disputes with optional status filter
 export const adminListDisputes = (status = "PENDING") =>
-  api.get(`/api/disputes${status ? `?status=${status}` : ''}`);
+  api.get("/api/admin/disputes", { params: { status } });
 
-// Admin: Update dispute (admin version)
+// Admin: Resolve/update dispute (admin version)
 export const adminUpdateDispute = (id, payload) =>
-  api.patch(`/api/disputes/${id}`, payload);
+  api.patch(`/api/admin/disputes/${id}/resolve`, payload);

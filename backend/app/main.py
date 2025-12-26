@@ -26,6 +26,10 @@ from .routers import (
     lawyers,
 )
 from .seed import seed_demo_users
+from app.seed import seed_all
+from app.database import SessionLocal
+from app.modules.disputes.routes import router as disputes_router
+from app.modules.disputes.routes import router as disputes_router, admin_router as admin_disputes_router
 
 # Create all database tables
 Base.metadata.create_all(bind=engine)
@@ -53,13 +57,13 @@ app.add_middleware(
 
 # ---- Startup seed ----
 @app.on_event("startup")
-def startup_seed_users():
-    """Seed demo users on application startup if enabled."""
+def startup():
     db = SessionLocal()
     try:
-        seed_demo_users(db)
+        seed_all(db)
     finally:
         db.close()
+
 
 # ---- Health check ----
 @app.get("/health")
@@ -78,10 +82,13 @@ app.include_router(availability.router)
 app.include_router(branches.router)
 app.include_router(kyc.router)
 app.include_router(dev.router)          # DEV-ONLY endpoints
+app.include_router(disputes_router)
+app.include_router(admin_disputes_router)
 
 # API v1 routers
 app.include_router(admin_v1.router)
 app.include_router(booking_v1.router)
+app.include_router(disputes_router)
 
 # ---- Custom OpenAPI (JWT Bearer Auth in Swagger) ----
 def custom_openapi():
