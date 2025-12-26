@@ -7,9 +7,11 @@ import BranchManagement from "../pages/BranchManagement";
 import ServicePackages from "../pages/ServicePackages";
 import ChecklistTemplates from "../pages/ChecklistTemplates";
 import { LawyerKYC } from "../features/lawyer_kyc";
+import LandingPage from "../pages/LandingPage";
 
 
 import AvailabilityEditor from "../pages/AvailabilityEditor";
+import LawyerAvailabilityDashboard from "../components/LawyerAvailabilityDashboard";
 import TokenQueue from "../pages/TokenQueue";
 import NotAuthorized from "../pages/NotAuthorized";
 import LandingRedirect from "../pages/LandingRedirect";
@@ -52,7 +54,8 @@ const DashboardRedirect = () => {
 const AppRoutes = () => {
   return (
     <Routes>
-      <Route path="/" element={<LandingRedirect />} />
+      <Route path="/" element={<LandingPage />} />
+
 
       {/* Dashboard redirect */}
       <Route path="/dashboard" element={<DashboardRedirect />} />
@@ -65,10 +68,12 @@ const AppRoutes = () => {
 
       {/* Client area */}
 
-      <Route path="/client/bookings/:bookingId/documents" element={<DocumentsListPlaceholder />} />
-      <Route path="/client/bookings/:bookingId/documents/upload" element={<DocumentUploadPlaceholder />} />
+
       <Route path="/client/bookings/:bookingId/documents" element={<DocumentsList />} />
       <Route path="/client/bookings/:bookingId/documents/upload" element={<DocumentUpload />} />
+
+      
+
 
       <Route
         element={
@@ -100,7 +105,7 @@ const AppRoutes = () => {
         }
       >
         <Route path="/lawyer/dashboard" element={<div>Lawyer Dashboard (placeholder)</div>} />
-        <Route path="/lawyer/availability" element={<AvailabilityEditor />} />
+        <Route path="/lawyer/availability" element={<LawyerAvailabilityDashboard />} />
         <Route path="/lawyer/token-queue" element={<TokenQueue />} />
         <Route path="/lawyer/branches" element={<BranchManagement />} />
         <Route path="/lawyer/services" element={<ServicePackages />} />
