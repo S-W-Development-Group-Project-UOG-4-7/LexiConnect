@@ -93,7 +93,11 @@ const LawyerProfile = () => {
           <div className="flex flex-col md:flex-row items-center md:items-start space-y-4 md:space-y-0 md:space-x-6">
             {/* Profile Image */}
             <div className="w-32 h-32 bg-gray-200 rounded-full flex items-center justify-center text-4xl">
-              👤
+              {lawyer.profile_image ? (
+                <img src={`http://localhost:8000/${lawyer.profile_image}`} alt="Profile" className="w-full h-full rounded-full object-cover" />
+              ) : (
+                '👤'
+              )}
             </div>
 
             {/* Profile Info */}

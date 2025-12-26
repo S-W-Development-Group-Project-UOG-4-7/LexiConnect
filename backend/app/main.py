@@ -27,6 +27,7 @@ from .seed import seed_demo_users
 
 # ✅ ADD THIS IMPORT (Disputes router)
 from app.modules.disputes.routes import router as disputes_router
+from app.modules.lawyers.router import router as lawyers_router
 
 # Create all database tables
 Base.metadata.create_all(bind=engine)

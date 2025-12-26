@@ -163,50 +163,38 @@ const SearchLawyers = () => {
             )}
 
             {!loading && !error && lawyers.length > 0 && lawyers.map((lawyer) => (
-            {lawyers.map((lawyer) => (
               <div key={lawyer.id} className="lawyer-card">
                 <div className="lawyer-avatar">
-                  <span className="lawyer-avatar-icon">{lawyer.image}</span>
+                  {lawyer.profile_image ? (
+                    <img src={`http://localhost:8000/${lawyer.profile_image}`} alt="Profile" className="lawyer-avatar-icon" />
+                  ) : (
+                    <span className="lawyer-avatar-icon">👤</span>
+                  )}
                 </div>
 
                 <div className="lawyer-info">
                   <div className="lawyer-header">
                     <div className="lawyer-name-group">
                       <h3 className="lawyer-name">{lawyer.name}</h3>
-                      {lawyer.verified && (
-                        <span className="badge badge-verified">Verified</span>
-                      )}
                     </div>
                   </div>
 
-                  <p className="lawyer-degree">{lawyer.degree}</p>
-
-                  <div className="lawyer-rating">
-                    <span className="rating-stars">⭐</span>
-                    <span className="rating-value">{lawyer.rating}</span>
-                    <span className="rating-reviews">({lawyer.reviews} reviews)</span>
-                  </div>
-
-                  <div className="lawyer-specializations">
-                    {lawyer.specializations.map((spec, idx) => (
-                      <span key={idx} className="specialization-tag">{spec}</span>
-                    ))}
-                  </div>
+                  <p className="lawyer-degree">{lawyer.specialization}</p>
 
                   <div className="lawyer-details">
                     <div className="lawyer-detail-item">
                       <span className="detail-icon">📍</span>
-                      <span>{lawyer.location.city}, {lawyer.location.district}</span>
+                      <span>{lawyer.location}</span>
                     </div>
                     <div className="lawyer-detail-item">
-                      <span className="detail-icon">🗣️</span>
-                      <span>{lawyer.languages.join(', ')}</span>
+                      <span className="detail-icon">⏰</span>
+                      <span>{lawyer.experience_years} years experience</span>
                     </div>
                   </div>
                 </div>
 
                 <div className="lawyer-actions">
-                  <button className="btn btn-secondary view-profile-btn">
+                  <button className="btn btn-secondary view-profile-btn" onClick={() => handleViewProfile(lawyer.id)}>
                     View Profile
                     <span>→</span>
                   </button>

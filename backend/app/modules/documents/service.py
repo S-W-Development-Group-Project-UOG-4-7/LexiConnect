@@ -31,3 +31,11 @@ def list_documents(db: Session, booking_id: int):
 
 def get_document(db: Session, doc_id: int):
     return db.query(Document).filter(Document.id == doc_id).first()
+
+def delete_document(db: Session, doc_id: int):
+    doc = db.query(Document).filter(Document.id == doc_id).first()
+    if doc:
+        db.delete(doc)
+        db.commit()
+        return True
+    return False
