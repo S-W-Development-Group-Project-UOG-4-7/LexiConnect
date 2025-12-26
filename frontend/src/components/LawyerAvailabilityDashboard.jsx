@@ -179,9 +179,10 @@ const LawyerAvailabilityDashboard = () => {
       const lawyerId = await getLawyerId();
       console.log('Using lawyer ID:', lawyerId); // Debug log
 
-      const [availabilityData, branchesData] = await Promise.all([
+      const [availabilityData, branchesData, blackoutData] = await Promise.all([
         apiRequest(`/api/lawyer-availability/weekly?lawyer_id=${lawyerId}`),
-        apiRequest('/api/lawyer-availability/branches')
+        apiRequest('/api/lawyer-availability/branches'),
+        apiRequest(`/api/lawyer-availability/blackout?lawyer_id=${lawyerId}`)
       ]);
 
       // Store branches data for dropdown
@@ -212,8 +213,19 @@ const LawyerAvailabilityDashboard = () => {
           }));
       });
 
-      const transformedBlackouts = []; // No blackout data from weekly endpoint
-      // Removed the broken transformation code
+      // Transform blackout dates response
+      const transformedBlackouts = (blackoutData || []).map(blackout => ({
+        id: blackout.id,
+        date: new Date(blackout.date).toLocaleDateString('en-US', {
+          month: '2-digit',
+          day: '2-digit',
+          year: 'numeric'
+        }),
+        availability: blackout.availability_type === 'full_day' ? 'Full Day' : 'Partial Time',
+        startTime: formatTime(blackout.start_time) || '',
+        endTime: formatTime(blackout.end_time) || '',
+        reason: blackout.reason || ''
+      }));
 
       setTimeSlots(transformedSlots);
       setBlackoutDates(transformedBlackouts);
@@ -467,6 +479,8 @@ const LawyerAvailabilityDashboard = () => {
   };
 
   const deleteBlackoutDate = async (id) => {
+    console.log('Deleting blackout with ID:', id); // Debug log
+    
     // Don't delete if it's a new unsaved blackout
     if (id.toString().startsWith('new-')) {
       setBlackoutDates(prev => prev.filter(blackout => blackout.id !== id));
@@ -477,9 +491,13 @@ const LawyerAvailabilityDashboard = () => {
       setSaving(prev => ({ ...prev, [`delete-blackout-${id}`]: true }));
       setError(null);
 
+      console.log('Making DELETE request to:', `/api/lawyer-availability/blackout/${id}`); // Debug log
+      
       await apiRequest(`/api/lawyer-availability/blackout/${id}`, {
         method: 'DELETE'
       });
+
+      console.log('DELETE request successful'); // Debug log
 
       // Remove from UI
       setBlackoutDates(prev => prev.filter(blackout => blackout.id !== id));
@@ -490,8 +508,8 @@ const LawyerAvailabilityDashboard = () => {
       // Reload to get updated stats
       await loadAvailabilityData();
     } catch (err) {
+      console.error('Delete blackout error:', err); // Debug log
       setError(err.message);
-      console.error('Failed to delete blackout date:', err);
     } finally {
       setSaving(prev => {
         const newState = { ...prev };
