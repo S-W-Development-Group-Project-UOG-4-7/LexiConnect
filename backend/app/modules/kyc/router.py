@@ -1,6 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from sqlalchemy.exc import IntegrityError
 
 from app.database import get_db
 from app.models.kyc_submission import KYCSubmission
@@ -13,36 +12,37 @@ from app.models.lawyer import Lawyer
 router = APIRouter(prefix="/api/kyc", tags=["KYC"])
 
 
-@router.post("", status_code=status.HTTP_201_CREATED, response_model=KYCResponse)
-    @router.post(
-    "",
-    status_code=status.HTTP_201_CREATED,
-    response_model=KYCResponse
-    )
-
+@router.post("", status_code=status.HTTP_201_CREATED)
 def submit_kyc(
     payload: KYCSubmitRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     if current_user.role != "lawyer":
-        raise HTTPException(
-          status_code=status.HTTP_403_FORBIDDEN,
-           detail="Access restricted to lawyer accounts only"
-       )
+        raise HTTPException(status_code=403, detail="Only lawyers can submit KYC")
+
     # 🔑 Find lawyer record linked to this user
-    lawyer = get_lawyer_for_user(db, current_user)
+    lawyer = (
+        db.query(Lawyer)
+        .filter(Lawyer.email == current_user.email)
+        .first()
+    )
+
+    if not lawyer:
+        raise HTTPException(
+            status_code=400,
+            detail="Lawyer profile not found for this user"
+        )
 
     # Check if KYC already exists
     existing = (
         db.query(KYCSubmission)
         .filter(KYCSubmission.lawyer_id == lawyer.id)
-        .order_by(KYCSubmission.created_at.desc())
         .first()
     )
 
     if existing:
-        raise HTTPException(status_code=409, detail="KYC already submitted")
+        raise HTTPException(status_code=400, detail="KYC already submitted")
 
     kyc = KYCSubmission(
         lawyer_id=lawyer.id,
@@ -55,32 +55,32 @@ def submit_kyc(
         status="pending",
     )
 
-   try:
-        db.add(kyc)
-        db.commit()
-        db.refresh(kyc)
-    except IntegrityError:
-        db.rollback()
-        raise HTTPException(
-            status_code=409,
-            detail="KYC already exists for this lawyer"
-        )
+    db.add(kyc)
+    db.commit()
+    db.refresh(kyc)
 
     return {"message": "KYC submitted successfully"}
 
 
 
 @router.get("/me", response_model=KYCResponse)
-    if current_user.role != "lawyer":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access restricted to lawyer accounts only"
-       )
-
+def get_my_kyc(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    
+):
     if current_user.role != "lawyer":
         raise HTTPException(status_code=403, detail="Only lawyers can view KYC")
 
-    lawyer = get_lawyer_for_user(db, current_user)
+    lawyer = (
+        db.query(Lawyer)
+        .filter(Lawyer.email == current_user.email)
+        .first()
+    )
+
+    if not lawyer:
+        raise HTTPException(status_code=404, detail="Lawyer profile not found")
+
     kyc = (
         db.query(KYCSubmission)
         .filter(KYCSubmission.lawyer_id == lawyer.id)
