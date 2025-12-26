@@ -15,7 +15,7 @@ from .api.v1 import admin as admin_v1, booking as booking_v1
 from .database import Base, engine, SessionLocal
 
 # Ensure models are loaded
-from .models import branch, kyc_submission, lawyer  # noqa
+from .models import branch, kyc_submission, lawyer, lawyer_availability  # noqa
 
 from .seed import seed_demo_users
 
@@ -31,7 +31,13 @@ from .routers import (
     dev,
     lawyers,
     token_queue,
+    lawyer_availability,
 )
+from .seed import seed_demo_users
+from app.seed import seed_all
+from app.database import SessionLocal
+from app.modules.disputes.routes import router as disputes_router
+from app.modules.disputes.routes import router as disputes_router, admin_router as admin_disputes_router
 
 # Create all database tables
 Base.metadata.create_all(bind=engine)
@@ -44,6 +50,10 @@ app = FastAPI(
 )
 
 # ---- CORS for React (Vite) frontend ----
+# NOTE:
+# - Allow both localhost + 127.0.0.1
+# - Allow common Vite ports (5173+)
+# - Dev-only: allow all methods/headers
 origins = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
@@ -54,6 +64,7 @@ origins = [
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
+    allow_origin_regex=r"^http:\/\/(localhost|127\.0\.0\.1):\d+$",  # <--- makes dev painless
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -61,12 +72,13 @@ app.add_middleware(
 
 # ---- Startup seed ----
 @app.on_event("startup")
-def startup_seed_users():
+def startup():
     db = SessionLocal()
     try:
-        seed_demo_users(db)
+        seed_all(db)
     finally:
         db.close()
+
 
 # ---- Health check ----
 @app.get("/health")
@@ -83,21 +95,21 @@ app.include_router(bookings.router)
 
 app.include_router(admin.router)
 app.include_router(branches.router)
-
-# ❌ Old availability router disabled
-# app.include_router(availability.router)
-
-# KYC, dev-only, token queue
 app.include_router(kyc_router)
-app.include_router(dev.router)
-app.include_router(token_queue.router)
+app.include_router(dev.router)          # DEV-ONLY endpoints
+app.include_router(disputes_router)
+app.include_router(admin_disputes_router)
 
 # API v1 routers
 app.include_router(admin_v1.router)
 app.include_router(booking_v1.router)
+app.include_router(disputes_router)
 
 # Disputes API
 app.include_router(disputes_router, prefix="/api/disputes", tags=["Disputes"])
+
+# Lawyer Availability API
+app.include_router(lawyer_availability.router)
 
 # ---- Custom OpenAPI (JWT Bearer Auth in Swagger) ----
 def custom_openapi():
