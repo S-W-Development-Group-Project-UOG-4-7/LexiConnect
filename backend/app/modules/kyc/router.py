@@ -26,8 +26,10 @@ def submit_kyc(
     current_user: User = Depends(get_current_user),
 ):
     if current_user.role != "lawyer":
-        raise HTTPException(status_code=403, detail="Only lawyers can submit KYC")
-
+        raise HTTPException(
+          status_code=status.HTTP_403_FORBIDDEN,
+           detail="Access restricted to lawyer accounts only"
+       )
     # 🔑 Find lawyer record linked to this user
     lawyer = get_lawyer_for_user(db, current_user)
 
@@ -68,11 +70,12 @@ def submit_kyc(
 
 
 @router.get("/me", response_model=KYCResponse)
-def get_my_kyc(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-    
-):
+    if current_user.role != "lawyer":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access restricted to lawyer accounts only"
+       )
+
     if current_user.role != "lawyer":
         raise HTTPException(status_code=403, detail="Only lawyers can view KYC")
 
