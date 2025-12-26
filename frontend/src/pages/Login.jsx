@@ -39,7 +39,8 @@ const Login = () => {
         localStorage.setItem("role", role);
       }
       
-      navigate("/client/dashboard");
+      navigate("/dashboard", { replace: true });
+
     } catch (err) {
       const message =
         err?.response?.data?.detail ||
@@ -140,15 +141,15 @@ const Login = () => {
         <ul className="list-none pl-0 text-slate-300 space-y-1">
           <li className="flex items-center gap-2">
             <span className="text-amber-400 text-xs">•</span>
-            <span>Client: any email / any password</span>
+            <span> client@lexiconnect.local / Client@123</span>
           </li>
           <li className="flex items-center gap-2">
             <span className="text-amber-400 text-xs">•</span>
-            <span>Lawyer: lawyer@example.com / any password</span>
+            <span>Lawyer: lawyer@lexiconnect.local / Lawyer@123</span>
           </li>
           <li className="flex items-center gap-2">
             <span className="text-amber-400 text-xs">•</span>
-            <span>Admin: admin@lexiconnect.com / any password</span>
+            <span>Admin: admin@lexiconnect.local / Admin@123</span>
           </li>
         </ul>
       </div>

@@ -1,7 +1,14 @@
 """
-Seed demo users for development.
-Only runs if SEED_DEMO_USERS environment variable is set to "true" (case-insensitive).
+Seed demo data for development.
+
+Runs only when environment variables are enabled.
+
+- SEED_DEMO_USERS=true
+- SEED_DEMO_DISPUTES=true
+
+Never overwrites existing data.
 """
+
 import os
 from sqlalchemy.orm import Session
 
@@ -9,18 +16,23 @@ from app.models.user import User, UserRole
 from app.models.lawyer import Lawyer
 from app.routers.auth import get_password_hash, get_user_by_email
 
+# ✅ Correct imports based on your project structure
+from app.modules.disputes.models import Dispute
+from app.models.booking import Booking
 
+
+def _is_true(name: str) -> bool:
+    return os.getenv(name, "").lower() == "true"
+
+
+# ======================================================
+# USERS
+# ======================================================
 def seed_demo_users(db: Session):
-    """
-    Seed demo users if SEED_DEMO_USERS env var is "true" (case-insensitive).
-    Creates admin, lawyer, and client users if they don't already exist.
-    """
-    seed_flag = os.getenv("SEED_DEMO_USERS", "").lower()
-    if seed_flag != "true":
+    if not _is_true("SEED_DEMO_USERS"):
         return
 
-    # Define users to seed from environment variables or defaults
-    users_to_seed = [
+    users = [
         {
             "email": os.getenv("ADMIN_EMAIL", "admin@lexiconnect.local"),
             "password": os.getenv("ADMIN_PASSWORD", "Admin@123"),
@@ -41,54 +53,141 @@ def seed_demo_users(db: Session):
         },
     ]
 
-    created_count = 0
-    skipped_count = 0
+    created = 0
+    skipped = 0
 
-    for user_data in users_to_seed:
-        # Check if user already exists
-        existing = get_user_by_email(db, user_data["email"])
-        if existing:
-            skipped_count += 1
+    for u in users:
+        if get_user_by_email(db, u["email"]):
+            skipped += 1
             continue
 
-        # Create new user
-        hashed_password = get_password_hash(user_data["password"])
-        new_user = User(
-            full_name=user_data["full_name"],
-            email=user_data["email"],
-            phone=None,
-            hashed_password=hashed_password,
-            role=user_data["role"],
+        db.add(
+            User(
+                full_name=u["full_name"],
+                email=u["email"],
+                phone=None,
+                hashed_password=get_password_hash(u["password"]),
+                role=u["role"],
+            )
         )
-        db.add(new_user)
-        created_count += 1
+        created += 1
 
-    # Commit once at the end
-    if created_count > 0:
+    if created:
         db.commit()
-        print(f"[SEED] Seeded {created_count} demo user(s). Skipped {skipped_count} existing user(s).")
-    else:
-        print(f"[SEED] All demo users already exist. Skipped {skipped_count} user(s).")
 
     # Create corresponding Lawyer records for lawyer users
     seed_lawyer_records(db)
 
+    print(f"[SEED] Users → created={created}, skipped={skipped}")
+
 
 def seed_lawyer_records(db: Session):
-    """Create Lawyer records for users with lawyer role"""
-    lawyer_users = db.query(User).filter(User.role == UserRole.lawyer).all()
-    
-    for user in lawyer_users:
-        # Check if Lawyer record already exists
-        existing_lawyer = db.query(Lawyer).filter(Lawyer.email == user.email).first()
-        if not existing_lawyer:
-            lawyer = Lawyer(
-                name=user.full_name,
-                email=user.email
-            )
-            db.add(lawyer)
-            print(f"[SEED] Created Lawyer record for {user.email}")
-    
-    db.commit()
-    print("[SEED] Lawyer records seeded.")
+    """
+    Create Lawyer records for users with lawyer role.
 
+    NOTE: This does NOT rely on a User.lawyer relationship (avoids mapper errors).
+    It links by email/name only.
+    """
+    lawyer_users = db.query(User).filter(User.role == UserRole.lawyer).all()
+
+    created = 0
+    skipped = 0
+
+    for user in lawyer_users:
+        existing_lawyer = db.query(Lawyer).filter(Lawyer.email == user.email).first()
+        if existing_lawyer:
+            skipped += 1
+            continue
+
+        lawyer = Lawyer(
+            name=user.full_name,
+            email=user.email,
+        )
+        db.add(lawyer)
+        created += 1
+
+    if created:
+        db.commit()
+
+    print(f"[SEED] Lawyer records → created={created}, skipped={skipped}")
+
+
+# ======================================================
+# DISPUTES
+# ======================================================
+def seed_demo_disputes(db: Session):
+    if not _is_true("SEED_DEMO_DISPUTES"):
+        return
+
+    client_email = os.getenv("CLIENT_EMAIL", "client@lexiconnect.local")
+    client = get_user_by_email(db, client_email)
+
+    if not client:
+        print("[SEED] Disputes skipped — client user not found")
+        return
+
+    # Get latest booking if exists (safe)
+    latest_booking = (
+        db.query(Booking)
+        .filter(Booking.client_id == client.id)
+        .order_by(Booking.id.desc())
+        .first()
+    )
+
+    booking_id = latest_booking.id if latest_booking else None
+
+    disputes = [
+        {
+            "title": "Lawyer did not respond",
+            "description": "No response from lawyer after booking confirmation.",
+        },
+        {
+            "title": "Appointment rescheduled without notice",
+            "description": "Meeting time changed without informing the client.",
+        },
+        {
+            "title": "Billing issue",
+            "description": "Charged amount does not match agreed package.",
+        },
+    ]
+
+    created = 0
+    skipped = 0
+
+    for d in disputes:
+        exists = (
+            db.query(Dispute)
+            .filter(
+                Dispute.client_id == client.id,
+                Dispute.title == d["title"],
+            )
+            .first()
+        )
+
+        if exists:
+            skipped += 1
+            continue
+
+        db.add(
+            Dispute(
+                client_id=client.id,
+                booking_id=booking_id,
+                title=d["title"],
+                description=d["description"],
+                status="PENDING",
+            )
+        )
+        created += 1
+
+    if created:
+        db.commit()
+
+    print(f"[SEED] Disputes → created={created}, skipped={skipped}")
+
+
+# ======================================================
+# ENTRY POINT
+# ======================================================
+def seed_all(db: Session):
+    seed_demo_users(db)
+    seed_demo_disputes(db)

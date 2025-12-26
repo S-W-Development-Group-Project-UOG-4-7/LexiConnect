@@ -33,6 +33,11 @@ from .routers import (
     token_queue,
     lawyer_availability,
 )
+from .seed import seed_demo_users
+from app.seed import seed_all
+from app.database import SessionLocal
+from app.modules.disputes.routes import router as disputes_router
+from app.modules.disputes.routes import router as disputes_router, admin_router as admin_disputes_router
 
 # Create all database tables
 Base.metadata.create_all(bind=engine)
@@ -67,12 +72,13 @@ app.add_middleware(
 
 # ---- Startup seed ----
 @app.on_event("startup")
-def startup_seed_users():
+def startup():
     db = SessionLocal()
     try:
-        seed_demo_users(db)
+        seed_all(db)
     finally:
         db.close()
+
 
 # ---- Health check ----
 @app.get("/health")
@@ -89,18 +95,15 @@ app.include_router(bookings.router)
 
 app.include_router(admin.router)
 app.include_router(branches.router)
-
-# ❌ Old availability router disabled
-# app.include_router(availability.router)
-
-# KYC, dev-only, token queue
-app.include_router(kyc_router)
-app.include_router(dev.router)
-app.include_router(token_queue.router)
+app.include_router(kyc.router)
+app.include_router(dev.router)          # DEV-ONLY endpoints
+app.include_router(disputes_router)
+app.include_router(admin_disputes_router)
 
 # API v1 routers
 app.include_router(admin_v1.router)
 app.include_router(booking_v1.router)
+app.include_router(disputes_router)
 
 # Disputes API
 app.include_router(disputes_router, prefix="/api/disputes", tags=["Disputes"])
