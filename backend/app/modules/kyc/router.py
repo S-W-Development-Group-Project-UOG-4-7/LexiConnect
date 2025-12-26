@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 
 from app.database import get_db
 from app.models.kyc_submission import KYCSubmission
@@ -13,6 +14,12 @@ router = APIRouter(prefix="/api/kyc", tags=["KYC"])
 
 
 @router.post("", status_code=status.HTTP_201_CREATED, response_model=KYCResponse)
+    @router.post(
+    "",
+    status_code=status.HTTP_201_CREATED,
+    response_model=KYCResponse
+    )
+    
 def submit_kyc(
     payload: KYCSubmitRequest,
     db: Session = Depends(get_db),
