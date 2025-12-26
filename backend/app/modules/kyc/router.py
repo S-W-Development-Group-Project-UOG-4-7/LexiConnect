@@ -37,6 +37,7 @@ def submit_kyc(
     existing = (
         db.query(KYCSubmission)
         .filter(KYCSubmission.lawyer_id == lawyer.id)
+        .order_by(KYCSubmission.created_at.desc())
         .first()
     )
 
