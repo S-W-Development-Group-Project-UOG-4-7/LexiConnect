@@ -95,7 +95,7 @@ app.include_router(bookings.router)
 
 app.include_router(admin.router)
 app.include_router(branches.router)
-app.include_router(kyc.router)
+app.include_router(kyc_router)
 app.include_router(dev.router)          # DEV-ONLY endpoints
 app.include_router(disputes_router)
 app.include_router(admin_disputes_router)

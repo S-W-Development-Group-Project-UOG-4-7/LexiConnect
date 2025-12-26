@@ -24,7 +24,7 @@ def submit_kyc(
     # 🔑 Find lawyer record linked to this user
     lawyer = (
         db.query(Lawyer)
-        .filter(Lawyer.user_id == current_user.id)
+        .filter(Lawyer.email == current_user.email)
         .first()
     )
 
@@ -67,13 +67,14 @@ def submit_kyc(
 def get_my_kyc(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
+    
 ):
     if current_user.role != "lawyer":
         raise HTTPException(status_code=403, detail="Only lawyers can view KYC")
 
     lawyer = (
         db.query(Lawyer)
-        .filter(Lawyer.user_id == current_user.id)
+        .filter(Lawyer.email == current_user.email)
         .first()
     )
 
