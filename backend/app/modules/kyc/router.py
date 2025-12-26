@@ -19,7 +19,7 @@ router = APIRouter(prefix="/api/kyc", tags=["KYC"])
     status_code=status.HTTP_201_CREATED,
     response_model=KYCResponse
     )
-    
+
 def submit_kyc(
     payload: KYCSubmitRequest,
     db: Session = Depends(get_db),
@@ -62,9 +62,16 @@ def submit_kyc(
         status="pending",
     )
 
-    db.add(kyc)
-    db.commit()
-    db.refresh(kyc)
+   try:
+        db.add(kyc)
+        db.commit()
+        db.refresh(kyc)
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail="KYC already exists for this lawyer"
+        )
 
     return {"message": "KYC submitted successfully"}
 
