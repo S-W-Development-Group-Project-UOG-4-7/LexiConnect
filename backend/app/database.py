@@ -38,7 +38,10 @@ def mask_password(url_str: str) -> str:
         return masked
     return str(url_str)
 
-print("✅ USING DATABASE:", mask_password(engine.url))
+import logging
+logger = logging.getLogger(__name__)
+logger.info("USING DATABASE: %s", mask_password(engine.url))
+
 
 SessionLocal = sessionmaker(
     autocommit=False,

@@ -279,7 +279,7 @@ def main():
             print(f"     - {item}")
 
         print("\n" + "=" * 60)
-        print("✅ Seed completed successfully!")
+        print("[SUCCESS] Seed completed successfully!")
         print("=" * 60)
 
     except Exception as e:

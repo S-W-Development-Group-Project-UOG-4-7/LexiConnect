@@ -31,7 +31,7 @@ def create_admin():
         # Check if admin already exists
         existing = get_user_by_email(db, admin_email)
         if existing:
-            print(f"✅ Admin user already exists!")
+            print(f"[SUCCESS] Admin user already exists!")
             print(f"   Email: {existing.email}")
             print(f"   Role: {existing.role}")
             print(f"   ID: {existing.id}")
@@ -51,7 +51,7 @@ def create_admin():
         db.commit()
         db.refresh(admin_user)
         
-        print("✅ Admin user created successfully!")
+        print("[SUCCESS] Admin user created successfully!")
         print(f"   Email: {admin_email}")
         print(f"   Password: admin123")
         print(f"   Role: admin")
@@ -60,7 +60,7 @@ def create_admin():
         
     except Exception as e:
         db.rollback()
-        print(f"❌ Error creating admin user: {e}")
+        print(f"[ERROR] Error creating admin user: {e}")
         raise
     finally:
         db.close()

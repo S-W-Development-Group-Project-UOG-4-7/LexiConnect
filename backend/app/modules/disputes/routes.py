@@ -1,4 +1,5 @@
-print("✅ LOADED disputes routes from:", __file__)
+print("LOADED disputes routes from:", __file__)
+
 
 from typing import List, Optional
 
