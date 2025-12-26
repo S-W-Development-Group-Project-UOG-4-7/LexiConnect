@@ -42,7 +42,7 @@ def submit_kyc(
     )
 
     if existing:
-        raise HTTPException(status_code=500, detail="KYC already submitted")
+        raise HTTPException(status_code=400, detail="KYC already submitted")
 
     kyc = KYCSubmission(
         lawyer_id=lawyer.id,
