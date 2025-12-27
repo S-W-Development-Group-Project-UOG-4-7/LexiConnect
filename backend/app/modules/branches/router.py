@@ -1,25 +1,82 @@
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+from typing import List
 
 from app.database import get_db
-from app.models.user import User
 from app.routers.auth import get_current_user
-from app.schemas.branch import Branch as BranchOut
-from app.schemas.branch import BranchCreate
-from app.modules.branches.service import create_branch, seed_sri_lanka_branches
+from app.models.user import User
+from app.models.branch import Branch
 
-router = APIRouter(prefix="/branches", tags=["Branches"])
+from app.modules.branches.schemas import (
+    BranchCreate,
+    BranchUpdate,
+    BranchResponse,
+)
+from app.modules.branches import service
 
 
-@router.post("/", response_model=BranchOut, status_code=status.HTTP_201_CREATED)
-def create_branch_endpoint(
+router = APIRouter(prefix="/api/branches", tags=["Branches"])
+
+
+@router.post("", response_model=BranchResponse, status_code=status.HTTP_201_CREATED)
+def create_branch(
     payload: BranchCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    return create_branch(db, payload=payload, current_user=current_user)
+    if current_user.role != "lawyer":
+        raise HTTPException(status_code=403, detail="Only lawyers can create branches")
+
+    lawyer = service.get_lawyer_by_user(db, current_user.email)
+    return service.create_branch(db, lawyer, payload)
 
 
-@router.post("/seed-sri-lanka")
-def seed_sri_lanka(db: Session = Depends(get_db)):
-    return seed_sri_lanka_branches(db)
+@router.get("/me", response_model=List[BranchResponse])
+def get_my_branches(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    if current_user.role != "lawyer":
+        raise HTTPException(status_code=403, detail="Only lawyers can view branches")
+
+    lawyer = service.get_lawyer_by_user(db, current_user.email)
+    return service.get_my_branches(db, lawyer)
+
+
+@router.patch("/{branch_id}", response_model=BranchResponse)
+def update_branch(
+    branch_id: int,
+    payload: BranchUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    lawyer = service.get_lawyer_by_user(db, current_user.email)
+
+    branch = (
+        db.query(Branch)
+        .filter(Branch.id == branch_id, Branch.lawyer_id == lawyer.id)
+        .first()
+    )
+    if not branch:
+        raise HTTPException(status_code=404, detail="Branch not found")
+
+    return service.update_branch(db, branch, payload)
+
+
+@router.delete("/{branch_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_branch(
+    branch_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    lawyer = service.get_lawyer_by_user(db, current_user.email)
+
+    branch = (
+        db.query(Branch)
+        .filter(Branch.id == branch_id, Branch.lawyer_id == lawyer.id)
+        .first()
+    )
+    if not branch:
+        raise HTTPException(status_code=404, detail="Branch not found")
+
+    service.delete_branch(db, branch)

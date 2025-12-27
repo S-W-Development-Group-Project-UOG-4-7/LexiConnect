@@ -12,8 +12,8 @@ Never overwrites existing data.
 import os
 from sqlalchemy.orm import Session
 
-from app.database import Base
 from app.models.user import User, UserRole
+from app.models.lawyer import Lawyer
 from app.routers.auth import get_password_hash, get_user_by_email
 
 # ✅ Correct imports based on your project structure
@@ -75,7 +75,41 @@ def seed_demo_users(db: Session):
     if created:
         db.commit()
 
+    # Create corresponding Lawyer records for lawyer users
+    seed_lawyer_records(db)
+
     print(f"[SEED] Users → created={created}, skipped={skipped}")
+
+
+def seed_lawyer_records(db: Session):
+    """
+    Create Lawyer records for users with lawyer role.
+
+    NOTE: This does NOT rely on a User.lawyer relationship (avoids mapper errors).
+    It links by email/name only.
+    """
+    lawyer_users = db.query(User).filter(User.role == UserRole.lawyer).all()
+
+    created = 0
+    skipped = 0
+
+    for user in lawyer_users:
+        existing_lawyer = db.query(Lawyer).filter(Lawyer.email == user.email).first()
+        if existing_lawyer:
+            skipped += 1
+            continue
+
+        lawyer = Lawyer(
+            name=user.full_name,
+            email=user.email,
+        )
+        db.add(lawyer)
+        created += 1
+
+    if created:
+        db.commit()
+
+    print(f"[SEED] Lawyer records → created={created}, skipped={skipped}")
 
 
 # ======================================================
@@ -121,7 +155,6 @@ def seed_demo_disputes(db: Session):
     skipped = 0
 
     for d in disputes:
-        # 🚫 Do NOT overwrite existing disputes
         exists = (
             db.query(Dispute)
             .filter(

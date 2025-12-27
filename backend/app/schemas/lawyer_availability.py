@@ -4,16 +4,7 @@ from typing import List, Optional
 from datetime import date, datetime, time
 from enum import Enum
 import re
-
-
-class WeekDayEnum(str, Enum):
-    MONDAY = "monday"
-    TUESDAY = "tuesday"
-    WEDNESDAY = "wednesday"
-    THURSDAY = "thursday"
-    FRIDAY = "friday"
-    SATURDAY = "saturday"
-    SUNDAY = "sunday"
+from ..models.lawyer_availability import WeekDay  # Import from model
 
 
 class AvailabilityTypeEnum(str, Enum):
@@ -45,7 +36,7 @@ def time_to_minutes(time_str: str) -> int:
 
 # Weekly Availability Schemas
 class WeeklyAvailabilityBase(BaseModel):
-    day_of_week: WeekDayEnum
+    day_of_week: WeekDay
     start_time: str = Field(..., description="Time in HH:MM AM/PM format")
     end_time: str = Field(..., description="Time in HH:MM AM/PM format")
     branch_id: int
@@ -70,7 +61,7 @@ class WeeklyAvailabilityCreate(WeeklyAvailabilityBase):
 
 
 class WeeklyAvailabilityUpdate(BaseModel):
-    day_of_week: Optional[WeekDayEnum] = None
+    day_of_week: Optional[WeekDay] = None
     start_time: Optional[str] = None
     end_time: Optional[str] = None
     branch_id: Optional[int] = None
@@ -95,7 +86,7 @@ class WeeklyAvailabilityUpdate(BaseModel):
 class WeeklyAvailabilityResponse(BaseModel):
     id: int
     lawyer_id: int
-    day_of_week: WeekDayEnum
+    day_of_week: WeekDay
     start_time: str
     end_time: str
     branch_id: int

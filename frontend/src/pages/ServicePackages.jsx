@@ -1,9 +1,18 @@
-import { useState } from "react";
-import './availability-ui.css';
+import { useEffect, useState } from "react";
+import "./availability-ui.css";
+
+import {
+  createServicePackage,
+  deleteServicePackage,
+  getMyServicePackages,
+  updateServicePackage,
+} from "../services/servicePackages";
 
 function ServicePackages() {
   const [packages, setPackages] = useState([]);
   const [editingId, setEditingId] = useState(null);
+  const [loading, setLoading] = useState(false);
+
   const [form, setForm] = useState({
     name: "",
     description: "",
@@ -12,55 +21,32 @@ function ServicePackages() {
     active: true,
   });
 
+  const loadPackages = async () => {
+    setLoading(true);
+    try {
+      const data = await getMyServicePackages();
+      setPackages(data);
+    } catch (err) {
+      console.error(err);
+      alert("Failed to load service packages. Make sure you are logged in as Lawyer.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadPackages();
+  }, []);
+
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
-    setForm({
-      ...form,
-      [name]: type === 'checkbox' ? checked : value,
-    });
+    setForm((prev) => ({
+      ...prev,
+      [name]: type === "checkbox" ? checked : value,
+    }));
   };
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    if (editingId) {
-      setPackages(packages.map(pkg => 
-        pkg.id === editingId 
-          ? { ...pkg, ...form, price: parseFloat(form.price), duration: parseInt(form.duration) }
-          : pkg
-      ));
-      setEditingId(null);
-    } else {
-      const newPackage = {
-        id: Date.now(),
-        name: form.name,
-        description: form.description,
-        price: parseFloat(form.price),
-        duration: parseInt(form.duration),
-        active: form.active,
-      };
-      setPackages([...packages, newPackage]);
-    }
-    setForm({
-      name: "",
-      description: "",
-      price: "",
-      duration: "",
-      active: true,
-    });
-  };
-
-  const handleEdit = (pkg) => {
-    setEditingId(pkg.id);
-    setForm({
-      name: pkg.name,
-      description: pkg.description,
-      price: pkg.price.toString(),
-      duration: pkg.duration.toString(),
-      active: pkg.active,
-    });
-  };
-
-  const handleCancel = () => {
+  const resetForm = () => {
     setEditingId(null);
     setForm({
       name: "",
@@ -71,9 +57,59 @@ function ServicePackages() {
     });
   };
 
-  const handleDelete = (id) => {
-    setPackages(packages.filter(pkg => pkg.id !== id));
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+
+    const payload = {
+      name: form.name,
+      description: form.description,
+      price: Number(form.price),
+      duration: Number(form.duration),
+      active: Boolean(form.active),
+    };
+
+    try {
+      if (editingId) {
+        // For PATCH you can send only changed fields,
+        // but sending full payload is fine if your backend accepts it.
+        await updateServicePackage(editingId, payload);
+      } else {
+        await createServicePackage(payload);
+      }
+
+      resetForm();
+      await loadPackages();
+    } catch (err) {
+      console.error(err);
+      alert("Failed to save service package. Check Swagger token + backend logs.");
+    }
   };
+
+  const handleEdit = (pkg) => {
+    setEditingId(pkg.id);
+    setForm({
+      name: pkg.name || "",
+      description: pkg.description || "",
+      price: pkg.price?.toString?.() ?? "",
+      duration: pkg.duration?.toString?.() ?? "",
+      active: !!pkg.active,
+    });
+  };
+
+  const handleDelete = async (id) => {
+    const ok = confirm("Delete this service package?");
+    if (!ok) return;
+
+    try {
+      await deleteServicePackage(id);
+      await loadPackages();
+    } catch (err) {
+      console.error(err);
+      alert("Failed to delete service package.");
+    }
+  };
+
+  const handleCancel = () => resetForm();
 
   return (
     <div className="availability-page">
@@ -162,30 +198,26 @@ function ServicePackages() {
               <label htmlFor="active" className="form-label">
                 Status
               </label>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', paddingTop: '0.5rem' }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", paddingTop: "0.5rem" }}>
                 <input
                   type="checkbox"
                   id="active"
                   name="active"
                   checked={form.active}
                   onChange={handleChange}
-                  style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                  style={{ width: "18px", height: "18px", cursor: "pointer" }}
                 />
-                <span style={{ fontSize: '0.9rem', color: 'rgba(226, 232, 240, 0.78)' }}>Active</span>
+                <span style={{ fontSize: "0.9rem", color: "rgba(226, 232, 240, 0.78)" }}>Active</span>
               </div>
             </div>
           </div>
 
-          <div style={{ display: 'flex', gap: '0.5rem' }}>
+          <div style={{ display: "flex", gap: "0.5rem" }}>
             <button type="submit" className="availability-primary-btn" style={{ flex: 1 }}>
-              {editingId ? 'Save Changes' : 'Add Package'}
+              {editingId ? "Save Changes" : "Add Package"}
             </button>
             {editingId && (
-              <button 
-                type="button" 
-                className="availability-danger-btn"
-                onClick={handleCancel}
-              >
+              <button type="button" className="availability-danger-btn" onClick={handleCancel}>
                 Cancel
               </button>
             )}
@@ -199,38 +231,40 @@ function ServicePackages() {
           <p>Manage your existing service packages.</p>
         </div>
 
-        {packages.length === 0 ? (
+        {loading ? (
+          <div className="empty-state">
+            <p>Loading...</p>
+          </div>
+        ) : packages.length === 0 ? (
           <div className="empty-state">
             <p>No service packages yet</p>
             <p className="empty-sub">Add your first service package to get started.</p>
           </div>
         ) : (
           <div className="availability-slots">
-            {packages.map(pkg => (
+            {packages.map((pkg) => (
               <div key={pkg.id} className="slot-item">
                 <div className="slot-info" style={{ flex: 1 }}>
                   <div className="slot-time">{pkg.name}</div>
-                  <div className="slot-meta" style={{ marginTop: '0.25rem' }}>
+                  <div className="slot-meta" style={{ marginTop: "0.25rem" }}>
                     {pkg.description}
                   </div>
-                  <div className="slot-meta" style={{ marginTop: '0.5rem', display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
-                    <span>LKR {pkg.price.toLocaleString()}</span>
+                  <div className="slot-meta" style={{ marginTop: "0.5rem", display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
+                    <span>LKR {Number(pkg.price).toLocaleString()}</span>
                     <span className="slot-sep">•</span>
                     <span>{pkg.duration} minutes</span>
                     <span className="slot-sep">•</span>
-                    <span style={{ 
-                      color: pkg.active ? 'rgba(52, 211, 153, 0.95)' : 'rgba(248, 113, 113, 0.95)',
-                      fontWeight: 600
-                    }}>
-                      {pkg.active ? 'Active' : 'Inactive'}
+                    <span style={{ fontWeight: 600 }}>
+                      {pkg.active ? "Active" : "Inactive"}
                     </span>
                   </div>
                 </div>
-                <div style={{ display: 'flex', gap: '0.5rem' }}>
+
+                <div style={{ display: "flex", gap: "0.5rem" }}>
                   <button
                     type="button"
                     className="availability-primary-btn"
-                    style={{ height: '40px', padding: '0 0.9rem', fontSize: '0.85rem' }}
+                    style={{ height: "40px", padding: "0 0.9rem", fontSize: "0.85rem" }}
                     onClick={() => handleEdit(pkg)}
                   >
                     Edit

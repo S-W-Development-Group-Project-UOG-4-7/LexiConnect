@@ -9,6 +9,7 @@ from typing import Sequence, Union
 
 from alembic import op
 import sqlalchemy as sa
+from sqlalchemy import inspect
 
 
 # revision identifiers, used by Alembic.
@@ -19,6 +20,12 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade():
+    # If table already exists (created by another migration), skip safely
+    bind = op.get_bind()
+    inspector = inspect(bind)
+    if "documents" in inspector.get_table_names():
+        return
+
     op.create_table(
         "documents",
         sa.Column("id", sa.Integer(), primary_key=True),
@@ -27,23 +34,7 @@ def upgrade():
         sa.Column("file_path", sa.String(), nullable=False),
         sa.Column("uploaded_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
     )
-    
+
 
 def downgrade():
-    #op.drop_index("ix_documents_booking_id", table_name="documents")
     op.drop_table("documents")
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
