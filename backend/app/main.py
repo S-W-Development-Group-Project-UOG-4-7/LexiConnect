@@ -11,12 +11,14 @@ from fastapi.openapi.utils import get_openapi
 from app.modules.kyc.router import router as kyc_router
 from app.modules.disputes.routes import router as disputes_router
 from app.modules.branches.router import router as branches_router
+from app.modules.service_packages.router import router as service_packages_router
+
 
 from .api.v1 import admin as admin_v1, booking as booking_v1
 from .database import Base, engine, SessionLocal
 
 # Ensure models are loaded
-from .models import branch, kyc_submission, lawyer, lawyer_availability  # noqa
+from .models import branch, kyc_submission, lawyer, lawyer_availability,service_package  # noqa
 
 from .seed import seed_demo_users
 
@@ -89,6 +91,8 @@ def health_check():
 app.include_router(auth.router)
 app.include_router(lawyers.router)
 app.include_router(bookings.router)
+app.include_router(service_packages_router)
+
 
 # ❌ Documents router disabled
 # app.include_router(documents.router, prefix="/bookings")
