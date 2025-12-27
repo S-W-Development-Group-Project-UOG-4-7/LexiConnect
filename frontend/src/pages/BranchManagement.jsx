@@ -1,5 +1,6 @@
-import { useState } from "react";
-import './availability-ui.css';
+import { useEffect, useMemo, useState } from "react";
+import "./availability-ui.css";
+import api from "../services/api"; // ✅ uses env base URL + attaches token
 
 function BranchManagement() {
   const [branches, setBranches] = useState([]);
@@ -10,26 +11,110 @@ function BranchManagement() {
     address: "",
   });
 
-  const handleChange = (e) => {
-    setForm({...form, [e.target.name]: e.target.value});
+  const [loading, setLoading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
+  const [editingId, setEditingId] = useState(null);
+
+  const isEditing = useMemo(() => editingId !== null, [editingId]);
+
+  const resetForm = () => {
+    setForm({ name: "", district: "", city: "", address: "" });
+    setEditingId(null);
   };
 
-  const handleSubmit = (e) => {
+  const fetchBranches = async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const res = await api.get("/api/branches/me");
+      setBranches(res.data || []);
+    } catch (err) {
+      const msg =
+        err?.response?.data?.detail ||
+        err?.message ||
+        "Failed to load branches.";
+      setError(msg);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchBranches();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleChange = (e) => {
+    setForm({ ...form, [e.target.name]: e.target.value });
+  };
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    const newBranch = {
-      id: Date.now(),
-      name: form.name,
-      district: form.district,
-      city: form.city,
-      address: form.address,
-    };
-    setBranches([...branches, newBranch]);
+    setSubmitting(true);
+    setError("");
+
+    try {
+      if (!form.name || !form.district || !form.city || !form.address) {
+        setError("Please fill all required fields.");
+        return;
+      }
+
+      if (isEditing) {
+        // ✅ Update branch
+        const res = await api.patch(`/api/branches/${editingId}`, form);
+
+        // update local list without refetch
+        setBranches((prev) =>
+          prev.map((b) => (b.id === editingId ? res.data : b))
+        );
+      } else {
+        // ✅ Create branch
+        const res = await api.post("/api/branches", form);
+        setBranches((prev) => [...prev, res.data]);
+      }
+
+      resetForm();
+    } catch (err) {
+      const msg =
+        err?.response?.data?.detail ||
+        err?.message ||
+        "Failed to save branch.";
+      setError(msg);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleEdit = (branch) => {
+    setEditingId(branch.id);
     setForm({
-      name: "",
-      district: "",
-      city: "",
-      address: "",
+      name: branch.name || "",
+      district: branch.district || "",
+      city: branch.city || "",
+      address: branch.address || "",
     });
+    setError("");
+  };
+
+  const handleDelete = async (branchId) => {
+    const ok = window.confirm("Delete this branch?");
+    if (!ok) return;
+
+    setError("");
+    try {
+      await api.delete(`/api/branches/${branchId}`);
+      setBranches((prev) => prev.filter((b) => b.id !== branchId));
+
+      // if deleting the branch you're editing, reset
+      if (editingId === branchId) resetForm();
+    } catch (err) {
+      const msg =
+        err?.response?.data?.detail ||
+        err?.message ||
+        "Failed to delete branch.";
+      setError(msg);
+    }
   };
 
   return (
@@ -40,11 +125,29 @@ function BranchManagement() {
             <span className="availability-logo">⚖️</span>
             <div className="availability-brand-text">
               <div className="availability-brand-name">LEXICONNECT</div>
-              <div className="availability-brand-subtitle">Manage your branch locations</div>
+              <div className="availability-brand-subtitle">
+                Manage your branch locations
+              </div>
             </div>
           </div>
           <h1 className="availability-title">My Branches</h1>
         </div>
+
+        {/* Error banner */}
+        {error ? (
+          <div
+            style={{
+              padding: "0.75rem 1rem",
+              borderRadius: "10px",
+              marginBottom: "1rem",
+              border: "1px solid rgba(255,0,0,0.25)",
+              background: "rgba(255,0,0,0.06)",
+              fontSize: "0.95rem",
+            }}
+          >
+            {error}
+          </div>
+        ) : null}
 
         <form onSubmit={handleSubmit} className="availability-form">
           <div className="availability-form-grid">
@@ -109,9 +212,32 @@ function BranchManagement() {
             </div>
           </div>
 
-          <button type="submit" className="availability-primary-btn">
-            Add Branch
-          </button>
+          <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
+            <button
+              type="submit"
+              className="availability-primary-btn"
+              disabled={submitting}
+            >
+              {submitting
+                ? isEditing
+                  ? "Saving..."
+                  : "Adding..."
+                : isEditing
+                ? "Save Changes"
+                : "Add Branch"}
+            </button>
+
+            {isEditing ? (
+              <button
+                type="button"
+                className="availability-danger-btn"
+                onClick={resetForm}
+                disabled={submitting}
+              >
+                Cancel Edit
+              </button>
+            ) : null}
+          </div>
         </form>
 
         <div className="availability-divider" />
@@ -121,22 +247,30 @@ function BranchManagement() {
           <p>Manage your existing branch locations.</p>
         </div>
 
-        {branches.length === 0 ? (
+        {loading ? (
+          <div className="empty-state">
+            <p>Loading branches...</p>
+          </div>
+        ) : branches.length === 0 ? (
           <div className="empty-state">
             <p>No branches yet</p>
             <p className="empty-sub">Add your first branch to get started.</p>
-            <button 
+            <button
               type="button"
               className="availability-primary-btn"
-              style={{ marginTop: '1rem' }}
-              onClick={() => {}}
+              style={{ marginTop: "1rem" }}
+              onClick={() => {
+                // focus the first field
+                const el = document.getElementById("name");
+                if (el) el.focus();
+              }}
             >
               Add First Branch
             </button>
           </div>
         ) : (
           <div className="availability-slots">
-            {branches.map(b => (
+            {branches.map((b) => (
               <div key={b.id} className="slot-item">
                 <div className="slot-info">
                   <div className="slot-time">{b.name}</div>
@@ -149,18 +283,30 @@ function BranchManagement() {
                       </>
                     )}
                   </div>
+                  {b.address ? (
+                    <div style={{ fontSize: "0.9rem", opacity: 0.85 }}>
+                      {b.address}
+                    </div>
+                  ) : null}
                 </div>
-                <div style={{ display: 'flex', gap: '0.5rem' }}>
+
+                <div style={{ display: "flex", gap: "0.5rem" }}>
                   <button
                     type="button"
                     className="availability-primary-btn"
-                    style={{ height: '40px', padding: '0 0.9rem', fontSize: '0.85rem' }}
+                    style={{
+                      height: "40px",
+                      padding: "0 0.9rem",
+                      fontSize: "0.85rem",
+                    }}
+                    onClick={() => handleEdit(b)}
                   >
                     Edit
                   </button>
                   <button
                     type="button"
                     className="availability-danger-btn"
+                    onClick={() => handleDelete(b.id)}
                   >
                     Delete
                   </button>
@@ -169,6 +315,19 @@ function BranchManagement() {
             ))}
           </div>
         )}
+
+        {/* Quick refresh link */}
+        <div style={{ marginTop: "1rem" }}>
+          <button
+            type="button"
+            className="availability-primary-btn"
+            style={{ height: "40px", padding: "0 0.9rem", fontSize: "0.85rem" }}
+            onClick={fetchBranches}
+            disabled={loading}
+          >
+            Refresh
+          </button>
+        </div>
       </div>
     </div>
   );
