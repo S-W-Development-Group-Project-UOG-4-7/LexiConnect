@@ -13,7 +13,11 @@ node_modules/
 
 # Uploads
 backend/uploads/
+uploads/
+
 
 # OS
 .DS_Store
 EOF
+
+.env 

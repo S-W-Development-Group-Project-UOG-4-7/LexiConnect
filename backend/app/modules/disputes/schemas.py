@@ -11,7 +11,14 @@ from pydantic import BaseModel, Field, ConfigDict
 # -------------------------
 
 class DisputeCreate(BaseModel):
-    """Client creates a dispute."""
+    """
+    Client creates a dispute.
+
+    booking_id is OPTIONAL to support:
+    - legacy endpoint: POST /api/disputes (booking_id may be in body)
+    - new nested endpoint: POST /api/bookings/{booking_id}/disputes (booking_id from URL)
+      (In that case, the backend should ignore payload.booking_id.)
+    """
     booking_id: Optional[int] = None
     title: str = Field(..., min_length=1, max_length=255)
     description: str = Field(..., min_length=1)
@@ -41,7 +48,7 @@ class DisputeOut(BaseModel):
     client_id: int
     title: str
     description: str
-    status: str
-    admin_note: Optional[str]
+    status: Literal["PENDING", "RESOLVED", "REJECTED"]
+    admin_note: Optional[str] = None
     created_at: datetime
     updated_at: datetime

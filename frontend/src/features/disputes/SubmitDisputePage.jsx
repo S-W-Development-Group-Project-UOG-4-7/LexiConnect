@@ -1,13 +1,20 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { createDispute } from "../../services/disputes";
+// frontend/src/features/disputes/SubmitDisputePage.jsx
+import { useMemo, useState } from "react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { createDispute, createDisputeForBooking } from "../../services/disputes";
 
 export default function SubmitDisputePage() {
   const navigate = useNavigate();
+  const location = useLocation();
+
+  const bookingId = useMemo(() => {
+    const n = Number(new URLSearchParams(location.search).get("booking_id"));
+    return Number.isFinite(n) && n > 0 ? n : null;
+  }, [location.search]);
+  const hasBooking = Boolean(bookingId);
+
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [bookingId, setBookingId] = useState("");
-
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -27,32 +34,27 @@ export default function SubmitDisputePage() {
       description: description.trim(),
     };
 
-    // booking_id optional
-    if (bookingId.trim()) {
-      const parsedId = Number(bookingId);
-      if (isNaN(parsedId) || parsedId <= 0) {
-        setError("Booking ID must be a positive number.");
-        return;
-      }
-      payload.booking_id = parsedId;
-    }
-
     try {
       setLoading(true);
-      const created = await createDispute(payload);
-      setSuccess(`Dispute submitted successfully! (ID: ${created.id})`);
+      const created = hasBooking
+        ? await createDisputeForBooking(bookingId, payload)
+        : await createDispute(payload);
+
+      setSuccess(`Dispute submitted successfully! (ID: ${created?.id ?? "—"})`);
       setTitle("");
       setDescription("");
-      setBookingId("");
-      
-      // Optionally navigate to the dispute detail page after a short delay
+
       setTimeout(() => {
-        navigate(`/disputes/${created.id}`);
-      }, 1500);
-    } catch (e) {
+        if (hasBooking) {
+          navigate(`/client/bookings/${bookingId}`);
+        } else {
+          navigate(`/client/disputes/my`);
+        }
+      }, 800);
+    } catch (e2) {
       const message =
-        e?.response?.data?.detail ||
-        e?.response?.data?.message ||
+        e2?.response?.data?.detail ||
+        e2?.response?.data?.message ||
         "Failed to submit dispute.";
       setError(message);
     } finally {
@@ -70,10 +72,17 @@ export default function SubmitDisputePage() {
           >
             ← Back
           </button>
+
           <h1 className="text-3xl font-bold mb-2">Submit Dispute</h1>
           <p className="text-gray-400">
             Report an issue or complaint. Our team will review and respond.
           </p>
+
+          {hasBooking && (
+            <div className="mt-3 inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-slate-800 border border-slate-700 text-amber-300">
+              Booking #{bookingId} dispute
+            </div>
+          )}
         </div>
 
         {error && (
@@ -120,24 +129,6 @@ export default function SubmitDisputePage() {
               />
             </div>
 
-            <div>
-              <label className="block text-sm font-semibold text-gray-300 mb-2">
-                Booking ID <span className="text-gray-500 text-xs">(optional)</span>
-              </label>
-              <input
-                type="number"
-                min="1"
-                className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent"
-                value={bookingId}
-                onChange={(e) => setBookingId(e.target.value)}
-                placeholder="e.g. 12"
-                disabled={loading}
-              />
-              <p className="mt-1 text-xs text-gray-500">
-                If this dispute is related to a specific booking, enter the booking ID.
-              </p>
-            </div>
-
             <div className="pt-4 border-t border-slate-700">
               <button
                 type="submit"
@@ -147,6 +138,12 @@ export default function SubmitDisputePage() {
                 {loading ? "Submitting..." : "Submit Dispute"}
               </button>
             </div>
+
+            {hasBooking && (
+              <div className="text-center text-sm opacity-80">
+                After submit, you’ll be taken back to Booking #{bookingId}.
+              </div>
+            )}
           </form>
         </div>
       </div>
