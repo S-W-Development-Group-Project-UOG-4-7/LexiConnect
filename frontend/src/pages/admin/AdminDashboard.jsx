@@ -1,5 +1,4 @@
-import AdminHeader from '../../components/AdminHeader';
-import './AdminDashboard.css';
+import "./AdminDashboard.css";
 
 const AdminDashboard = () => {
   const metrics = {
@@ -8,55 +7,54 @@ const AdminDashboard = () => {
     verifiedLawyers: 3,
     pendingKYC: 1,
     totalBookings: 1,
-    activeBookings: 1
+    activeBookings: 1,
   };
 
   const recentBookings = [
     {
       id: 1,
-      lawyerName: 'Priya Jayawardena',
-      date: '12/5/2025',
-      time: '10:00',
-      status: 'confirmed'
-    }
+      lawyerName: "Priya Jayawardena",
+      date: "12/5/2025",
+      time: "10:00",
+      status: "confirmed",
+    },
   ];
 
   const lawyers = [
     {
       id: 1,
-      name: 'Priya Jayawardena',
-      specialization: 'Corporate Law',
+      name: "Priya Jayawardena",
+      specialization: "Corporate Law",
       verified: true,
-      image: '👩‍💼'
+      image: "👩‍💼",
     },
     {
       id: 2,
-      name: 'Rohan Perera',
-      specialization: 'Criminal Law',
+      name: "Rohan Perera",
+      specialization: "Criminal Law",
       verified: true,
-      image: '👨‍💼'
+      image: "👨‍💼",
     },
     {
       id: 3,
-      name: 'Nimalka Fernando',
-      specialization: 'Property Law',
+      name: "Nimalka Fernando",
+      specialization: "Property Law",
       verified: true,
-      image: '👩‍💼'
+      image: "👩‍💼",
     },
     {
       id: 4,
-      name: 'Arjun Silva',
-      specialization: 'Immigration Law',
+      name: "Arjun Silva",
+      specialization: "Immigration Law",
       verified: false,
-      image: '👨‍💼'
-    }
+      image: "👨‍💼",
+    },
   ];
 
   return (
     <div className="admin-dashboard-page">
       <div className="diamond-pattern"></div>
-      <AdminHeader />
-      
+
       <main className="admin-dashboard-main">
         <div className="admin-dashboard-container">
           {/* System Overview Section */}
@@ -86,12 +84,14 @@ const AdminDashboard = () => {
               <div className="metric-content">
                 <div className="metric-value">{metrics.totalLawyers}</div>
                 <div className="metric-label">Total Lawyers</div>
-                <div className="metric-detail verified">{metrics.verifiedLawyers} verified</div>
+                <div className="metric-detail verified">
+                  {metrics.verifiedLawyers} verified
+                </div>
               </div>
             </div>
 
             <div className="admin-metric-card">
-              <div className="metric-icon">🕐</div>
+              <div className="metric-icon">🕒</div>
               <div className="metric-content">
                 <div className="metric-value">{metrics.pendingKYC}</div>
                 <div className="metric-label">Pending KYC</div>
@@ -111,14 +111,16 @@ const AdminDashboard = () => {
 
           {/* Pending KYC Banner */}
           <section className="admin-kyc-banner">
-            <div className="kyc-banner-icon">🕐</div>
+            <div className="kyc-banner-icon">🕒</div>
             <div className="kyc-banner-content">
-              <h3 className="kyc-banner-title">{metrics.pendingKYC} Pending KYC Verification</h3>
+              <h3 className="kyc-banner-title">
+                {metrics.pendingKYC} Pending KYC Verification
+              </h3>
               <p className="kyc-banner-description">
                 Review and approve lawyer registrations to maintain platform quality.
               </p>
             </div>
-            <a href="/admin/kyc" className="btn btn-primary kyc-review-btn">
+            <a href="/admin/kyc-approval" className="btn btn-primary kyc-review-btn">
               Review KYC →
             </a>
           </section>
@@ -136,9 +138,13 @@ const AdminDashboard = () => {
                   <div key={booking.id} className="booking-item">
                     <div className="booking-info">
                       <span className="booking-lawyer">{booking.lawyerName}</span>
-                      <span className="booking-date">{booking.date} at {booking.time}</span>
+                      <span className="booking-date">
+                        {booking.date} at {booking.time}
+                      </span>
                     </div>
-                    <span className={`booking-status ${booking.status}`}>{booking.status}</span>
+                    <span className={`booking-status ${booking.status}`}>
+                      {booking.status}
+                    </span>
                   </div>
                 ))}
               </div>
@@ -161,7 +167,7 @@ const AdminDashboard = () => {
                     {lawyer.verified ? (
                       <span className="lawyer-status-icon verified-icon">✓</span>
                     ) : (
-                      <span className="lawyer-status-icon pending-icon">🕐</span>
+                      <span className="lawyer-status-icon pending-icon">🕒</span>
                     )}
                   </div>
                 ))}
@@ -171,15 +177,15 @@ const AdminDashboard = () => {
 
           {/* Bottom Row Cards */}
           <section className="admin-bottom-cards">
-            <a href="/admin/kyc" className="admin-feature-card">
-              <div className="feature-card-icon">🕐</div>
+            <a href="/admin/kyc-approval" className="admin-feature-card">
+              <div className="feature-card-icon">🕒</div>
               <h4 className="feature-card-title">KYC Approval</h4>
               <p className="feature-card-description">
                 Review and approve lawyer verifications.
               </p>
             </a>
 
-            <a href="/admin/audit" className="admin-feature-card">
+            <a href="/admin/audit-log" className="admin-feature-card">
               <div className="feature-card-icon">📄</div>
               <h4 className="feature-card-title">Audit Log</h4>
               <p className="feature-card-description">
@@ -204,4 +210,3 @@ const AdminDashboard = () => {
 };
 
 export default AdminDashboard;
-

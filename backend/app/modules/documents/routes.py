@@ -1,3 +1,5 @@
+# backend/app/modules/documents/routes.py
+
 from typing import Optional, List
 
 from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException
@@ -5,7 +7,13 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from .schema import DocumentOut
-from .service import save_upload, create_document, list_documents, get_document, delete_document
+from .service import (
+    save_upload,
+    create_document,
+    list_documents,
+    get_document,
+    delete_document,
+)
 
 router = APIRouter(prefix="/api/documents", tags=["Documents"])
 
@@ -18,13 +26,21 @@ def upload_document(
     db: Session = Depends(get_db),
 ):
     file_path = save_upload(file)
-    doc = create_document(db, booking_id=booking_id, file_name=file_name, file_path=file_path)
+
+    # ✅ service.create_document expects `title`, not `file_name`
+    doc = create_document(
+        db,
+        booking_id=booking_id,
+        title=file_name,
+        file_path=file_path,
+    )
     return doc
 
 
 @router.get("", response_model=List[DocumentOut])
 def get_documents(booking_id: Optional[int] = None, db: Session = Depends(get_db)):
-    # Allow /api/documents?booking_id=30
+    # ✅ Allows: /api/documents?booking_id=30
+    # (service.list_documents supports booking_id=None after your service.py fix)
     return list_documents(db, booking_id=booking_id)
 
 

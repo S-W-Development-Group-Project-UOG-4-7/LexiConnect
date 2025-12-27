@@ -1,49 +1,55 @@
+# backend/app/main.py
+
 # Load environment variables first
 from dotenv import load_dotenv
+
 load_dotenv()
 
 # Third-party imports
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
+from fastapi.staticfiles import StaticFiles  # ✅ for serving uploads
 
-# Safe module routers
+# Core DB
+from .database import Base, engine, SessionLocal
+
+# Ensure models are loaded (so Alembic / SQLAlchemy sees them)
+# Add/remove here only if these models exist in backend/app/models
+from .models import (  # noqa
+    branch,
+    kyc_submission,
+    lawyer,
+    lawyer_availability,
+    service_package,
+    checklist_template,
+)
+
+# Routers (existing app routers)
+from .routers import admin, auth, bookings, dev, lawyers, token_queue  # noqa: F401
+
+# Module routers (new modular structure)
 from app.modules.kyc.router import router as kyc_router
-from app.modules.disputes.routes import router as disputes_router
 from app.modules.branches.router import router as branches_router
 from app.modules.service_packages.router import router as service_packages_router
 from app.modules.checklist_templates.router import router as checklist_router
 
-
-
-from .api.v1 import admin as admin_v1, booking as booking_v1
-from .database import Base, engine, SessionLocal
-
-# Ensure models are loaded
-from .models import branch, kyc_submission, lawyer, lawyer_availability,service_package,checklist_template # noqa
-
-from .seed import seed_demo_users
-
-# IMPORTANT:
-# - documents module disabled (missing Document model)
-# - old availability router disabled (missing availability_v2 model)
-
-from .routers import (
-    admin,
-    auth,
-    bookings,
-    dev,
-    lawyers,
-    token_queue,
-    lawyer_availability,
+from app.modules.disputes.routes import (
+    router as disputes_router,
+    admin_router as admin_disputes_router,
+    booking_router as booking_disputes_router,
 )
-from .seed import seed_demo_users
-from app.seed import seed_all
-from app.database import SessionLocal
-from app.modules.disputes.routes import router as disputes_router
-from app.modules.disputes.routes import router as disputes_router, admin_router as admin_disputes_router
 
-# Create all database tables
+from app.modules.documents.routes import router as documents_router
+from app.modules.intake.routes import router as intake_router
+
+# API v1 routers
+from .api.v1 import admin as admin_v1, booking as booking_v1
+
+# Seed
+from app.seed import seed_all
+
+# Create all database tables (dev-friendly)
 Base.metadata.create_all(bind=engine)
 
 # FastAPI app
@@ -53,11 +59,11 @@ app = FastAPI(
     swagger_ui_parameters={"persistAuthorization": True},
 )
 
+# ✅ Serve uploaded files so frontend can open PDFs/images in browser
+# Example URL: http://127.0.0.1:8000/uploads/documents/<file>.pdf
+app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
+
 # ---- CORS for React (Vite) frontend ----
-# NOTE:
-# - Allow both localhost + 127.0.0.1
-# - Allow common Vite ports (5173+)
-# - Dev-only: allow all methods/headers
 origins = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
@@ -68,7 +74,7 @@ origins = [
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
-    allow_origin_regex=r"^http:\/\/(localhost|127\.0\.0\.1):\d+$",  # <--- makes dev painless
+    allow_origin_regex=r"^http:\/\/(localhost|127\.0\.0\.1):\d+$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -83,41 +89,42 @@ def startup():
     finally:
         db.close()
 
-
 # ---- Health check ----
 @app.get("/health")
 def health_check():
     return {"status": "ok"}
 
 # ---- Routers ----
+
+# Core auth/booking/lawyers
 app.include_router(auth.router)
 app.include_router(lawyers.router)
 app.include_router(bookings.router)
+app.include_router(token_queue.router)
+
+# Feature modules
 app.include_router(service_packages_router)
 app.include_router(checklist_router)
 
-
-
-# ❌ Documents router disabled
-# app.include_router(documents.router, prefix="/bookings")
-
+# Admin / Dev / Branches / KYC
 app.include_router(admin.router)
 app.include_router(branches_router)
 app.include_router(kyc_router)
-app.include_router(dev.router)          # DEV-ONLY endpoints
-app.include_router(disputes_router)
-app.include_router(admin_disputes_router)
+app.include_router(dev.router)  # DEV-ONLY endpoints
+
+# Modules (grouped to avoid duplicate includes and Swagger noise)
+for module_router in (
+    disputes_router,
+    admin_disputes_router,
+    booking_disputes_router,
+    documents_router,
+    intake_router,
+):
+    app.include_router(module_router)
 
 # API v1 routers
 app.include_router(admin_v1.router)
 app.include_router(booking_v1.router)
-app.include_router(disputes_router)
-
-# Disputes API
-app.include_router(disputes_router, prefix="/api/disputes", tags=["Disputes"])
-
-# Lawyer Availability API
-app.include_router(lawyer_availability.router)
 
 # ---- Custom OpenAPI (JWT Bearer Auth in Swagger) ----
 def custom_openapi():
@@ -142,5 +149,6 @@ def custom_openapi():
     openapi_schema["security"] = [{"BearerAuth": []}]
     app.openapi_schema = openapi_schema
     return openapi_schema
+
 
 app.openapi = custom_openapi

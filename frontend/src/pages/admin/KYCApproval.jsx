@@ -1,108 +1,104 @@
-import { useState } from 'react';
-import AdminHeader from '../../components/AdminHeader';
-import './KYCApproval.css';
+import { useState } from "react";
+import "./KYCApproval.css";
 
 const KYCApproval = () => {
-  const [activeTab, setActiveTab] = useState('pending');
+  const [activeTab, setActiveTab] = useState("pending");
 
   const kycData = {
     pending: [
       {
         id: 1,
-        name: 'Arjun Silva',
-        email: 'arjun@law.lk',
-        degree: 'LLB',
-        barId: 'BAR2022010',
-        specializations: ['Immigration Law', 'Corporate Law'],
-        location: { city: 'Nugegoda', district: 'Colombo' },
-        languages: ['English'],
+        name: "Arjun Silva",
+        email: "arjun@law.lk",
+        degree: "LLB",
+        barId: "BAR2022010",
+        specializations: ["Immigration Law", "Corporate Law"],
+        location: { city: "Nugegoda", district: "Colombo" },
+        languages: ["English"],
         rating: 4.7,
         reviews: 28,
-        status: 'pending',
-        image: '👨‍💼'
-      }
+        status: "pending",
+        image: "👨‍💼",
+      },
     ],
     approved: [
       {
         id: 2,
-        name: 'Priya Jayawardena',
-        email: 'priya@law.lk',
-        degree: 'LLB (Hons), Attorney-at-Law',
-        barId: 'BAR2021001',
-        specializations: ['Corporate Law', 'Contract Law'],
-        location: { city: 'Colombo', district: 'Colombo' },
-        languages: ['English', 'Sinhala', 'Tamil'],
+        name: "Priya Jayawardena",
+        email: "priya@law.lk",
+        degree: "LLB (Hons), Attorney-at-Law",
+        barId: "BAR2021001",
+        specializations: ["Corporate Law", "Contract Law"],
+        location: { city: "Colombo", district: "Colombo" },
+        languages: ["English", "Sinhala", "Tamil"],
         rating: 4.8,
         reviews: 45,
-        status: 'approved',
-        image: '👩‍💼'
+        status: "approved",
+        image: "👩‍💼",
       },
       {
         id: 3,
-        name: 'Rohan Perera',
-        email: 'rohan@law.lk',
-        degree: 'LLB, LLM',
-        barId: 'BAR2021002',
-        specializations: ['Criminal Law', 'Family Law'],
-        location: { city: 'Kandy', district: 'Kandy' },
-        languages: ['English', 'Sinhala'],
+        name: "Rohan Perera",
+        email: "rohan@law.lk",
+        degree: "LLB, LLM",
+        barId: "BAR2021002",
+        specializations: ["Criminal Law", "Family Law"],
+        location: { city: "Kandy", district: "Kandy" },
+        languages: ["English", "Sinhala"],
         rating: 4.6,
         reviews: 32,
-        status: 'approved',
-        image: '👨‍💼'
+        status: "approved",
+        image: "👨‍💼",
       },
       {
         id: 4,
-        name: 'Nimalka Fernando',
-        email: 'nimalka@law.lk',
-        degree: 'LLB (Hons), Attorney-at-Law',
-        barId: 'BAR2021003',
-        specializations: ['Property Law', 'Tax Law'],
-        location: { city: 'Galle', district: 'Galle' },
-        languages: ['English', 'Sinhala', 'Tamil'],
+        name: "Nimalka Fernando",
+        email: "nimalka@law.lk",
+        degree: "LLB (Hons), Attorney-at-Law",
+        barId: "BAR2021003",
+        specializations: ["Property Law", "Tax Law"],
+        location: { city: "Galle", district: "Galle" },
+        languages: ["English", "Sinhala", "Tamil"],
         rating: 4.9,
         reviews: 56,
-        status: 'approved',
-        image: '👩‍💼'
-      }
+        status: "approved",
+        image: "👩‍💼",
+      },
     ],
-    rejected: []
+    rejected: [],
   };
 
   const tabs = [
-    { id: 'pending', label: 'Pending', count: kycData.pending.length },
-    { id: 'approved', label: 'Approved', count: kycData.approved.length },
-    { id: 'rejected', label: 'Rejected', count: kycData.rejected.length },
-    { id: 'all', label: 'All', count: Object.values(kycData).flat().length }
+    { id: "pending", label: "Pending", count: kycData.pending.length },
+    { id: "approved", label: "Approved", count: kycData.approved.length },
+    { id: "rejected", label: "Rejected", count: kycData.rejected.length },
+    { id: "all", label: "All", count: Object.values(kycData).flat().length },
   ];
 
   const getCurrentData = () => {
-    if (activeTab === 'all') {
-      return Object.values(kycData).flat();
-    }
+    if (activeTab === "all") return Object.values(kycData).flat();
     return kycData[activeTab] || [];
   };
 
   const handleApprove = (id) => {
-    console.log('Approve KYC:', id);
+    console.log("Approve KYC:", id);
     // TODO: Implement approve logic
   };
 
   const handleReject = (id) => {
-    console.log('Reject KYC:', id);
+    console.log("Reject KYC:", id);
     // TODO: Implement reject logic
   };
 
   const handleViewDocuments = (id) => {
-    console.log('View documents:', id);
+    console.log("View documents:", id);
     // TODO: Implement view documents logic
   };
 
   return (
     <div className="kyc-approval-page">
       <div className="diamond-pattern"></div>
-      <AdminHeader />
-      
+
       <main className="kyc-approval-main">
         <div className="kyc-approval-container">
           {/* Page Title */}
@@ -113,7 +109,7 @@ const KYCApproval = () => {
             {tabs.map((tab) => (
               <button
                 key={tab.id}
-                className={`kyc-tab ${activeTab === tab.id ? 'active' : ''}`}
+                className={`kyc-tab ${activeTab === tab.id ? "active" : ""}`}
                 onClick={() => setActiveTab(tab.id)}
               >
                 {tab.label} ({tab.count})
@@ -134,7 +130,7 @@ const KYCApproval = () => {
                     <div className="kyc-name-row">
                       <h3 className="kyc-name">{kyc.name}</h3>
                       <span className={`badge badge-${kyc.status}`}>
-                        {kyc.status === 'pending' && '🕐 '}
+                        {kyc.status === "pending" && "🕐 "}
                         {kyc.status.charAt(0).toUpperCase() + kyc.status.slice(1)}
                       </span>
                     </div>
@@ -143,7 +139,9 @@ const KYCApproval = () => {
 
                     <div className="kyc-specializations">
                       {kyc.specializations.map((spec, idx) => (
-                        <span key={idx} className="kyc-spec-tag">{spec}</span>
+                        <span key={idx} className="kyc-spec-tag">
+                          {spec}
+                        </span>
                       ))}
                     </div>
 
@@ -154,7 +152,9 @@ const KYCApproval = () => {
                       </div>
                       <div className="kyc-contact-item">
                         <span className="kyc-contact-icon">📍</span>
-                        <span>{kyc.location.city}, {kyc.location.district}</span>
+                        <span>
+                          {kyc.location.city}, {kyc.location.district}
+                        </span>
                       </div>
                     </div>
 
@@ -172,12 +172,12 @@ const KYCApproval = () => {
                     </div>
                     <div className="kyc-detail-item">
                       <span className="kyc-detail-icon">📄</span>
-                      <span>Languages: {kyc.languages.join(', ')}</span>
+                      <span>Languages: {kyc.languages.join(", ")}</span>
                     </div>
                   </div>
 
                   <div className="kyc-actions">
-                    {kyc.status === 'pending' && (
+                    {kyc.status === "pending" && (
                       <>
                         <button
                           className="btn btn-success approve-btn"
@@ -195,6 +195,7 @@ const KYCApproval = () => {
                         </button>
                       </>
                     )}
+
                     <button
                       className="btn btn-secondary view-docs-btn"
                       onClick={() => handleViewDocuments(kyc.id)}
@@ -220,5 +221,3 @@ const KYCApproval = () => {
 };
 
 export default KYCApproval;
-
-

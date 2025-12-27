@@ -42,7 +42,25 @@ config.set_main_option("sqlalchemy.url", DATABASE_URL)
 # Import models for autogenerate
 # -----------------------------------------------------------------------------
 from app.database import Base  # noqa: E402
-from app import models  # noqa: F401,E402  (ensures models are imported)
+
+# Import all SQLAlchemy model modules so Alembic can discover metadata
+from app.models import (  # noqa: F401,E402
+    appointment,
+    availability,
+    booking,
+    branch,
+    kyc_submission,
+    lawyer,
+    lawyer_availability,
+    lawyer_kyc,
+    user,
+)
+from app.modules.availability import models as availability_models  # noqa: F401,E402
+from app.modules.blackouts import models as blackout_models  # noqa: F401,E402
+from app.modules.documents import models as document_models  # noqa: F401,E402
+from app.modules.disputes import models as dispute_models  # noqa: F401,E402
+from app.modules.intake import models as intake_models  # noqa: F401,E402
+from app.modules.queue import models as queue_models  # noqa: F401,E402
 
 target_metadata = Base.metadata
 
