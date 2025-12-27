@@ -1,3 +1,5 @@
+# backend/app/modules/disputes/routes.py
+
 print("✅ LOADED disputes routes from:", __file__)
 
 from typing import List, Optional
@@ -11,15 +13,18 @@ from app.models.user import UserRole
 
 from .models import Dispute
 from .schemas import DisputeCreate, DisputeOut, DisputeUpdate, DisputeAdminUpdate
+from .service import create_dispute as create_dispute_service
 
 
 router = APIRouter(prefix="/api/disputes", tags=["Disputes"])
 admin_router = APIRouter(prefix="/api/admin/disputes", tags=["Admin Disputes"])
 
+# ✅ NEW nested router: booking disputes
+booking_router = APIRouter(prefix="/api/bookings", tags=["Disputes"])
+
 
 def _is_admin(user) -> bool:
     role = getattr(user, "role", None)
-    # works for Enum or string
     if isinstance(role, UserRole):
         return role == UserRole.admin
     return str(role).lower() == "admin"
@@ -44,12 +49,18 @@ def ping():
     return {"ok": True, "module": "disputes"}
 
 
-# -------------------------
-# CLIENT
-# -------------------------
-
-@router.post("", response_model=DisputeOut, status_code=status.HTTP_201_CREATED)
-def create_dispute(
+# -----------------------------------------------------------------------------
+# ✅ NEW: Create dispute tied to a booking via URL
+# POST /api/bookings/{booking_id}/disputes
+# booking_id is guaranteed (cannot be NULL)
+# -----------------------------------------------------------------------------
+@booking_router.post(
+    "/{booking_id}/disputes",
+    response_model=DisputeOut,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_dispute_for_booking(
+    booking_id: int,
     payload: DisputeCreate,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
@@ -57,18 +68,44 @@ def create_dispute(
     if not _is_client(current_user):
         raise HTTPException(status_code=403, detail="Only clients can create disputes")
 
-    dispute = Dispute(
-        booking_id=payload.booking_id,
+    # booking_id enforced from path; ignore payload.booking_id
+    return create_dispute_service(
+        db=db,
         client_id=current_user.id,
+        booking_id=booking_id,
         title=payload.title,
         description=payload.description,
-        status="PENDING",
-        admin_note=None,
     )
-    db.add(dispute)
-    db.commit()
-    db.refresh(dispute)
-    return dispute
+
+
+# -------------------------
+# CLIENT (legacy, still supported)
+# -------------------------
+@router.post("", response_model=DisputeOut, status_code=status.HTTP_201_CREATED)
+def create_dispute(
+    payload: DisputeCreate,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """
+    Legacy endpoint:
+      POST /api/disputes
+    booking_id may be null unless provided in body.
+    Prefer: POST /api/bookings/{booking_id}/disputes
+    """
+    if not _is_client(current_user):
+        raise HTTPException(status_code=403, detail="Only clients can create disputes")
+
+    if not payload.booking_id:
+        raise HTTPException(status_code=400, detail="booking_id is required")
+
+    return create_dispute_service(
+        db=db,
+        client_id=current_user.id,
+        booking_id=payload.booking_id,
+        title=payload.title,
+        description=payload.description,
+    )
 
 
 @router.get("/my", response_model=List[DisputeOut])
@@ -114,7 +151,10 @@ def client_update_dispute(
         raise HTTPException(status_code=403, detail="Not allowed to update this dispute")
 
     if str(dispute.status).upper() != "PENDING":
-        raise HTTPException(status_code=400, detail="Only PENDING disputes can be updated by client")
+        raise HTTPException(
+            status_code=400,
+            detail="Only PENDING disputes can be updated by client",
+        )
 
     if payload.title is not None:
         dispute.title = payload.title
@@ -129,10 +169,9 @@ def client_update_dispute(
 # -------------------------
 # ADMIN
 # -------------------------
-
 @admin_router.get("", response_model=List[DisputeOut])
 def admin_list_disputes(
-    status: Optional[str] = Query(None, description="PENDING or RESOLVED"),
+    status: Optional[str] = Query(None, description="PENDING or RESOLVED or REJECTED"),
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):

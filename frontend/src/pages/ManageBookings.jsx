@@ -103,7 +103,13 @@ const ManageBookings = () => {
                   </div>
                 </div>
 
-                <div className="flex gap-2">
+                <div className="flex gap-2 flex-wrap justify-end">
+                  <button
+                    onClick={() => navigate(`/client/bookings/${booking.id}`)}
+                    className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-medium transition-colors"
+                  >
+                    View Details
+                  </button>
                   <button
                     onClick={() => navigate(`/client/bookings/${booking.id}/documents/upload`)}
                     className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"

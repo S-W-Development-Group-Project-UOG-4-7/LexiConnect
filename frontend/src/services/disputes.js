@@ -3,6 +3,10 @@ import api from "./api";
 // Client: create dispute
 export const createDispute = (payload) => api.post("/api/disputes", payload);
 
+// Client: create dispute scoped to a booking (preferred)
+export const createDisputeForBooking = (bookingId, payload) =>
+  api.post(`/api/bookings/${bookingId}/disputes`, payload);
+
 // Client: my disputes
 export const listMyDisputes = () => api.get("/api/disputes/my");
 
