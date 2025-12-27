@@ -12,13 +12,15 @@ from app.modules.kyc.router import router as kyc_router
 from app.modules.disputes.routes import router as disputes_router
 from app.modules.branches.router import router as branches_router
 from app.modules.service_packages.router import router as service_packages_router
+from app.modules.checklist_templates.router import router as checklist_router
+
 
 
 from .api.v1 import admin as admin_v1, booking as booking_v1
 from .database import Base, engine, SessionLocal
 
 # Ensure models are loaded
-from .models import branch, kyc_submission, lawyer, lawyer_availability,service_package  # noqa
+from .models import branch, kyc_submission, lawyer, lawyer_availability,service_package,checklist_template # noqa
 
 from .seed import seed_demo_users
 
@@ -92,6 +94,8 @@ app.include_router(auth.router)
 app.include_router(lawyers.router)
 app.include_router(bookings.router)
 app.include_router(service_packages_router)
+app.include_router(checklist_router)
+
 
 
 # ❌ Documents router disabled
