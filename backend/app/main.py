@@ -91,10 +91,12 @@ def startup():
     finally:
         db.close()
 
+
 # ---- Health check ----
 @app.get("/health")
 def health_check():
     return {"status": "ok"}
+
 
 # ---- Routers ----
 
@@ -130,6 +132,7 @@ for module_router in (
 # API v1 routers
 app.include_router(admin_v1.router)
 app.include_router(booking_v1.router)
+
 
 # ---- Custom OpenAPI (JWT Bearer Auth in Swagger) ----
 def custom_openapi():
