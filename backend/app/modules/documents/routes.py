@@ -27,20 +27,19 @@ def upload_document(
 ):
     file_path = save_upload(file)
 
-    # ✅ service.create_document expects `title`, not `file_name`
     doc = create_document(
         db,
         booking_id=booking_id,
         title=file_name,
+        original_filename=file.filename or file_name,
         file_path=file_path,
     )
     return doc
 
 
+
 @router.get("", response_model=List[DocumentOut])
 def get_documents(booking_id: Optional[int] = None, db: Session = Depends(get_db)):
-    # ✅ Allows: /api/documents?booking_id=30
-    # (service.list_documents supports booking_id=None after your service.py fix)
     return list_documents(db, booking_id=booking_id)
 
 
