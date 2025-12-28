@@ -26,13 +26,15 @@ from .models import (  # noqa
 )
 
 # Routers (existing app routers)
-from .routers import admin, auth, bookings, dev, lawyers, token_queue  # noqa: F401
+from .routers import admin, auth, bookings, dev, lawyers, token_queue, lawyer_availability  # noqa: F401
 
 # Module routers (new modular structure)
 from app.modules.kyc.router import router as kyc_router
 from app.modules.branches.router import router as branches_router
 from app.modules.service_packages.router import router as service_packages_router
 from app.modules.checklist_templates.router import router as checklist_router
+from app.modules.availability.router import router as availability_router
+from app.modules.blackouts.router import router as blackouts_router
 
 from app.modules.disputes.routes import (
     router as disputes_router,
@@ -103,6 +105,7 @@ app.include_router(auth.router)
 app.include_router(lawyers.router)
 app.include_router(bookings.router)
 app.include_router(token_queue.router)
+app.include_router(lawyer_availability.router)
 
 # Feature modules
 app.include_router(service_packages_router)
@@ -111,6 +114,8 @@ app.include_router(checklist_router)
 # Admin / Dev / Branches / KYC
 app.include_router(admin.router)
 app.include_router(branches_router)
+app.include_router(availability_router)
+app.include_router(blackouts_router)
 app.include_router(kyc_router)
 app.include_router(dev.router)  # DEV-ONLY endpoints
 

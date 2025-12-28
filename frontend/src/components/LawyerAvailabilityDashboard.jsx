@@ -33,6 +33,194 @@ const LawyerAvailabilityDashboard = () => {
 
   const weekDays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
+  // Helper functions for UI <-> DB format conversion
+  const toDbDay = (dayLabel) => {
+    const dayMap = {
+      'Monday': 'MONDAY',
+      'Tuesday': 'TUESDAY',
+      'Wednesday': 'WEDNESDAY',
+      'Thursday': 'THURSDAY',
+      'Friday': 'FRIDAY',
+      'Saturday': 'SATURDAY',
+      'Sunday': 'SUNDAY'
+    };
+    return dayMap[dayLabel] || 'MONDAY';
+  };
+
+  // Helper functions for API format (lawyer-availability endpoints)
+  const toApiDay = (dayLabelOrDbValue) => {
+    // Handle UI labels ("Monday") and DB values ("MONDAY")
+    const dayMap = {
+      'Monday': 'monday',
+      'Tuesday': 'tuesday',
+      'Wednesday': 'wednesday',
+      'Thursday': 'thursday',
+      'Friday': 'friday',
+      'Saturday': 'saturday',
+      'Sunday': 'sunday',
+      'MONDAY': 'monday',
+      'TUESDAY': 'tuesday',
+      'WEDNESDAY': 'wednesday',
+      'THURSDAY': 'thursday',
+      'FRIDAY': 'friday',
+      'SATURDAY': 'saturday',
+      'SUNDAY': 'sunday'
+    };
+    return dayMap[dayLabelOrDbValue] || 'monday';
+  };
+
+  const toApiTime = (uiTime) => {
+    if (!uiTime) return '09:00 AM';
+    
+    // If already in "HH:MM AM/PM" format, return as-is
+    if (typeof uiTime === 'string' && uiTime.match(/^\d{1,2}:\d{2}\s*(AM|PM)$/i)) {
+      return uiTime.toUpperCase().replace(/\s+(AM|PM)/, ' $1');
+    }
+    
+    // If in "HH:MM:SS" format, convert to AM/PM
+    if (typeof uiTime === 'string' && uiTime.match(/^\d{1,2}:\d{2}:\d{2}$/)) {
+      const [timeHours, timeMinutes] = uiTime.split(':').map(Number);
+      const period = timeHours >= 12 ? 'PM' : 'AM';
+      const displayHours = timeHours % 12 || 12;
+      return `${displayHours}:${timeMinutes.toString().padStart(2, '0')} ${period}`;
+    }
+    
+    // Fallback
+    return '09:00 AM';
+  };
+
+  const fromApiTime = (apiTime) => {
+    if (!apiTime) return '09:00 AM';
+    
+    // If already in AM/PM format, ensure proper formatting
+    if (typeof apiTime === 'string' && (apiTime.includes('AM') || apiTime.includes('PM'))) {
+      return apiTime.toUpperCase().replace(/\s+(AM|PM)/, ' $1');
+    }
+    
+    // If in "HH:MM:SS" format, convert to AM/PM
+    if (typeof apiTime === 'string' && apiTime.match(/^\d{1,2}:\d{2}:\d{2}$/)) {
+      const [timeHours, timeMinutes] = apiTime.split(':').map(Number);
+      const period = timeHours >= 12 ? 'PM' : 'AM';
+      const displayHours = timeHours % 12 || 12;
+      return `${displayHours}:${timeMinutes.toString().padStart(2, '0')} ${period}`;
+    }
+    
+    return '09:00 AM';
+  };
+
+  const toDbTime = (uiTime) => {
+    if (!uiTime) return null; // Return null to indicate failure
+    
+    // If already in "HH:MM:SS" format, return as is
+    if (typeof uiTime === 'string' && uiTime.match(/^\d{1,2}:\d{2}:\d{2}$/)) {
+      return uiTime;
+    }
+    
+    // Parse "09:00 AM" or "9:00 AM" format
+    const match = uiTime.match(/(\d{1,2}):(\d{2})\s*(AM|PM)/i);
+    if (!match) return null; // Return null to indicate failure
+    
+    let [, hours, minutes, period] = match;
+    hours = parseInt(hours, 10);
+    minutes = parseInt(minutes, 10);
+    period = period.toUpperCase();
+    
+    // Validate hours and minutes
+    if (hours < 0 || hours > 12 || minutes < 0 || minutes > 59) {
+      return null; // Return null to indicate failure
+    }
+    
+    // Convert to 24-hour format
+    if (period === 'PM' && hours !== 12) {
+      hours += 12;
+    } else if (period === 'AM' && hours === 12) {
+      hours = 0;
+    }
+    
+    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:00`;
+  };
+
+  const fromDbTime = (dbTime) => {
+    if (!dbTime) return '09:00 AM';
+    
+    // If already in AM/PM format, return as is
+    if (typeof dbTime === 'string' && (dbTime.includes('AM') || dbTime.includes('PM'))) {
+      return dbTime;
+    }
+    
+    // Parse "09:00:00" format
+    const match = dbTime.match(/^(\d{1,2}):(\d{2}):\d{2}$/);
+    if (!match) return '09:00 AM';
+    
+    let [, hours, minutes] = match;
+    hours = parseInt(hours, 10);
+    minutes = parseInt(minutes, 10);
+    
+    // Validate hours and minutes
+    if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) {
+      return '09:00 AM';
+    }
+    
+    // Convert to 12-hour format
+    const period = hours >= 12 ? 'PM' : 'AM';
+    hours = hours % 12;
+    if (hours === 0) hours = 12;
+    
+    return `${hours}:${minutes.toString().padStart(2, '0')} ${period}`;
+  };
+
+  // Helper function to format errors properly
+  const formatError = (err) => {
+    // Handle null/undefined
+    if (!err) return 'An unknown error occurred';
+    
+    // Handle string errors
+    if (typeof err === 'string') return err;
+    
+    // Handle Error instances
+    if (err instanceof Error) {
+      return err.message || 'An error occurred';
+    }
+    
+    // Handle axios/fetch response errors
+    if (err.response?.data) {
+      return formatError(err.response.data);
+    }
+    
+    // Handle fetch-style errors with status
+    if (err.statusText) {
+      return err.statusText;
+    }
+    
+    // Handle FastAPI validation errors
+    if (err?.detail !== undefined) {
+      if (Array.isArray(err.detail)) {
+        return err.detail.map(error => {
+          if (typeof error === 'string') return error;
+          if (typeof error === 'object' && error?.msg) {
+            const field = error?.loc ? error.loc.join('.') : 'field';
+            return `${field}: ${error.msg}`;
+          }
+          return JSON.stringify(error);
+        }).join('; ');
+      }
+      if (typeof err.detail === 'string') return err.detail;
+      return JSON.stringify(err.detail);
+    }
+    
+    // Handle objects with message or error fields
+    if (err?.message && typeof err.message === 'string') return err.message;
+    if (err?.error && typeof err.error === 'string') return err.error;
+    
+    // Safe JSON fallback for unknown objects
+    try {
+      const str = JSON.stringify(err);
+      return str === '{}' || str === '[]' ? 'An unknown error occurred' : str;
+    } catch {
+      return 'An unknown error occurred';
+    }
+  };
+
   // Helper function to convert time object to HH:MM AM/PM format
   const formatTime = (timeStr) => {
     if (!timeStr) return '';
@@ -131,10 +319,12 @@ const LawyerAvailabilityDashboard = () => {
       let err;
       try {
         err = JSON.parse(errorText);
+        // Preserve the full error structure for formatError
+        throw err;
       } catch {
-        err = { detail: errorText || `HTTP ${response.status}` };
+        // If not JSON, create a simple error object
+        throw { detail: errorText || `HTTP ${response.status}` };
       }
-      throw new Error(err.detail || `HTTP ${response.status}`);
     }
 
     // Handle empty responses (204, 304, or Content-Length: 0)
@@ -201,11 +391,11 @@ const LawyerAvailabilityDashboard = () => {
       const transformedSlots = {};
       weekDays.forEach(day => {
         transformedSlots[day] = weeklySlots
-          .filter(slot => slot.day_of_week.toLowerCase() === day.toLowerCase())
+          .filter(slot => slot.day_of_week === toApiDay(day)) // Match lowercase API values
           .map(slot => ({
             id: slot.id,
-            startTime: formatTime(slot.start_time),
-            endTime: formatTime(slot.end_time),
+            startTime: fromApiTime(slot.start_time), // Convert API time to UI format
+            endTime: fromApiTime(slot.end_time), // Convert API time to UI format
             branch: branchesData.find(b => b.id === slot.branch_id)?.name || 'Default Branch',
             branchId: slot.branch_id || 1,
             maxBookings: slot.max_bookings,
@@ -234,7 +424,7 @@ const LawyerAvailabilityDashboard = () => {
         dailyCapacity: weeklySlots.length
       });
     } catch (err) {
-      setError(err.message);
+      setError(formatError(err));
       console.error('Failed to load availability data:', err);
     } finally {
       setLoading(false);
@@ -251,12 +441,22 @@ const LawyerAvailabilityDashboard = () => {
       setError(null);
 
       const slotData = {
-        day_of_week: day.toLowerCase(),
-        start_time: slot.startTime,
-        end_time: slot.endTime,
-        branch_id: slot.branchId, // Require explicit branch selection
-        max_bookings: slot.maxBookings
+        day_of_week: toApiDay(day), // "monday".."sunday" for API
+        start_time: toApiTime(slot.startTime), // "09:00 AM" for API
+        end_time: toApiTime(slot.endTime), // "05:00 PM" for API
+        branch_id: Number(slot.branchId), // Ensure it's a number
+        max_bookings: Number(slot.maxBookings) // Ensure it's a number
       };
+      
+      console.log('Saving slot data:', slotData); // Debug log
+      
+      // Validate time format (should be AM/PM now)
+      if (!slotData.start_time || !slotData.start_time.match(/^\d{1,2}:\d{2}\s*(AM|PM)$/i)) {
+        throw new Error('Invalid start time format. Please use HH:MM AM/PM format.');
+      }
+      if (!slotData.end_time || !slotData.end_time.match(/^\d{1,2}:\d{2}\s*(AM|PM)$/i)) {
+        throw new Error('Invalid end time format. Please use HH:MM AM/PM format.');
+      }
       
       // Validate branch selection
       if (!slotData.branch_id || slotData.branch_id === '') {
@@ -287,8 +487,8 @@ const LawyerAvailabilityDashboard = () => {
           s.id === slot.id ? {
             ...s,
             id: savedSlot.id,
-            startTime: formatTime(savedSlot.start_time),
-            endTime: formatTime(savedSlot.end_time),
+            startTime: fromApiTime(savedSlot.start_time), // Use API helper
+            endTime: fromApiTime(savedSlot.end_time), // Use API helper
             branchId: savedSlot.branch_id,
             isUnsaved: false
           } : s
@@ -302,10 +502,10 @@ const LawyerAvailabilityDashboard = () => {
       await loadAvailabilityData();
     } catch (err) {
       // Handle specific branch not found error
-      if (err.message.includes('Branch not found')) {
+      if (err.message && err.message.includes('Branch not found')) {
         setError('Branch not found. Please select a valid branch from the dropdown.');
       } else {
-        setError(err.message);
+        setError(formatError(err));
       }
       console.error('Failed to save time slot:', err);
     } finally {
@@ -382,7 +582,7 @@ const LawyerAvailabilityDashboard = () => {
       // Reload to get updated stats
       await loadAvailabilityData();
     } catch (err) {
-      setError(err.message);
+      setError(formatError(err));
       console.error('Failed to delete time slot:', err);
     } finally {
       setSaving(prev => {
@@ -467,7 +667,7 @@ const LawyerAvailabilityDashboard = () => {
       // Reload to get updated stats
       await loadAvailabilityData();
     } catch (err) {
-      setError(err.message);
+      setError(formatError(err));
       console.error('Failed to add blackout date:', err);
     } finally {
       setSaving(prev => {
@@ -509,7 +709,7 @@ const LawyerAvailabilityDashboard = () => {
       await loadAvailabilityData();
     } catch (err) {
       console.error('Delete blackout error:', err); // Debug log
-      setError(err.message);
+      setError(formatError(err));
     } finally {
       setSaving(prev => {
         const newState = { ...prev };
