@@ -19,6 +19,14 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
+    bind = op.get_bind()
+    exists = bind.execute(sa.text(
+        "SELECT 1 FROM information_schema.tables "
+        "WHERE table_schema = current_schema() AND table_name = 'intake_forms' "
+        "LIMIT 1"
+    )).scalar()
+    if exists:
+        return
     op.create_table(
         'intake_forms',
         sa.Column('id', sa.Integer(), primary_key=True, nullable=False),
