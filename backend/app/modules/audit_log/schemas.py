@@ -1,0 +1,15 @@
+from datetime import datetime
+from typing import Any, Optional
+from pydantic import BaseModel, ConfigDict
+
+
+class AuditLogOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    user_id: Optional[int] = None
+    user_email: Optional[str] = None
+    action: str
+    description: str
+    meta: Optional[Any] = None
+    created_at: datetime
