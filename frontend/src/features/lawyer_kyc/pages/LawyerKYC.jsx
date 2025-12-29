@@ -78,16 +78,14 @@ function LawyerKYC() {
 
         {/* FORM */}
         {!isApproved && (
-          <div className="bg-white rounded-md border shadow-sm">
-            <div className="border-b px-4 py-3">
-              <h2 className="font-semibold text-slate-800">
-                Submit KYC Documents
-              </h2>
+          <div className="bg-slate-900 border border-slate-700 rounded-lg shadow-sm">
+            <div className="border-b border-slate-700 px-4 py-3">
+              <h2 className="font-semibold text-white">Submit KYC Documents</h2>
             </div>
 
-            <form onSubmit={handleSubmit} className="p-4 space-y-4">
+            <form onSubmit={handleSubmit} className="p-4 space-y-4 text-white">
               {isRejected && (
-                <div className="bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded text-sm">
+                <div className="bg-red-900/30 border border-red-500/60 text-red-100 px-3 py-2 rounded text-sm">
                   Your KYC was rejected. Please review and resubmit.
                 </div>
               )}
@@ -103,33 +101,33 @@ function LawyerKYC() {
               </div>
 
               <div>
-                <label className="text-xs uppercase text-slate-600">Address</label>
+                <label className="text-xs uppercase text-slate-300">Address</label>
                 <textarea
                   name="address"
                   value={form.address}
                   onChange={handleChange}
                   disabled={isPending}
                   rows={3}
-                  className="w-full border rounded bg-slate-100 px-3 py-2 text-sm"
+                  className="w-full rounded-lg border border-gray-300 bg-white text-gray-900 placeholder-gray-400 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500 disabled:bg-gray-100"
                 />
               </div>
 
               {/* URL INPUT (REPLACES FILE UPLOAD) */}
               <div>
-                <label className="text-xs uppercase text-slate-600">
+                <label className="text-xs uppercase text-slate-300">
                   Bar Council Certificate URL
                 </label>
-                <div className="border-dashed border rounded bg-slate-50 px-4 py-6">
+                <div className="border-dashed border border-gray-300 rounded bg-white px-4 py-6">
                   <input
                     name="bar_certificate_url"
                     value={form.bar_certificate_url}
                     onChange={handleChange}
                     disabled={isPending}
                     placeholder="https://drive.google.com/..."
-                    className="w-full border rounded px-3 py-2 text-sm"
+                    className="w-full rounded-lg border border-gray-300 bg-white text-gray-900 placeholder-gray-400 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500 disabled:bg-gray-100"
                     required
                   />
-                  <p className="text-xs text-slate-500 mt-2">
+                  <p className="text-xs text-slate-600 mt-2">
                     Upload the certificate to Google Drive / Cloudinary and paste the link here
                   </p>
                 </div>
@@ -139,7 +137,7 @@ function LawyerKYC() {
                 <button
                   type="submit"
                   disabled={isPending}
-                  className="w-full bg-blue-500 hover:bg-blue-600 text-white py-2.5 rounded disabled:opacity-60"
+                  className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2.5 rounded-lg disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
                 >
                   Submit for Verification
                 </button>
@@ -148,7 +146,7 @@ function LawyerKYC() {
                   <button
                     type="button"
                     onClick={handleResubmit}
-                    className="border bg-white px-3 py-2 rounded text-black"
+                    className="border border-slate-600 bg-slate-800 px-3 py-2 rounded-lg text-white hover:bg-slate-700 transition-colors"
                   >
                     Start Over
                   </button>
@@ -162,13 +160,13 @@ function LawyerKYC() {
   );
 }
 
-function Input({ label, ...props }) {
+function Input({ label, className = "", ...props }) {
   return (
     <div>
-      <label className="text-xs uppercase text-slate-600">{label}</label>
+      <label className="text-xs uppercase text-slate-300">{label}</label>
       <input
         {...props}
-        className="w-full border rounded bg-slate-100 px-3 py-2 text-sm"
+        className={`w-full rounded-lg border border-gray-300 bg-white text-gray-900 placeholder-gray-400 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500 disabled:bg-gray-100 ${className}`}
       />
     </div>
   );
