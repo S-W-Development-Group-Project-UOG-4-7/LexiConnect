@@ -21,3 +21,6 @@ venv/
 
 # Uploaded files (runtime only)
 uploads/
+
+# Local environment file
+.env
