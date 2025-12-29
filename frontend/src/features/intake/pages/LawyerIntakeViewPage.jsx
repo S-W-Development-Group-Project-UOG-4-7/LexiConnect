@@ -2,9 +2,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import {
-  deleteIntakeByBooking,
   getIntakeByBooking,
-  updateIntakeByBooking,
 } from "../services/intake.service";
 
 export default function LawyerIntakeViewPage() {
@@ -15,10 +13,6 @@ export default function LawyerIntakeViewPage() {
 
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
-
-  const [editMode, setEditMode] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [deleting, setDeleting] = useState(false);
 
   // editable fields
   const [caseType, setCaseType] = useState("");
@@ -33,7 +27,6 @@ export default function LawyerIntakeViewPage() {
     async function run() {
       setLoading(true);
       setErr("");
-      setEditMode(false);
 
       try {
         const res = await getIntakeByBooking(bookingId);
@@ -74,102 +67,6 @@ export default function LawyerIntakeViewPage() {
 
   const createdAt = useMemo(() => formatDate(data?.created_at), [data]);
   const updatedAt = useMemo(() => formatDate(data?.updated_at), [data]);
-
-  function resetEditsFromData() {
-    setCaseType(data?.case_type ?? "");
-    setUrgency(data?.urgency ?? "");
-    setSubject(data?.subject ?? "");
-    setDetails(data?.details ?? "");
-    setAnswersJsonText(JSON.stringify(data?.answers_json ?? {}, null, 2));
-  }
-
-  async function onSave() {
-    setErr("");
-
-    // validate JSON
-    let parsedAnswers = {};
-    try {
-      parsedAnswers = answersJsonText?.trim()
-        ? JSON.parse(answersJsonText)
-        : {};
-      if (parsedAnswers && typeof parsedAnswers !== "object") {
-        setErr("Answers JSON must be a JSON object (e.g. { \"key\": \"value\" }).");
-        return;
-      }
-    } catch {
-      setErr("Answers JSON is invalid. Fix it before saving.");
-      return;
-    }
-
-    // minimal validation
-    if (!subject.trim() || subject.trim().length < 3) {
-      setErr("Subject must be at least 3 characters.");
-      return;
-    }
-    if (!details.trim() || details.trim().length < 10) {
-      setErr("Details must be at least 10 characters.");
-      return;
-    }
-
-    try {
-      setSaving(true);
-
-      const payload = {
-        case_type: caseType,
-        urgency,
-        subject: subject.trim(),
-        details: details.trim(),
-        answers_json: parsedAnswers,
-      };
-
-      const res = await updateIntakeByBooking(bookingId, payload);
-
-      // update local state with returned object if backend returns it
-      const updated = res?.data ?? { ...data, ...payload };
-      setData(updated);
-      setEditMode(false);
-
-      // keep form state in sync
-      setCaseType(updated?.case_type ?? caseType);
-      setUrgency(updated?.urgency ?? urgency);
-      setSubject(updated?.subject ?? subject);
-      setDetails(updated?.details ?? details);
-      setAnswersJsonText(JSON.stringify(updated?.answers_json ?? parsedAnswers, null, 2));
-    } catch (e) {
-      const msg =
-        e?.response?.data?.detail ||
-        e?.response?.data?.message ||
-        "Failed to save intake form";
-      setErr(msg);
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function onDelete() {
-    setErr("");
-
-    const ok = window.confirm(
-      `Delete intake form for booking #${bookingId}? This cannot be undone.`
-    );
-    if (!ok) return;
-
-    try {
-      setDeleting(true);
-      await deleteIntakeByBooking(bookingId);
-
-      // after delete, go back to bookings hub or lawyer dashboard
-      navigate(-1);
-    } catch (e) {
-      const msg =
-        e?.response?.data?.detail ||
-        e?.response?.data?.message ||
-        "Failed to delete intake form";
-      setErr(msg);
-    } finally {
-      setDeleting(false);
-    }
-  }
 
   return (
     <div className="min-h-screen p-6 text-white bg-slate-900">
@@ -225,55 +122,6 @@ export default function LawyerIntakeViewPage() {
                   <span className="font-semibold">{updatedAt}</span>
                 </div>
               </div>
-
-              <div className="flex gap-2">
-                {!editMode ? (
-                  <>
-                    <button
-                      onClick={() => setEditMode(true)}
-                      className="px-4 py-2 rounded bg-amber-600 hover:bg-amber-700 text-white text-sm font-semibold"
-                    >
-                      Edit
-                    </button>
-                    <button
-                      onClick={onDelete}
-                      disabled={deleting}
-                      className={`px-4 py-2 rounded text-sm font-semibold ${
-                        deleting
-                          ? "bg-slate-700 opacity-60 cursor-not-allowed"
-                          : "bg-rose-600 hover:bg-rose-700"
-                      }`}
-                    >
-                      {deleting ? "Deleting..." : "Delete"}
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <button
-                      onClick={onSave}
-                      disabled={saving}
-                      className={`px-4 py-2 rounded text-sm font-semibold ${
-                        saving
-                          ? "bg-slate-700 opacity-60 cursor-not-allowed"
-                          : "bg-green-600 hover:bg-green-700"
-                      }`}
-                    >
-                      {saving ? "Saving..." : "Save"}
-                    </button>
-                    <button
-                      onClick={() => {
-                        resetEditsFromData();
-                        setEditMode(false);
-                        setErr("");
-                      }}
-                      disabled={saving}
-                      className="px-4 py-2 rounded bg-slate-800 border border-slate-700 hover:bg-slate-700 text-sm font-semibold"
-                    >
-                      Cancel
-                    </button>
-                  </>
-                )}
-              </div>
             </div>
 
             {/* Content */}
@@ -281,15 +129,13 @@ export default function LawyerIntakeViewPage() {
               <Field
                 label="Case Type"
                 value={caseType}
-                setValue={setCaseType}
-                readOnly={!editMode}
+                readOnly
                 placeholder="Case type"
               />
               <Field
                 label="Urgency"
                 value={urgency}
-                setValue={setUrgency}
-                readOnly={!editMode}
+                readOnly
                 placeholder="Urgency"
               />
             </div>
@@ -298,8 +144,7 @@ export default function LawyerIntakeViewPage() {
               <Field
                 label="Subject"
                 value={subject}
-                setValue={setSubject}
-                readOnly={!editMode}
+                readOnly
                 placeholder="Subject"
               />
             </div>
@@ -308,31 +153,16 @@ export default function LawyerIntakeViewPage() {
               <TextArea
                 label="Details"
                 value={details}
-                setValue={setDetails}
-                readOnly={!editMode}
+                readOnly
                 placeholder="Details"
               />
             </div>
 
             <div className="mt-4 rounded border border-slate-700 bg-slate-950/30 p-4">
               <div className="font-semibold mb-2">Answers JSON</div>
-              {editMode ? (
-                <textarea
-                  value={answersJsonText}
-                  onChange={(e) => setAnswersJsonText(e.target.value)}
-                  rows={8}
-                  className="w-full rounded bg-slate-800 border border-slate-700 px-3 py-2 text-xs font-mono"
-                />
-              ) : (
-                <pre className="text-xs overflow-auto whitespace-pre-wrap">
-                  {JSON.stringify(data.answers_json ?? {}, null, 2)}
-                </pre>
-              )}
-              {editMode && (
-                <div className="text-xs opacity-70 mt-2">
-                  Must be valid JSON object (example: {"{ \"NIC\": \"123...\" }"}).
-                </div>
-              )}
+              <pre className="text-xs overflow-auto whitespace-pre-wrap">
+                {JSON.stringify(data.answers_json ?? {}, null, 2)}
+              </pre>
             </div>
           </div>
         )}
@@ -341,41 +171,22 @@ export default function LawyerIntakeViewPage() {
   );
 }
 
-function Field({ label, value, setValue, readOnly, placeholder }) {
+function Field({ label, value, readOnly, placeholder }) {
   return (
     <div className="rounded border border-slate-700 bg-slate-950/30 p-4">
       <div className="text-xs opacity-70">{label}</div>
-      {readOnly ? (
-        <div className="mt-1 font-semibold break-words">{value || "—"}</div>
-      ) : (
-        <input
-          value={value ?? ""}
-          onChange={(e) => setValue(e.target.value)}
-          placeholder={placeholder}
-          className="mt-2 w-full rounded bg-slate-800 border border-slate-700 px-3 py-2"
-        />
-      )}
+      <div className="mt-1 font-semibold break-words">{value || "—"}</div>
     </div>
   );
 }
 
-function TextArea({ label, value, setValue, readOnly, placeholder }) {
+function TextArea({ label, value, readOnly, placeholder }) {
   return (
     <div className="rounded border border-slate-700 bg-slate-950/30 p-4">
       <div className="text-xs opacity-70">{label}</div>
-      {readOnly ? (
-        <div className="mt-2 whitespace-pre-wrap leading-relaxed">
-          {value || "—"}
-        </div>
-      ) : (
-        <textarea
-          value={value ?? ""}
-          onChange={(e) => setValue(e.target.value)}
-          placeholder={placeholder}
-          rows={6}
-          className="mt-2 w-full rounded bg-slate-800 border border-slate-700 px-3 py-2"
-        />
-      )}
+      <div className="mt-2 whitespace-pre-wrap leading-relaxed">
+        {value || "—"}
+      </div>
     </div>
   );
 }
