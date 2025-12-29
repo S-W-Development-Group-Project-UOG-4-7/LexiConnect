@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.user import User, UserRole
 from app.routers.auth import get_password_hash, get_user_by_email
+from app.modules.lawyer_profiles.models import LawyerProfile
 
 router = APIRouter(prefix="/dev", tags=["dev"])
 
@@ -90,3 +91,41 @@ def seed_users(db: Session = Depends(get_db)):
     }
 
 
+@router.post("/seed-lawyer-profiles")
+def seed_lawyer_profiles(db: Session = Depends(get_db)):
+    """
+    DEV-ONLY: Seed lawyer_profiles for all lawyers without one.
+    """
+    if not _is_dev_mode():
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This endpoint is only available in development mode. Set ENV=development or DEBUG=True.",
+        )
+
+    defaults = {
+        "district": "Colombo",
+        "city": "Colombo",
+        "specialization": "General",
+        "languages": ["Sinhala", "English"],
+        "is_verified": True,
+        "rating": 4.2,
+        "years_of_experience": 5,
+        "bio": "Demo lawyer profile",
+    }
+
+    lawyers = db.query(User).filter(User.role == UserRole.lawyer).all()
+    created = 0
+    for lawyer in lawyers:
+        existing = (
+            db.query(LawyerProfile)
+            .filter(LawyerProfile.user_id == lawyer.id)
+            .first()
+        )
+        if existing:
+            continue
+        profile = LawyerProfile(user_id=lawyer.id, **defaults)
+        db.add(profile)
+        created += 1
+
+    db.commit()
+    return {"created": created, "total_lawyers": len(lawyers)}

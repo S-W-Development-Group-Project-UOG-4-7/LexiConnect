@@ -27,9 +27,11 @@ from .models import (  # noqa
 
 # Routers (existing app routers)
 from .routers import admin, auth, bookings, dev, lawyers, token_queue  # noqa: F401
+from .routers import admin_overview  # noqa: F401
 
 # Module routers (new modular structure)
 from app.modules.kyc.router import router as kyc_router
+from app.modules.kyc.router import admin_router as admin_kyc_router
 from app.modules.branches.router import router as branches_router
 from app.modules.service_packages.router import router as service_packages_router
 from app.modules.checklist_templates.router import router as checklist_router
@@ -42,6 +44,9 @@ from app.modules.disputes.routes import (
 
 from app.modules.documents.routes import router as documents_router
 from app.modules.intake.routes import router as intake_router
+from app.modules.lawyer_profiles.routes import router as lawyer_profiles_router
+from app.routers.lawyer_availability import router as lawyer_availability_router
+from app.modules.audit_log.routes import router as audit_log_router
 
 # API v1 routers
 from .api.v1 import admin as admin_v1, booking as booking_v1
@@ -111,6 +116,7 @@ app.include_router(admin.router)
 app.include_router(branches_router)
 app.include_router(kyc_router)
 app.include_router(dev.router)  # DEV-ONLY endpoints
+app.include_router(admin_overview.router)
 
 # Modules (grouped to avoid duplicate includes and Swagger noise)
 for module_router in (
@@ -119,8 +125,14 @@ for module_router in (
     booking_disputes_router,
     documents_router,
     intake_router,
+    admin_kyc_router,
+    audit_log_router,
+    lawyer_profiles_router,
 ):
     app.include_router(module_router)
+
+# Dedicated router include (keeps optional grouping clear)
+app.include_router(lawyer_availability_router, prefix="/api")
 
 # API v1 routers
 app.include_router(admin_v1.router)
