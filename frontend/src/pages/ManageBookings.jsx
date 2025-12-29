@@ -110,12 +110,14 @@ const ManageBookings = () => {
                   >
                     View Details
                   </button>
-                  <button
-                    onClick={() => navigate(`/client/bookings/${booking.id}/documents/upload`)}
-                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
-                  >
-                    Documents
-                  </button>
+                  {(booking.status || "").toLowerCase() !== "cancelled" && (
+                    <button
+                      onClick={() => navigate(`/client/bookings/${booking.id}/documents/upload`)}
+                      className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
+                    >
+                      Documents
+                    </button>
+                  )}
                   {booking.status !== "cancelled" && (
                     <button
                       onClick={() => handleCancel(booking.id)}
