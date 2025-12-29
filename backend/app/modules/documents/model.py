@@ -8,7 +8,13 @@ class Document(Base):
     id = Column(Integer, primary_key=True, index=True)
     booking_id = Column(Integer, ForeignKey("bookings.id"), nullable=False, index=True)
 
-    title = Column(String, nullable=False)
-    file_path = Column(String, nullable=False)
+    # ✅ safer as nullable (keep using it in API, but DB won't break if missing)
+    title = Column(String(255), nullable=True)
+
+    # ✅ DB has NOT NULL constraint, so model must match
+    original_filename = Column(String(255), nullable=False)
+
+    # ✅ allow longer paths
+    file_path = Column(String(500), nullable=False)
 
     uploaded_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
