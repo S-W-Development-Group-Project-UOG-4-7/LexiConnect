@@ -1,12 +1,15 @@
-from typing import List, Optional
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import and_, or_
+from sqlalchemy import and_
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models.user import User, UserRole
+from app.models.lawyer import Lawyer
+from app.models.service_package import ServicePackage
 from app.modules.lawyer_profiles.models import LawyerProfile
+from app.routers.auth import get_current_user
 
 router = APIRouter(prefix="/lawyers", tags=["Lawyers"])
 
@@ -46,7 +49,7 @@ def list_lawyers(
     for user, profile in query.all():
         results.append(
             {
-                "id": user.id,
+                "id": user.id,  # IMPORTANT: this is users.id (used by your client routes)
                 "full_name": user.full_name,
                 "specialization": profile.specialization,
                 "district": profile.district,
@@ -87,3 +90,52 @@ def get_lawyer_profile(lawyer_id: int, db: Session = Depends(get_db)):
         "branches": [],
         "reviews": [],
     }
+
+
+@router.get("/by-user/{user_id}")
+def get_lawyer_by_user_id(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Map a users.id to the corresponding lawyers.id via email."""
+    if current_user.role not in {UserRole.client, UserRole.lawyer, UserRole.admin}:
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    lawyer = db.query(Lawyer).filter(Lawyer.email == user.email).first()
+    if not lawyer:
+        raise HTTPException(status_code=404, detail="Lawyer profile not found for this user")
+
+    return {"lawyer_id": lawyer.id, "email": user.email}
+
+
+@router.get("/{lawyer_id}/service-packages")
+def get_service_packages_for_lawyer(
+    lawyer_id: int,
+    db: Session = Depends(get_db),
+):
+    """Return ACTIVE service packages for a given lawyers.id."""
+    packages = (
+        db.query(ServicePackage)
+        .filter(ServicePackage.lawyer_id == lawyer_id)
+        .filter(ServicePackage.active == True)
+        .order_by(ServicePackage.id.asc())
+        .all()
+    )
+
+    return [
+        {
+            "id": p.id,
+            "lawyer_id": p.lawyer_id,
+            "name": p.name,
+            "description": p.description,
+            "price": float(p.price),
+            "duration": p.duration,
+            "active": p.active,
+        }
+        for p in packages
+    ]

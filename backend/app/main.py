@@ -104,6 +104,7 @@ def health_check():
 # Core auth/booking/lawyers
 app.include_router(auth.router)
 app.include_router(lawyers.router)
+app.include_router(lawyers.router, prefix="/api")
 app.include_router(bookings.router)
 app.include_router(token_queue.router)
 
