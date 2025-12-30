@@ -21,3 +21,5 @@ uploads/
 EOF
 
 .env 
+__pycache__/
+*.pyc
