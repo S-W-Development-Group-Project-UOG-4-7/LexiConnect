@@ -43,7 +43,7 @@ const AuditLog = () => {
       <main className="audit-log-main">
         <div className="audit-log-container">
           {/* Page Title */}
-          <h1 className="audit-page-title">Audit Log</h1>
+          <h1 className="audit-page-title">Case Audit Log</h1>
 
           {/* Search and Filter Section */}
           <div className="audit-search-card">
