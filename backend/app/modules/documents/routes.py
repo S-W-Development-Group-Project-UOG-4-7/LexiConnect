@@ -1,4 +1,6 @@
 # backend/app/modules/documents/routes.py
+from fastapi import HTTPException, status
+from app.models.appointment import Appointment, AppointmentStatus
 
 from typing import Optional, List
 
@@ -25,6 +27,22 @@ def upload_document(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
 ):
+    # 🔒 Backend guard: block uploads for CANCELLED appointments
+    appt = db.query(Appointment).filter(Appointment.id == booking_id).first()
+
+    if not appt:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Booking not found."
+        )
+
+    if appt.status == AppointmentStatus.CANCELLED:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Cannot upload documents for a cancelled booking."
+        )
+
+    # ✅ Only save file if appointment is valid
     file_path = save_upload(file)
 
     doc = create_document(
