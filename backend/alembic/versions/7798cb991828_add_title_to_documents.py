@@ -1,6 +1,12 @@
 from alembic import op
 import sqlalchemy as sa
 
+# revision identifiers, used by Alembic.
+revision = "7798cb991828"
+down_revision = "add_documents_table"
+branch_labels = None
+depends_on = None
+
 def upgrade() -> None:
     bind = op.get_bind()
     exists = bind.execute(
