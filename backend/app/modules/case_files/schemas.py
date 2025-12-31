@@ -45,3 +45,28 @@ class CaseIntakeOut(BaseModel):
     case_id: int
     status: str
     answers_json: Optional[Dict[str, Any]] = None
+
+# ---------------------------
+# Case Checklist Schemas
+# ---------------------------
+
+from typing import List
+
+
+class CaseChecklistItem(BaseModel):
+    key: str
+    label: str
+    done: bool = False
+
+
+class CaseChecklistOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    case_id: int
+    items_json: List[CaseChecklistItem]
+
+
+class CaseChecklistIsCompleteOut(BaseModel):
+    case_id: int
+    is_complete: bool

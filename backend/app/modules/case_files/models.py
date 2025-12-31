@@ -42,3 +42,24 @@ class CaseIntake(Base):
 
 
 Index("ix_case_intakes_case_id", CaseIntake.case_id)
+
+# ---------------------------
+# Case Checklist Model
+# ---------------------------
+
+from sqlalchemy.dialects.postgresql import JSONB
+
+
+class CaseChecklist(Base):
+    __tablename__ = "case_checklists"
+
+    id = Column(Integer, primary_key=True, index=True)
+    case_id = Column(Integer, nullable=False, unique=True, index=True)
+
+    items_json = Column(JSONB, nullable=False)
+
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())
+
+
+Index("ix_case_checklists_case_id", CaseChecklist.case_id)
