@@ -1,565 +1,448 @@
-from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, status, Query
-from sqlalchemy.orm import Session
-from sqlalchemy import and_, or_
 from datetime import date, time
+from typing import List, Optional
 
-from ..database import get_db
-from ..models.lawyer_availability import WeeklyAvailability, BlackoutDate, WeekDay
-from app.modules.availability.models import AvailabilityTemplate  # ✅ FIXED IMPORT
-from ..models.lawyer import Lawyer
-from ..models.branch import Branch
-from ..schemas.lawyer_availability import (
-    WeeklyAvailabilityCreate, WeeklyAvailabilityUpdate, WeeklyAvailabilityResponse,
-    BlackoutDateCreate, BlackoutDateUpdate, BlackoutDateResponse,
-    LawyerAvailabilityResponse, BulkWeeklyAvailabilityCreate, BulkBlackoutDateCreate,
-    AvailabilityStatus, BranchInfo
-)
+from fastapi import APIRouter, Depends, HTTPException, status, Query
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+from sqlalchemy.orm import Session
 
-router = APIRouter(prefix="/api/lawyer-availability", tags=["Lawyer Availability"])
+from app.database import get_db
+from app.models.user import User, UserRole
+from app.models.lawyer_availability import WeeklyAvailability, WeekDay
+from app.modules.blackouts.models import BlackoutDay
+from app.models.branch import Branch
+from app.routers.auth import get_current_user
+from app.modules.branches.service import get_lawyer_by_user
+
+# ---------------------------------------------------------------------------
+# Canonical tables for availability in this phase:
+# - weekly_availability: source of truth for recurring weekly schedule rows
+# - blackout_days: source of truth for full-day blackouts
+#
+# Other availability tables (availability_templates, availability_slots,
+# availability_exceptions, blackout_dates) are reserved for future features
+# (templating/partial blocks). Do not use them in the current flow.
+# ---------------------------------------------------------------------------
+
+router = APIRouter(prefix="/lawyer-availability", tags=["Lawyer Availability"])
 
 
-# Helper functions for availability_templates
-def day_to_int(day_str: str) -> int:
-    days = {
-        "monday": 0, "tuesday": 1, "wednesday": 2, "thursday": 3,
-        "friday": 4, "saturday": 5, "sunday": 6
+# ---------------------------------------------------------------------------
+# Schemas
+# ---------------------------------------------------------------------------
+class WeeklyBase(BaseModel):
+    day_of_week: str = Field(..., description="MONDAY..SUNDAY")
+    start_time: time
+    end_time: time
+    branch_id: Optional[int] = None
+    max_bookings: Optional[int] = None
+    is_active: Optional[bool] = True
+
+    @field_validator("day_of_week", mode="before")
+    @classmethod
+    def normalize_day(cls, v: str):
+        if not isinstance(v, str):
+            raise ValueError("day_of_week must be a string")
+        upper = v.strip().upper()
+        allowed = {
+            "MONDAY": WeekDay.MONDAY,
+            "TUESDAY": WeekDay.TUESDAY,
+            "WEDNESDAY": WeekDay.WEDNESDAY,
+            "THURSDAY": WeekDay.THURSDAY,
+            "FRIDAY": WeekDay.FRIDAY,
+            "SATURDAY": WeekDay.SATURDAY,
+            "SUNDAY": WeekDay.SUNDAY,
+        }
+        if upper not in allowed:
+            raise ValueError("day_of_week must be one of MONDAY..SUNDAY")
+        return upper
+
+
+class WeeklyCreate(WeeklyBase):
+    pass
+
+
+class WeeklyUpdate(BaseModel):
+    day_of_week: Optional[str] = Field(None, description="MONDAY..SUNDAY")
+    start_time: Optional[time] = None
+    end_time: Optional[time] = None
+    branch_id: Optional[int] = None
+    max_bookings: Optional[int] = None
+    is_active: Optional[bool] = None
+
+    @field_validator("day_of_week", mode="before")
+    @classmethod
+    def normalize_day(cls, v):
+        if v is None:
+            return v
+        return WeeklyBase.normalize_day(v)
+
+
+class WeeklyOut(WeeklyBase):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+
+
+class BlackoutBase(BaseModel):
+    date: date
+    reason: Optional[str] = None
+
+
+class BlackoutCreate(BlackoutBase):
+    pass
+
+
+class BlackoutOut(BlackoutBase):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+
+
+class AvailabilityBundle(BaseModel):
+    weekly: List[WeeklyOut]
+    blackouts: List[BlackoutOut]
+    branches: List[dict]
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+def _require_lawyer(user: User):
+    if user.role != UserRole.lawyer:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only lawyers can access this resource")
+
+
+def _current_lawyer(db: Session, current_user: User):
+    # Branches/weekly availability are keyed to the Lawyer table (FK)
+    return get_lawyer_by_user(db, current_user.email)
+
+
+def _to_weekday(day_str: str) -> WeekDay:
+    mapping = {
+        "MONDAY": WeekDay.MONDAY,
+        "TUESDAY": WeekDay.TUESDAY,
+        "WEDNESDAY": WeekDay.WEDNESDAY,
+        "THURSDAY": WeekDay.THURSDAY,
+        "FRIDAY": WeekDay.FRIDAY,
+        "SATURDAY": WeekDay.SATURDAY,
+        "SUNDAY": WeekDay.SUNDAY,
     }
-    return days.get(day_str.lower(), 0)
+    return mapping[day_str]
 
 
-# Helper functions
-def parse_time_string(time_str: str) -> time:
-    """Convert HH:MM AM/PM string to time object"""
-    try:
-        time_part = time_str.split()[0]
-        period = time_str.split()[1]
-        hours, minutes = map(int, time_part.split(':'))
-
-        if period.upper() == 'PM' and hours != 12:
-            hours += 12
-        elif period.upper() == 'AM' and hours == 12:
-            hours = 0
-
-        return time(hour=hours, minute=minutes)
-    except Exception:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid time format. Use HH:MM AM/PM"
-        )
-
-
-def time_to_minutes(t: time) -> int:
-    """Convert time object to minutes since midnight"""
-    return t.hour * 60 + t.minute
-
-
-def format_time_to_string(t: time) -> str:
-    """Convert time object to HH:MM AM/PM string"""
-    hour = t.hour
-    minute = t.minute
-    period = 'AM' if hour < 12 else 'PM'
-    hour12 = hour % 12
-    if hour12 == 0:
-        hour12 = 12
-    return f"{hour12}:{minute:02d} {period}"
-
-
-# Weekly Availability Endpoints
-@router.get("/weekly", response_model=List[WeeklyAvailabilityResponse])
-def get_weekly_availability(
-    lawyer_id: Optional[int] = Query(None, description="Filter by lawyer ID"),
-    day_of_week: Optional[str] = Query(None, description="Filter by day of week"),
-    db: Session = Depends(get_db)
-):
-    """Get weekly availability slots"""
-    query = db.query(WeeklyAvailability).filter(WeeklyAvailability.is_active == True)
-
-    if lawyer_id:
-        query = query.filter(WeeklyAvailability.lawyer_id == lawyer_id)
-
-    if day_of_week:
-        try:
-            day_enum = WeekDay(day_of_week.lower())
-            query = query.filter(WeeklyAvailability.day_of_week == day_enum)
-        except ValueError:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Invalid day of week: {day_of_week}"
-            )
-
-    return query.order_by(WeeklyAvailability.day_of_week, WeeklyAvailability.start_time).all()
-
-
-@router.post("/weekly", response_model=WeeklyAvailabilityResponse, status_code=status.HTTP_201_CREATED)
-def create_weekly_availability(
-    slot_data: WeeklyAvailabilityCreate,
-    lawyer_id: int = Query(..., description="Lawyer ID"),
-    db: Session = Depends(get_db)
-):
-    """Create a new weekly availability slot"""
-
-    # Verify lawyer exists
-    lawyer = db.query(Lawyer).filter(Lawyer.id == lawyer_id).first()
-    if not lawyer:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Lawyer not found"
-        )
-
-    # Verify branch exists
-    branch = db.query(Branch).filter(Branch.id == slot_data.branch_id).first()
+def _branch_for_lawyer(db: Session, branch_id: Optional[int], lawyer_id: int) -> Optional[Branch]:
+    if branch_id is None:
+        return None
+    branch = db.query(Branch).filter(Branch.id == branch_id).first()
     if not branch:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Branch not found"
+        raise HTTPException(status_code=404, detail="Branch not found")
+    if branch.lawyer_id and branch.lawyer_id != lawyer_id:
+        raise HTTPException(status_code=403, detail="Branch does not belong to this lawyer")
+    return branch
+
+
+# ---------------------------------------------------------------------------
+# Routes
+# ---------------------------------------------------------------------------
+@router.get("/me", response_model=AvailabilityBundle)
+def get_my_availability(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _require_lawyer(current_user)
+    lawyer = _current_lawyer(db, current_user)
+
+    weekly_rows = (
+        db.query(WeeklyAvailability)
+        .filter(WeeklyAvailability.lawyer_id == lawyer.id)
+        .order_by(WeeklyAvailability.day_of_week, WeeklyAvailability.start_time)
+        .all()
+    )
+
+    weekly = [
+        WeeklyOut(
+            id=row.id,
+            day_of_week=row.day_of_week.name.upper(),
+            start_time=row.start_time,
+            end_time=row.end_time,
+            branch_id=row.branch_id,
+            max_bookings=row.max_bookings,
+            is_active=row.is_active,
         )
+        for row in weekly_rows
+    ]
 
-    # Parse times
-    start_time = parse_time_string(slot_data.start_time)
-    end_time = parse_time_string(slot_data.end_time)
+    blackout_rows = (
+        db.query(BlackoutDay)
+        .filter(BlackoutDay.lawyer_id == current_user.id)
+        .order_by(BlackoutDay.date.desc())
+        .all()
+    )
+    blackouts = [
+        BlackoutOut(id=str(b.id), date=b.date, reason=b.reason) for b in blackout_rows
+    ]
 
-    # Check for overlapping slots
-    existing = db.query(WeeklyAvailability).filter(
-        and_(
-            WeeklyAvailability.lawyer_id == lawyer_id,
-            WeeklyAvailability.day_of_week == slot_data.day_of_week,
-            WeeklyAvailability.is_active == True,
-            or_(
-                and_(
-                    WeeklyAvailability.start_time <= start_time,
-                    WeeklyAvailability.end_time > start_time
-                ),
-                and_(
-                    WeeklyAvailability.start_time < end_time,
-                    WeeklyAvailability.end_time >= end_time
-                )
-            )
+    branches = db.query(Branch).filter(Branch.lawyer_id == lawyer.id).all()
+    branch_out = [
+        {"id": b.id, "name": b.name, "district": b.district, "city": b.city} for b in branches
+    ]
+
+    return AvailabilityBundle(weekly=weekly, blackouts=blackouts, branches=branch_out)
+
+
+@router.get("/weekly", response_model=List[WeeklyOut])
+def list_weekly(
+    lawyer_id: Optional[int] = Query(None, description="Compatibility param (optional)"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _require_lawyer(current_user)
+    lawyer = _current_lawyer(db, current_user)
+    target_id = lawyer_id or lawyer.id
+    if target_id != lawyer.id:
+        raise HTTPException(status_code=403, detail="Cannot view another lawyer's availability")
+
+    weekly_rows = (
+        db.query(WeeklyAvailability)
+        .filter(WeeklyAvailability.lawyer_id == target_id)
+        .order_by(WeeklyAvailability.day_of_week, WeeklyAvailability.start_time)
+        .all()
+    )
+    return [
+        WeeklyOut(
+            id=row.id,
+            day_of_week=row.day_of_week.name.upper(),
+            start_time=row.start_time,
+            end_time=row.end_time,
+            branch_id=row.branch_id,
+            max_bookings=row.max_bookings,
+            is_active=row.is_active,
         )
-    ).first()
+        for row in weekly_rows
+    ]
 
+
+@router.get("/branches", response_model=List[dict])
+def list_branches(
+    lawyer_id: Optional[int] = Query(None, description="Compatibility param (optional)"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _require_lawyer(current_user)
+    lawyer = _current_lawyer(db, current_user)
+    target_id = lawyer_id or lawyer.id
+    if target_id != lawyer.id:
+        raise HTTPException(status_code=403, detail="Cannot view another lawyer's branches")
+    branches = db.query(Branch).filter(Branch.lawyer_id == target_id).all()
+    return [{"id": b.id, "name": b.name, "district": b.district, "city": b.city} for b in branches]
+
+
+@router.get("/blackouts", response_model=List[BlackoutOut])
+def list_blackouts(
+    lawyer_id: Optional[int] = Query(None, description="Compatibility param (optional)"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _require_lawyer(current_user)
+    # BlackoutDay FK points to users.id
+    target_id = lawyer_id or current_user.id
+    if target_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Cannot view another lawyer's blackouts")
+
+    blackout_rows = (
+        db.query(BlackoutDay)
+        .filter(BlackoutDay.lawyer_id == target_id)
+        .order_by(BlackoutDay.date.desc())
+        .all()
+    )
+    return [BlackoutOut(id=str(b.id), date=b.date, reason=b.reason) for b in blackout_rows]
+
+
+@router.post("/weekly", response_model=WeeklyOut, status_code=status.HTTP_201_CREATED)
+def create_weekly_slot(
+    payload: WeeklyCreate,
+    lawyer_id: Optional[int] = Query(None, description="Compatibility param (optional)"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _require_lawyer(current_user)
+    lawyer = _current_lawyer(db, current_user)
+    target_id = lawyer_id or lawyer.id
+    if target_id != lawyer.id:
+        raise HTTPException(status_code=403, detail="Cannot create availability for another lawyer")
+
+    if payload.start_time >= payload.end_time:
+        raise HTTPException(status_code=400, detail="start_time must be before end_time")
+
+    _branch_for_lawyer(db, payload.branch_id, target_id)
+
+    entry = WeeklyAvailability(
+        lawyer_id=target_id,
+        branch_id=payload.branch_id,
+        day_of_week=_to_weekday(payload.day_of_week),
+        start_time=payload.start_time,
+        end_time=payload.end_time,
+        max_bookings=payload.max_bookings,
+        is_active=payload.is_active if payload.is_active is not None else True,
+    )
+    db.add(entry)
+    db.commit()
+    db.refresh(entry)
+
+    return WeeklyOut(
+        id=entry.id,
+        day_of_week=entry.day_of_week.name.upper(),
+        start_time=entry.start_time,
+        end_time=entry.end_time,
+        branch_id=entry.branch_id,
+        max_bookings=entry.max_bookings,
+        is_active=entry.is_active,
+    )
+
+
+@router.patch("/weekly/{entry_id}", response_model=WeeklyOut)
+def update_weekly_slot(
+    entry_id: int,
+    payload: WeeklyUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _require_lawyer(current_user)
+    lawyer = _current_lawyer(db, current_user)
+    entry = (
+        db.query(WeeklyAvailability)
+        .filter(WeeklyAvailability.id == entry_id, WeeklyAvailability.lawyer_id == lawyer.id)
+        .first()
+    )
+    if not entry:
+        raise HTTPException(status_code=404, detail="Weekly availability not found")
+
+    updates = payload.model_dump(exclude_unset=True)
+
+    if "day_of_week" in updates:
+        updates["day_of_week"] = _to_weekday(updates["day_of_week"])
+
+    if "branch_id" in updates:
+        _branch_for_lawyer(db, updates["branch_id"], lawyer.id)
+
+    start_time = updates.get("start_time", entry.start_time)
+    end_time = updates.get("end_time", entry.end_time)
+    if start_time and end_time and start_time >= end_time:
+        raise HTTPException(status_code=400, detail="start_time must be before end_time")
+
+    for field, value in updates.items():
+        setattr(entry, field, value)
+
+    db.commit()
+    db.refresh(entry)
+    return WeeklyOut(
+        id=entry.id,
+        day_of_week=entry.day_of_week.name.upper(),
+        start_time=entry.start_time,
+        end_time=entry.end_time,
+        branch_id=entry.branch_id,
+        max_bookings=entry.max_bookings,
+        is_active=entry.is_active,
+    )
+
+
+@router.delete("/weekly/{entry_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_weekly_slot(
+    entry_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _require_lawyer(current_user)
+    lawyer = _current_lawyer(db, current_user)
+    entry = (
+        db.query(WeeklyAvailability)
+        .filter(WeeklyAvailability.id == entry_id, WeeklyAvailability.lawyer_id == lawyer.id)
+        .first()
+    )
+    if not entry:
+        raise HTTPException(status_code=404, detail="Weekly availability not found")
+
+    db.delete(entry)
+    db.commit()
+    return None
+
+
+@router.post("/blackouts", response_model=BlackoutOut, status_code=status.HTTP_201_CREATED)
+def create_blackout(
+    payload: BlackoutCreate,
+    lawyer_id: Optional[int] = Query(None, description="Compatibility param (optional)"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _require_lawyer(current_user)
+    target_id = lawyer_id or current_user.id
+    if target_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Cannot create blackout for another lawyer")
+
+    # prevent duplicate date per lawyer
+    existing = (
+        db.query(BlackoutDay)
+        .filter(BlackoutDay.lawyer_id == target_id, BlackoutDay.date == payload.date)
+        .first()
+    )
     if existing:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Time slot overlaps with existing availability"
-        )
+        raise HTTPException(status_code=400, detail="Blackout for this date already exists")
 
-    # Create new availability slot
-    new_slot = WeeklyAvailability(
-        lawyer_id=lawyer_id,
-        branch_id=slot_data.branch_id,
-        day_of_week=slot_data.day_of_week,
-        start_time=start_time,
-        end_time=end_time,
-        max_bookings=slot_data.max_bookings
+    entry = BlackoutDay(
+        lawyer_id=target_id,
+        date=payload.date,
+        reason=payload.reason,
     )
-
-    db.add(new_slot)
+    db.add(entry)
     db.commit()
-    db.refresh(new_slot)
+    db.refresh(entry)
+    return BlackoutOut(id=str(entry.id), date=entry.date, reason=entry.reason)
 
-    return new_slot
 
-
-@router.put("/weekly/{slot_id}", response_model=WeeklyAvailabilityResponse)
-def update_weekly_availability(
-    slot_id: int,
-    slot_data: WeeklyAvailabilityUpdate,
-    db: Session = Depends(get_db)
+@router.delete("/blackouts/{entry_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_blackout(
+    entry_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    """Update a weekly availability slot"""
-
-    slot = db.query(WeeklyAvailability).filter(WeeklyAvailability.id == slot_id).first()
-    if not slot:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Availability slot not found"
-        )
-
-    # Update fields if provided
-    update_data = slot_data.dict(exclude_unset=True)
-
-    if 'start_time' in update_data:
-        update_data['start_time'] = parse_time_string(update_data['start_time'])
-
-    if 'end_time' in update_data:
-        update_data['end_time'] = parse_time_string(update_data['end_time'])
-
-    if 'branch_id' in update_data:
-        branch = db.query(Branch).filter(Branch.id == update_data['branch_id']).first()
-        if not branch:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Branch not found"
-            )
-
-    for field, value in update_data.items():
-        setattr(slot, field, value)
-
-    db.commit()
-    db.refresh(slot)
-
-    return slot
-
-
-@router.delete("/weekly/{slot_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_weekly_availability(
-    slot_id: int,
-    db: Session = Depends(get_db)
-):
-    """Delete a weekly availability slot"""
-
-    slot = db.query(WeeklyAvailability).filter(WeeklyAvailability.id == slot_id).first()
-    if not slot:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Availability slot not found"
-        )
-
-    # Soft delete
-    slot.is_active = False
-    db.commit()
-
-
-@router.post("/weekly/bulk", response_model=List[WeeklyAvailabilityResponse])
-def create_bulk_weekly_availability(
-    bulk_data: BulkWeeklyAvailabilityCreate,
-    lawyer_id: int = Query(..., description="Lawyer ID"),
-    db: Session = Depends(get_db)
-):
-    """Create multiple weekly availability slots"""
-
-    # Verify lawyer exists
-    lawyer = db.query(Lawyer).filter(Lawyer.id == lawyer_id).first()
-    if not lawyer:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Lawyer not found"
-        )
-
-    created_slots = []
-
-    for slot_data in bulk_data.slots:
-        # Verify branch exists
-        branch = db.query(Branch).filter(Branch.id == slot_data.branch_id).first()
-        if not branch:
-            continue  # Skip invalid branches
-
-        # Parse times
-        start_time = parse_time_string(slot_data.start_time)
-        end_time = parse_time_string(slot_data.end_time)
-
-        # Check for overlaps
-        existing = db.query(WeeklyAvailability).filter(
-            and_(
-                WeeklyAvailability.lawyer_id == lawyer_id,
-                WeeklyAvailability.day_of_week == slot_data.day_of_week,
-                WeeklyAvailability.is_active == True,
-                or_(
-                    and_(
-                        WeeklyAvailability.start_time <= start_time,
-                        WeeklyAvailability.end_time > start_time
-                    ),
-                    and_(
-                        WeeklyAvailability.start_time < end_time,
-                        WeeklyAvailability.end_time >= end_time
-                    )
-                )
-            )
-        ).first()
-
-        if existing:
-            continue  # Skip overlapping slots
-
-        # Create slot
-        slot = WeeklyAvailability(
-            lawyer_id=lawyer_id,
-            branch_id=slot_data.branch_id,
-            day_of_week=slot_data.day_of_week,
-            start_time=start_time,
-            end_time=end_time,
-            max_bookings=slot_data.max_bookings
-        )
-
-        db.add(slot)
-        created_slots.append(slot)
-
-    db.commit()
-
-    for slot in created_slots:
-        db.refresh(slot)
-
-    return created_slots
-
-
-# Blackout Dates Endpoints
-@router.get("/blackout", response_model=List[BlackoutDateResponse])
-def get_blackout_dates(
-    lawyer_id: Optional[int] = Query(None, description="Filter by lawyer ID"),
-    start_date: Optional[date] = Query(None, description="Filter by start date"),
-    end_date: Optional[date] = Query(None, description="Filter by end date"),
-    db: Session = Depends(get_db)
-):
-    """Get blackout dates"""
-    query = db.query(BlackoutDate).filter(BlackoutDate.is_active == True)
-
-    if lawyer_id:
-        query = query.filter(BlackoutDate.lawyer_id == lawyer_id)
-
-    if start_date:
-        query = query.filter(BlackoutDate.date >= start_date)
-
-    if end_date:
-        query = query.filter(BlackoutDate.date <= end_date)
-
-    return query.order_by(BlackoutDate.date).all()
-
-
-@router.post("/blackout", response_model=BlackoutDateResponse, status_code=status.HTTP_201_CREATED)
-def create_blackout_date(
-    blackout_data: BlackoutDateCreate,
-    lawyer_id: int = Query(..., description="Lawyer ID"),
-    db: Session = Depends(get_db)
-):
-    """Create a new blackout date"""
-
-    # Verify lawyer exists
-    lawyer = db.query(Lawyer).filter(Lawyer.id == lawyer_id).first()
-    if not lawyer:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Lawyer not found"
-        )
-
-    # Check for existing blackout on same date
-    existing = db.query(BlackoutDate).filter(
-        and_(
-            BlackoutDate.lawyer_id == lawyer_id,
-            BlackoutDate.date == blackout_data.date,
-            BlackoutDate.is_active == True
-        )
-    ).first()
-
-    if existing:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Blackout date already exists for this date"
-        )
-
-    # Parse times if partial time
-    start_time = None
-    end_time = None
-
-    if blackout_data.availability_type == "partial_time":
-        if not blackout_data.start_time or not blackout_data.end_time:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Start and end times required for partial time blackout"
-            )
-        start_time = parse_time_string(blackout_data.start_time)
-        end_time = parse_time_string(blackout_data.end_time)
-
-    # Create blackout date
-    blackout = BlackoutDate(
-        lawyer_id=lawyer_id,
-        date=blackout_data.date,
-        availability_type=blackout_data.availability_type,
-        start_time=start_time,
-        end_time=end_time,
-        reason=blackout_data.reason
+    _require_lawyer(current_user)
+    entry = (
+        db.query(BlackoutDay)
+        .filter(BlackoutDay.id == entry_id, BlackoutDay.lawyer_id == current_user.id)
+        .first()
     )
+    if not entry:
+        raise HTTPException(status_code=404, detail="Blackout not found")
 
-    db.add(blackout)
+    db.delete(entry)
     db.commit()
-    db.refresh(blackout)
-
-    return blackout
+    return None
 
 
-@router.delete("/blackout/{blackout_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_blackout_date(
-    blackout_id: int,
-    db: Session = Depends(get_db)
+# Compatibility endpoints (legacy naming)
+@router.get("/blackout", response_model=List[BlackoutOut])
+def list_blackouts_legacy(
+    lawyer_id: Optional[int] = Query(None, description="Compatibility param (optional)"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    """Delete a blackout date"""
-
-    blackout = db.query(BlackoutDate).filter(BlackoutDate.id == blackout_id).first()
-    if not blackout:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Blackout date not found"
-        )
-
-    # Soft delete
-    blackout.is_active = False
-    db.commit()
+    return list_blackouts(lawyer_id, db, current_user)
 
 
-@router.post("/blackout/bulk", response_model=List[BlackoutDateResponse])
-def create_bulk_blackout_dates(
-    bulk_data: BulkBlackoutDateCreate,
-    lawyer_id: int = Query(..., description="Lawyer ID"),
-    db: Session = Depends(get_db)
+@router.post("/blackout", response_model=BlackoutOut, status_code=status.HTTP_201_CREATED)
+def create_blackout_legacy(
+    payload: BlackoutCreate,
+    lawyer_id: Optional[int] = Query(None, description="Compatibility param (optional)"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    """Create multiple blackout dates"""
-
-    # Verify lawyer exists
-    lawyer = db.query(Lawyer).filter(Lawyer.id == lawyer_id).first()
-    if not lawyer:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Lawyer not found"
-        )
-
-    created_blackouts = []
-
-    for blackout_data in bulk_data.dates:
-        # Check for existing blackout on same date
-        existing = db.query(BlackoutDate).filter(
-            and_(
-                BlackoutDate.lawyer_id == lawyer_id,
-                BlackoutDate.date == blackout_data.date,
-                BlackoutDate.is_active == True
-            )
-        ).first()
-
-        if existing:
-            continue  # Skip duplicates
-
-        # Parse times if partial time
-        start_time = None
-        end_time = None
-
-        if blackout_data.availability_type == "partial_time":
-            if blackout_data.start_time and blackout_data.end_time:
-                start_time = parse_time_string(blackout_data.start_time)
-                end_time = parse_time_string(blackout_data.end_time)
-
-        # Create blackout date
-        blackout = BlackoutDate(
-            lawyer_id=lawyer_id,
-            date=blackout_data.date,
-            availability_type=blackout_data.availability_type,
-            start_time=start_time,
-            end_time=end_time,
-            reason=blackout_data.reason
-        )
-
-        db.add(blackout)
-        created_blackouts.append(blackout)
-
-    db.commit()
-
-    for blackout in created_blackouts:
-        db.refresh(blackout)
-
-    return created_blackouts
+    return create_blackout(payload, lawyer_id, db, current_user)
 
 
-# Combined Endpoints
-@router.get("/lawyer/{lawyer_id}", response_model=LawyerAvailabilityResponse)
-def get_lawyer_complete_availability(
-    lawyer_id: int,
-    db: Session = Depends(get_db)
+@router.delete("/blackout/{entry_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_blackout_legacy(
+    entry_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    """Get complete availability for a lawyer (weekly + blackout)"""
-
-    # Verify lawyer exists
-    lawyer = db.query(Lawyer).filter(Lawyer.id == lawyer_id).first()
-    if not lawyer:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Lawyer not found"
-        )
-
-    # Get weekly availability with branch relationship
-    from sqlalchemy.orm import joinedload
-    weekly_slots = db.query(WeeklyAvailability).options(
-        joinedload(WeeklyAvailability.branch)
-    ).filter(
-        and_(
-            WeeklyAvailability.lawyer_id == lawyer_id,
-            WeeklyAvailability.is_active == True
-        )
-    ).order_by(WeeklyAvailability.day_of_week, WeeklyAvailability.start_time).all()
-
-    # Get blackout dates
-    blackout_dates = db.query(BlackoutDate).filter(
-        and_(
-            BlackoutDate.lawyer_id == lawyer_id,
-            BlackoutDate.is_active == True,
-            BlackoutDate.date >= date.today()
-        )
-    ).order_by(BlackoutDate.date).all()
-
-    # Calculate statistics
-    total_weekly_hours = 0
-    for slot in weekly_slots:
-        start_minutes = time_to_minutes(slot.start_time)
-        end_minutes = time_to_minutes(slot.end_time)
-        total_weekly_hours += (end_minutes - start_minutes) / 60
-
-    total_daily_capacity = sum(slot.max_bookings for slot in weekly_slots)
-    active_blackouts = len(blackout_dates)
-
-    return LawyerAvailabilityResponse(
-        weekly_slots=weekly_slots,
-        blackout_dates=blackout_dates,
-        total_weekly_hours=total_weekly_hours,
-        total_daily_capacity=total_daily_capacity,
-        active_blackouts=active_blackouts
-    )
-
-
-@router.get("/status/{lawyer_id}", response_model=AvailabilityStatus)
-def get_availability_status(
-    lawyer_id: int,
-    db: Session = Depends(get_db)
-):
-    """Get availability status summary for a lawyer"""
-
-    # Verify lawyer exists
-    lawyer = db.query(Lawyer).filter(Lawyer.id == lawyer_id).first()
-    if not lawyer:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Lawyer not found"
-        )
-
-    # Get counts and calculations
-    weekly_slots = db.query(WeeklyAvailability).filter(
-        and_(
-            WeeklyAvailability.lawyer_id == lawyer_id,
-            WeeklyAvailability.is_active == True
-        )
-    ).all()
-
-    blackout_dates = db.query(BlackoutDate).filter(
-        and_(
-            BlackoutDate.lawyer_id == lawyer_id,
-            BlackoutDate.is_active == True,
-            BlackoutDate.date >= date.today()
-        )
-    ).all()
-
-    total_weekly_hours = 0
-    for slot in weekly_slots:
-        start_minutes = time_to_minutes(slot.start_time)
-        end_minutes = time_to_minutes(slot.end_time)
-        total_weekly_hours += (end_minutes - start_minutes) / 60
-
-    total_daily_capacity = sum(slot.max_bookings for slot in weekly_slots)
-
-    return AvailabilityStatus(
-        total_weekly_hours=total_weekly_hours,
-        total_daily_capacity=total_daily_capacity,
-        active_blackouts=len(blackout_dates),
-        weekly_slots_count=len(weekly_slots),
-        blackout_dates_count=len(blackout_dates)
-    )
-
-
-@router.get("/branches", response_model=List[BranchInfo])
-def get_branches(db: Session = Depends(get_db)):
-    """Get all branches for dropdown"""
-    return db.query(Branch).filter(Branch.name.isnot(None)).order_by(Branch.name).all()
+    return delete_blackout(entry_id, db, current_user)

@@ -6,6 +6,7 @@ from app.models.booking import Booking
 from app.routers.auth import get_current_user
 from app.schemas.booking import BookingCreate, BookingOut, BookingCancelOut
 from app.models.user import User
+from app.modules.audit_log.service import log_event
 
 router = APIRouter(prefix="/api/bookings", tags=["bookings"])
 
@@ -117,6 +118,17 @@ def cancel_booking(
     booking.status = "cancelled"
     db.commit()
     db.refresh(booking)
+    log_event(
+        db,
+        user=current_user,
+        action="BOOKING_CANCELLED",
+        description=f"Booking {booking.id} cancelled by client",
+        meta={
+            "booking_id": booking.id,
+            "client_id": booking.client_id,
+            "lawyer_id": booking.lawyer_id,
+        },
+    )
     return BookingCancelOut.model_validate(booking)
 
 
@@ -184,6 +196,17 @@ def confirm_booking(
     booking.status = "confirmed"
     db.commit()
     db.refresh(booking)
+    log_event(
+        db,
+        user=current_user,
+        action="BOOKING_CONFIRMED",
+        description=f"Booking {booking.id} confirmed by lawyer",
+        meta={
+            "booking_id": booking.id,
+            "lawyer_id": booking.lawyer_id,
+            "client_id": booking.client_id,
+        },
+    )
     return BookingOut.model_validate(booking)
 
 
@@ -224,4 +247,15 @@ def reject_booking(
     booking.status = "rejected"
     db.commit()
     db.refresh(booking)
+    log_event(
+        db,
+        user=current_user,
+        action="BOOKING_REJECTED",
+        description=f"Booking {booking.id} rejected by lawyer",
+        meta={
+            "booking_id": booking.id,
+            "lawyer_id": booking.lawyer_id,
+            "client_id": booking.client_id,
+        },
+    )
     return BookingOut.model_validate(booking)

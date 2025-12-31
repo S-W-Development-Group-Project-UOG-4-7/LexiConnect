@@ -44,6 +44,9 @@ import ServicePackages from "../pages/ServicePackages";
 import ChecklistTemplates from "../pages/ChecklistTemplates";
 import { LawyerKYC } from "../features/lawyer_kyc";
 import LawyerIncomingBookingsPage from "../features/bookings/LawyerIncomingBookingsPage";
+import LawyerBookingDetailPage from "../features/bookings/pages/LawyerBookingDetailPage";
+import LawyerDocumentsView from "../features/documents/pages/LawyerDocumentsView";
+import LawyerIntakeViewPage from "../features/intake/pages/LawyerIntakeViewPage";
 import LawyerPublicProfile from "../pages/LawyerPublicProfile";
 
 // Admin pages (real)
@@ -189,6 +192,9 @@ const AppRoutes = () => {
         <Route path="/lawyer/checklist" element={<ChecklistTemplates />} />
         <Route path="/lawyer/kyc" element={<LawyerKYC />} />
         <Route path="/lawyer/bookings/incoming" element={<LawyerIncomingBookingsPage />} />
+        <Route path="/lawyer/bookings/:bookingId" element={<LawyerBookingDetailPage />} />
+        <Route path="/lawyer/bookings/:bookingId/documents" element={<LawyerDocumentsView />} />
+        <Route path="/lawyer/bookings/:bookingId/intake" element={<LawyerIntakeViewPage />} />
       </Route>
 
       {/* Admin area */}

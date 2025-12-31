@@ -60,6 +60,8 @@ from app.modules.blackouts import models as blackout_models  # noqa: F401,E402
 from app.modules.documents import models as document_models  # noqa: F401,E402
 from app.modules.disputes import models as dispute_models  # noqa: F401,E402
 from app.modules.intake import models as intake_models  # noqa: F401,E402
+from app.modules.lawyer_profiles import models as lawyer_profile_models  # noqa: F401,E402
+from app.modules.audit_log import models as audit_log_models  # noqa: F401,E402
 from app.modules.queue import models as queue_models  # noqa: F401,E402
 
 target_metadata = Base.metadata
