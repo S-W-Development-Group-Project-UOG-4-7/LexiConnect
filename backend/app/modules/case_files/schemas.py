@@ -15,3 +15,33 @@ class CaseDocumentOut(BaseModel):
     uploaded_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+# backend/app/modules/case_files/schemas.py
+
+from typing import Any, Dict, Optional
+
+from pydantic import BaseModel, Field, ConfigDict
+
+
+class CaseIntakeBase(BaseModel):
+    status: Optional[str] = Field(default=None, max_length=20)
+    answers_json: Optional[Dict[str, Any]] = None
+
+
+class CaseIntakeCreate(CaseIntakeBase):
+    # For create, we allow answers_json and optional status
+    pass
+
+
+class CaseIntakeUpdate(BaseModel):
+    status: Optional[str] = Field(default=None, max_length=20)
+    answers_json: Optional[Dict[str, Any]] = None
+
+
+class CaseIntakeOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    case_id: int
+    status: str
+    answers_json: Optional[Dict[str, Any]] = None
