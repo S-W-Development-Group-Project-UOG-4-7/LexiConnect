@@ -11,8 +11,11 @@ from app.modules.case_files.schemas import (
     CaseIntakeOut,
     CaseIntakeUpdate,
     CaseDocumentOut,
+    CaseChecklistOut,
+    CaseChecklistIsCompleteOut,
 )
-from app.modules.case_files.service import CaseIntakeService, CaseDocumentsService
+
+from app.modules.case_files.service import CaseIntakeService, CaseDocumentsService, CaseChecklistService
 
 router = APIRouter(tags=["Case Files"])
 
@@ -65,3 +68,20 @@ def list_case_documents(case_id: int, db: Session = Depends(get_db)):
 def delete_case_document(case_id: int, doc_id: int, db: Session = Depends(get_db)):
     CaseDocumentsService.delete_document(db=db, case_id=case_id, doc_id=doc_id)
     return {"detail": "Deleted"}
+
+# ---------------------------
+# Case Checklist Endpoints
+# ---------------------------
+@router.post("/cases/{case_id}/checklist/init", response_model=CaseChecklistOut, status_code=status.HTTP_201_CREATED)
+def init_case_checklist(case_id: int, db: Session = Depends(get_db)):
+    return CaseChecklistService.init_checklist(db=db, case_id=case_id)
+
+
+@router.get("/cases/{case_id}/checklist", response_model=CaseChecklistOut)
+def get_case_checklist(case_id: int, db: Session = Depends(get_db)):
+    return CaseChecklistService.get_checklist(db=db, case_id=case_id)
+
+
+@router.get("/cases/{case_id}/checklist/is-complete", response_model=CaseChecklistIsCompleteOut)
+def is_case_checklist_complete(case_id: int, db: Session = Depends(get_db)):
+    return {"case_id": case_id, "is_complete": CaseChecklistService.is_complete(db=db, case_id=case_id)}

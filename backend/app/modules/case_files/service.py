@@ -10,7 +10,8 @@ from typing import List, Optional
 from fastapi import HTTPException, UploadFile
 from sqlalchemy.orm import Session
 
-from app.modules.case_files.models import CaseDocument, CaseIntake
+from app.modules.case_files.models import CaseChecklist, CaseDocument, CaseIntake
+
 
 
 # ---------------------------
@@ -147,3 +148,39 @@ class CaseDocumentsService:
 
         db.delete(doc)
         db.commit()
+
+# ---------------------------
+# Case Checklist Service
+# ---------------------------
+class CaseChecklistService:
+    DEFAULT_ITEMS = [
+        {"key": "intake_submitted", "label": "Case intake submitted", "done": False},
+        {"key": "documents_uploaded", "label": "Required documents uploaded", "done": False},
+        {"key": "lawyer_assigned", "label": "Lawyer assigned", "done": False},
+        {"key": "hearing_scheduled", "label": "Hearing date scheduled", "done": False},
+    ]
+
+    @staticmethod
+    def init_checklist(db: Session, case_id: int) -> CaseChecklist:
+        existing = db.query(CaseChecklist).filter(CaseChecklist.case_id == case_id).first()
+        if existing:
+            return existing
+
+        checklist = CaseChecklist(case_id=case_id, items_json=CaseChecklistService.DEFAULT_ITEMS)
+        db.add(checklist)
+        db.commit()
+        db.refresh(checklist)
+        return checklist
+
+    @staticmethod
+    def get_checklist(db: Session, case_id: int) -> CaseChecklist:
+        checklist = db.query(CaseChecklist).filter(CaseChecklist.case_id == case_id).first()
+        if not checklist:
+            raise HTTPException(status_code=404, detail="Case checklist not found")
+        return checklist
+
+    @staticmethod
+    def is_complete(db: Session, case_id: int) -> bool:
+        checklist = CaseChecklistService.get_checklist(db=db, case_id=case_id)
+        items = checklist.items_json or []
+        return all(bool(item.get("done")) for item in items)
