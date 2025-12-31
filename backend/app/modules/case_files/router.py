@@ -1,35 +1,29 @@
-from typing import List, Optional
+# backend/app/modules/case_files/router.py
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from .schemas import CaseDocumentOut
-from .service import create_case_document, list_case_documents, delete_case_document
+from app.modules.case_files.schemas import CaseIntakeCreate, CaseIntakeOut, CaseIntakeUpdate
+from app.modules.case_files.service import CaseIntakeService
+
+router = APIRouter(tags=["Case Files"])
 
 
-router = APIRouter(prefix="/api/cases/{case_id}/documents", tags=["Case Files"])
+@router.get("/cases/{case_id}/intake", response_model=CaseIntakeOut)
+def get_case_intake(case_id: int, db: Session = Depends(get_db)):
+    return CaseIntakeService.get_intake(db=db, case_id=case_id)
 
 
-@router.post("", response_model=CaseDocumentOut)
-def upload_case_document(
-    case_id: int,
-    file: UploadFile = File(...),
-    doc_type: Optional[str] = Form(None),
-    db: Session = Depends(get_db),
-):
-    doc = create_case_document(db, case_id=case_id, file=file, doc_type=doc_type)
-    return doc
+@router.post(
+    "/cases/{case_id}/intake",
+    response_model=CaseIntakeOut,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_case_intake(case_id: int, payload: CaseIntakeCreate, db: Session = Depends(get_db)):
+    return CaseIntakeService.create_intake(db=db, case_id=case_id, payload=payload)
 
 
-@router.get("", response_model=List[CaseDocumentOut])
-def get_case_documents(case_id: int, db: Session = Depends(get_db)):
-    return list_case_documents(db, case_id=case_id)
-
-
-@router.delete("/{doc_id}", status_code=204)
-def delete_case_document_endpoint(case_id: int, doc_id: int, db: Session = Depends(get_db)):
-    ok = delete_case_document(db, case_id=case_id, doc_id=doc_id)
-    if not ok:
-        raise HTTPException(status_code=404, detail="Document not found")
-    return None
+@router.patch("/cases/{case_id}/intake", response_model=CaseIntakeOut)
+def update_case_intake(case_id: int, payload: CaseIntakeUpdate, db: Session = Depends(get_db)):
+    return CaseIntakeService.update_intake(db=db, case_id=case_id, payload=payload)
