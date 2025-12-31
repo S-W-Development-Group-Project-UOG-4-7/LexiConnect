@@ -2,12 +2,20 @@
 
 from __future__ import annotations
 
-from fastapi import HTTPException
+import os
+import uuid
+from pathlib import Path
+from typing import List, Optional
+
+from fastapi import HTTPException, UploadFile
 from sqlalchemy.orm import Session
 
-from app.modules.case_files.models import CaseIntake
+from app.modules.case_files.models import CaseDocument, CaseIntake
 
 
+# ---------------------------
+# Case Intake Service
+# ---------------------------
 class CaseIntakeService:
     @staticmethod
     def get_intake(db: Session, case_id: int) -> CaseIntake:
@@ -38,7 +46,6 @@ class CaseIntakeService:
         if not intake:
             raise HTTPException(status_code=404, detail="Case intake not found")
 
-        # Update only fields provided
         if getattr(payload, "status", None) is not None:
             intake.status = payload.status
 
@@ -49,3 +56,94 @@ class CaseIntakeService:
         db.commit()
         db.refresh(intake)
         return intake
+
+
+# ---------------------------
+# Case Documents Service
+# ---------------------------
+class CaseDocumentsService:
+    """
+    Stores files on disk and metadata in case_documents table.
+    Storage base: uploads/case_documents/<case_id>/
+    """
+
+    BASE_DIR = Path("uploads") / "case_documents"
+
+    @staticmethod
+    def _ensure_case_dir(case_id: int) -> Path:
+        case_dir = CaseDocumentsService.BASE_DIR / str(case_id)
+        case_dir.mkdir(parents=True, exist_ok=True)
+        return case_dir
+
+    @staticmethod
+    def _safe_filename(original_name: str) -> str:
+        # keep extension if possible
+        ext = ""
+        if "." in original_name:
+            ext = "." + original_name.split(".")[-1]
+        return f"{uuid.uuid4().hex}{ext}"
+
+    @staticmethod
+    def upload_document(
+        db: Session,
+        case_id: int,
+        file: UploadFile,
+        uploaded_by_user_id: Optional[int] = None,
+    ) -> CaseDocument:
+        if file is None:
+            raise HTTPException(status_code=400, detail="File is required")
+
+        case_dir = CaseDocumentsService._ensure_case_dir(case_id)
+        stored_name = CaseDocumentsService._safe_filename(file.filename or "file")
+        stored_path = case_dir / stored_name
+
+        # Save file to disk
+        try:
+            with open(stored_path, "wb") as f:
+                f.write(file.file.read())
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to save file: {e}")
+
+        doc = CaseDocument(
+            case_id=case_id,
+            filename=file.filename or stored_name,
+            stored_path=str(stored_path).replace("\\", "/"),
+            mime_type=file.content_type,
+            size_bytes=os.path.getsize(stored_path),
+            uploaded_by_user_id=uploaded_by_user_id,
+        )
+
+        db.add(doc)
+        db.commit()
+        db.refresh(doc)
+        return doc
+
+    @staticmethod
+    def list_documents(db: Session, case_id: int) -> List[CaseDocument]:
+        return (
+            db.query(CaseDocument)
+            .filter(CaseDocument.case_id == case_id)
+            .order_by(CaseDocument.uploaded_at.desc())
+            .all()
+        )
+
+    @staticmethod
+    def delete_document(db: Session, case_id: int, doc_id: int) -> None:
+        doc = (
+            db.query(CaseDocument)
+            .filter(CaseDocument.id == doc_id, CaseDocument.case_id == case_id)
+            .first()
+        )
+        if not doc:
+            raise HTTPException(status_code=404, detail="Case document not found")
+
+        # remove file if exists
+        try:
+            if doc.stored_path and os.path.exists(doc.stored_path):
+                os.remove(doc.stored_path)
+        except Exception:
+            # don't block DB delete if file delete fails
+            pass
+
+        db.delete(doc)
+        db.commit()
