@@ -1,5 +1,10 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+
+import CaseIntakeSection from "../../modules/case_files/components/CaseIntakeSection";
+import CaseDocumentsSection from "../../modules/case_files/components/CaseDocumentsSection";
+import CaseChecklistSection from "../../modules/case_files/components/CaseChecklistSection";
+
 import {
   lawyerListIncomingBookings,
   lawyerConfirmBooking,
@@ -114,6 +119,21 @@ const LawyerIncomingBookingsPage = () => {
   return (
     <div className="min-h-screen bg-slate-900 text-white p-6">
       <div className="max-w-6xl mx-auto">
+        {/* ✅ TEMP DEMO BLOCK: Case Files (Intake + Documents + Checklist) */}
+        <div className="mb-6 p-4 bg-slate-800 border border-slate-700 rounded-lg">
+          <h2 className="text-xl font-bold mb-3">Case Files (Demo)</h2>
+
+          <CaseIntakeSection />
+
+          <div className="mt-6">
+            <CaseDocumentsSection />
+          </div>
+
+          <div className="mt-6">
+            <CaseChecklistSection />
+          </div>
+        </div>
+
         <div className="mb-6">
           <h1 className="text-3xl font-bold mb-2">Incoming Booking Requests</h1>
           <p className="text-gray-400">
