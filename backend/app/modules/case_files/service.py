@@ -1,89 +1,51 @@
-import os
-from typing import List, Optional, Tuple
-from uuid import uuid4
+# backend/app/modules/case_files/service.py
 
-from fastapi import UploadFile
+from __future__ import annotations
+
+from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
-from .models import CaseDocument
+from app.modules.case_files.models import CaseIntake
 
 
-UPLOAD_DIR = "uploads/documents"
+class CaseIntakeService:
+    @staticmethod
+    def get_intake(db: Session, case_id: int) -> CaseIntake:
+        intake = db.query(CaseIntake).filter(CaseIntake.case_id == case_id).first()
+        if not intake:
+            raise HTTPException(status_code=404, detail="Case intake not found")
+        return intake
 
+    @staticmethod
+    def create_intake(db: Session, case_id: int, payload) -> CaseIntake:
+        existing = db.query(CaseIntake).filter(CaseIntake.case_id == case_id).first()
+        if existing:
+            raise HTTPException(status_code=409, detail="Case intake already exists")
 
-def _ensure_upload_dir() -> None:
-    os.makedirs(UPLOAD_DIR, exist_ok=True)
+        intake = CaseIntake(
+            case_id=case_id,
+            status=payload.status if payload.status is not None else "draft",
+            answers_json=payload.answers_json,
+        )
+        db.add(intake)
+        db.commit()
+        db.refresh(intake)
+        return intake
 
+    @staticmethod
+    def update_intake(db: Session, case_id: int, payload) -> CaseIntake:
+        intake = db.query(CaseIntake).filter(CaseIntake.case_id == case_id).first()
+        if not intake:
+            raise HTTPException(status_code=404, detail="Case intake not found")
 
-def save_upload(file: UploadFile) -> Tuple[str, str, int, str]:
-    _ensure_upload_dir()
+        # Update only fields provided
+        if getattr(payload, "status", None) is not None:
+            intake.status = payload.status
 
-    ext = os.path.splitext(file.filename or "")[1]
-    stored_name = f"{uuid4().hex}{ext}"
-    stored_path = os.path.join(UPLOAD_DIR, stored_name)
+        if getattr(payload, "answers_json", None) is not None:
+            intake.answers_json = payload.answers_json
 
-    content = file.file.read()
-    with open(stored_path, "wb") as f:
-        f.write(content)
-
-    size_bytes = len(content)
-    mime_type = file.content_type or "application/octet-stream"
-
-    return stored_path, mime_type, size_bytes, stored_name
-
-
-def create_case_document(
-    db: Session,
-    case_id: int,
-    file: UploadFile,
-    doc_type: Optional[str] = None,
-    uploaded_by_user_id: Optional[int] = None,
-) -> CaseDocument:
-    stored_path, mime_type, size_bytes, stored_name = save_upload(file)
-
-    doc = CaseDocument(
-        case_id=case_id,
-        filename=file.filename or stored_name,
-        stored_path=stored_path,
-        mime_type=mime_type,
-        size_bytes=size_bytes,
-        uploaded_by_user_id=uploaded_by_user_id,
-    )
-
-    db.add(doc)
-    db.commit()
-    db.refresh(doc)
-    return doc
-
-
-def list_case_documents(db: Session, case_id: int) -> List[CaseDocument]:
-    return (
-        db.query(CaseDocument)
-        .filter(CaseDocument.case_id == case_id)
-        .order_by(CaseDocument.uploaded_at.desc(), CaseDocument.id.desc())
-        .all()
-    )
-
-
-def get_case_document(db: Session, case_id: int, doc_id: int) -> Optional[CaseDocument]:
-    return (
-        db.query(CaseDocument)
-        .filter(CaseDocument.id == doc_id, CaseDocument.case_id == case_id)
-        .first()
-    )
-
-
-def delete_case_document(db: Session, case_id: int, doc_id: int) -> bool:
-    doc = get_case_document(db, case_id, doc_id)
-    if not doc:
-        return False
-
-    try:
-        if doc.stored_path and os.path.exists(doc.stored_path):
-            os.remove(doc.stored_path)
-    except OSError:
-        pass
-
-    db.delete(doc)
-    db.commit()
-    return True
+        db.add(intake)
+        db.commit()
+        db.refresh(intake)
+        return intake
