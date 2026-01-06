@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { getBookingById } from "../../../services/bookings";
 import { listDocuments } from "../../documents/services/documents.service";
-import { getIntakeByBooking } from "../../intake/services/intake.service";
+import { getIntakeByBooking, getIntakeByCase } from "../../intake/services/intake.service";
+import api from "../../../services/api";
 
 const tabs = ["Details", "Documents", "Intake", "Disputes", "Reviews"];
 
@@ -65,12 +66,23 @@ export default function ClientBookingDetailPage() {
       }
     };
 
+    loadBooking();
+  }, [bookingId]);
+
+  useEffect(() => {
+    if (!booking) return;
+
     const loadDocs = async () => {
       setDocError("");
       setDocLoading(true);
       try {
-        const res = await listDocuments(bookingId);
-        setDocs(res.data || []);
+        if (booking?.case_id) {
+          const { data } = await api.get(`/api/documents/by-case/${booking.case_id}`);
+          setDocs(data || []);
+        } else {
+          const res = await listDocuments(bookingId);
+          setDocs(res.data || []);
+        }
       } catch (err) {
         setDocError(
           err?.response?.data?.detail ||
@@ -86,6 +98,18 @@ export default function ClientBookingDetailPage() {
       setIntakeError("");
       setIntakeLoading(true);
       try {
+        if (booking?.case_id) {
+          try {
+            const data = await getIntakeByCase(booking.case_id);
+            setIntake(data || null);
+            return;
+          } catch (err) {
+            // fallback to booking-based if case call fails/404
+            const res = await getIntakeByBooking(bookingId);
+            setIntake(res.data || null);
+            return;
+          }
+        }
         const res = await getIntakeByBooking(bookingId);
         setIntake(res.data || null);
       } catch (err) {
@@ -103,10 +127,9 @@ export default function ClientBookingDetailPage() {
       }
     };
 
-    loadBooking();
     loadDocs();
     loadIntake();
-  }, [bookingId]);
+  }, [bookingId, booking?.id, booking?.case_id, booking]);
 
   const statusClass = useMemo(() => {
     const key = (booking?.status || "").toLowerCase();
@@ -446,11 +469,11 @@ export default function ClientBookingDetailPage() {
 
       {/* Tabs */}
       <div className="flex flex-wrap gap-2">
-        {tabs.map((tab) => {
-          const active = activeTab === tab;
-          return (
-            <button
-              key={tab}
+      {tabs.map((tab) => {
+        const active = activeTab === tab;
+        return (
+          <button
+            key={tab}
               onClick={() => setActiveTab(tab)}
               className={`px-4 py-2 rounded-full text-sm font-semibold border transition-colors ${
                 active

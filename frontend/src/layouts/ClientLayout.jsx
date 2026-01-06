@@ -6,6 +6,8 @@ const ClientLayout = () => {
     { to: "/client/dashboard", label: "Dashboard" },
     { to: "/client/search", label: "Search Lawyers" },
     { to: "/client/manage-bookings", label: "My Bookings" },
+    { to: "/client/cases", label: "My Cases" }
+
   ];
 
   return (

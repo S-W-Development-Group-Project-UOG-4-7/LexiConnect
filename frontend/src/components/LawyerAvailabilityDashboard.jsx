@@ -34,6 +34,11 @@ const LawyerAvailabilityDashboard = () => {
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
   const [stats, setStats] = useState({ activeBlackouts: 0, dailyCapacity: 0 });
+  const [slotPreview, setSlotPreview] = useState([]);
+  const [previewFrom, setPreviewFrom] = useState("");
+  const [previewTo, setPreviewTo] = useState("");
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewError, setPreviewError] = useState("");
   const [newBlackout, setNewBlackout] = useState({
     date: '',
     availability: 'Full Day',
@@ -153,6 +158,25 @@ const LawyerAvailabilityDashboard = () => {
       setError(err?.response?.data?.detail || err.message || 'Failed to load availability');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchSlotPreview = async (fromDate, toDate) => {
+    if (!fromDate || !toDate) return;
+    setPreviewLoading(true);
+    setPreviewError("");
+    try {
+      const { data } = await api.get("/api/lawyer-availability/slots", {
+        params: { from_date: fromDate, to_date: toDate },
+      });
+      setSlotPreview(data || []);
+    } catch (err) {
+      setPreviewError(
+        err?.response?.data?.detail || err?.response?.data?.message || "Failed to load upcoming slots"
+      );
+      setSlotPreview([]);
+    } finally {
+      setPreviewLoading(false);
     }
   };
 
@@ -360,8 +384,42 @@ const LawyerAvailabilityDashboard = () => {
       0
     );
 
+  const cancelDay = async (dateStr) => {
+    const key = `cancel-${dateStr}`;
+    try {
+      setSaving((p) => ({ ...p, [key]: true }));
+      setError(null);
+      await api.post("/api/lawyer-availability/blackout", {
+        date: dateStr,
+        reason: "Cancelled via calendar",
+      });
+      setSuccess("Day cancelled");
+      fetchSlotPreview(previewFrom, previewTo);
+      await loadAvailabilityData();
+    } catch (err) {
+      setError(err?.response?.data?.detail || err?.response?.data?.message || "Failed to cancel day");
+    } finally {
+      setSaving((p) => {
+        const next = { ...p };
+        delete next[key];
+        return next;
+      });
+    }
+  };
+
   useEffect(() => {
     loadAvailabilityData();
+  }, []);
+
+  useEffect(() => {
+    const today = new Date();
+    const from = today.toISOString().slice(0, 10);
+    const toDate = new Date(today.getTime() + 14 * 24 * 60 * 60 * 1000);
+    const to = toDate.toISOString().slice(0, 10);
+    setPreviewFrom(from);
+    setPreviewTo(to);
+    fetchSlotPreview(from, to);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const TrashIcon = () => <Trash2 className="w-4 h-4" />;
@@ -580,9 +638,84 @@ const LawyerAvailabilityDashboard = () => {
               )}
             </div>
 
-            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-8">
-              <div className="flex items-center justify-between mb-8">
-                <h2 className="text-xl font-bold text-slate-900">Blackout Dates</h2>
+      {/* Upcoming Slots */}
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-8 mb-8">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h2 className="text-xl font-bold text-slate-900">Upcoming Slots (Next 14 Days)</h2>
+            <p className="text-slate-600 text-sm">Generated from your weekly availability.</p>
+          </div>
+          {previewError && <div className="text-sm text-red-500">{previewError}</div>}
+        </div>
+        {previewLoading ? (
+          <div className="flex items-center justify-center py-8 text-slate-500 text-sm">
+            <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin mr-2"></div>
+            Loading upcoming slots...
+          </div>
+        ) : slotPreview.length === 0 ? (
+          <div className="text-slate-500 text-sm">No upcoming slots in this range.</div>
+        ) : (
+          Object.entries(
+            slotPreview.reduce((acc, slot) => {
+              const d = slot.date;
+              acc[d] = acc[d] || [];
+              acc[d].push(slot);
+              return acc;
+            }, {})
+          ).map(([d, slotsForDay]) => {
+            const dateLabel = new Date(d + "T00:00:00");
+            const niceDate = isNaN(dateLabel.getTime())
+              ? d
+              : `${dateLabel.toLocaleDateString()} (${dateLabel.toLocaleDateString(undefined, {
+                  weekday: "long",
+                })})`;
+            const isBlackoutDay = slotsForDay.every((s) => s.is_blackout);
+            const cancelKey = `cancel-${d}`;
+            const canceling = !!saving[cancelKey];
+            return (
+              <div key={d} className="mb-4 border border-slate-200 rounded-xl p-4 bg-slate-50">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="text-slate-900 font-semibold">{niceDate}</div>
+                  <button
+                    type="button"
+                    disabled={isBlackoutDay || canceling}
+                    onClick={() => cancelDay(d)}
+                    className={`px-3 py-1.5 rounded-lg text-sm font-semibold ${
+                      isBlackoutDay
+                        ? "bg-slate-200 text-slate-500 cursor-not-allowed"
+                        : "bg-red-600 text-white hover:bg-red-700"
+                    }`}
+                  >
+                    {isBlackoutDay ? "Cancelled" : canceling ? "Cancelling..." : "Cancel this day"}
+                  </button>
+                </div>
+                <div className="space-y-2">
+                  {slotsForDay.map((slot, idx) => (
+                    <div
+                      key={`${d}-${idx}`}
+                      className="flex items-center justify-between bg-white border border-slate-200 rounded-lg p-3"
+                    >
+                      <div className="text-sm text-slate-800 font-semibold">
+                        {fromApiTime(slot.start_time)} - {fromApiTime(slot.end_time)}
+                      </div>
+                      <div className="text-sm text-slate-500">{slot.branch_name || "No branch"}</div>
+                      {slot.is_blackout && (
+                        <span className="text-xs px-2 py-1 rounded-full bg-red-100 text-red-600 font-semibold">
+                          BLACKOUT
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
+
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-8">
+        <div className="flex items-center justify-between mb-8">
+          <h2 className="text-xl font-bold text-slate-900">Blackout Dates</h2>
                 <div className="flex items-center space-x-2 text-sm text-amber-600">
                   <AlertCircleIcon />
                   <span>Overrides weekly schedule</span>

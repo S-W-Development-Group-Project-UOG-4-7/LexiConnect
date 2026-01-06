@@ -10,6 +10,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
 from fastapi.staticfiles import StaticFiles  # ✅ for serving uploads
+from app.modules.checklist_answers.router import router as checklist_answers_router
 
 # Core DB
 from .database import Base, engine, SessionLocal
@@ -24,6 +25,7 @@ from .models import (  # noqa
     service_package,
     checklist_template,
 )
+from app.modules.cases import models as case_models  # noqa: F401
 
 # Routers (existing app routers)
 from .routers import admin, auth, bookings, dev, lawyers, token_queue  # noqa: F401
@@ -47,6 +49,7 @@ from app.modules.intake.routes import router as intake_router
 from app.modules.lawyer_profiles.routes import router as lawyer_profiles_router
 from app.routers.lawyer_availability import router as lawyer_availability_router
 from app.modules.audit_log.routes import router as audit_log_router
+from app.modules.cases.routes import router as cases_router
 
 # API v1 routers
 from .api.v1 import admin as admin_v1, booking as booking_v1
@@ -107,6 +110,7 @@ app.include_router(lawyers.router)
 app.include_router(lawyers.router, prefix="/api")
 app.include_router(bookings.router)
 app.include_router(token_queue.router)
+app.include_router(checklist_answers_router)
 
 # Feature modules
 app.include_router(service_packages_router)
@@ -134,6 +138,7 @@ for module_router in (
 
 # Dedicated router include (keeps optional grouping clear)
 app.include_router(lawyer_availability_router, prefix="/api")
+app.include_router(cases_router, prefix="/api")
 
 # API v1 routers
 app.include_router(admin_v1.router)

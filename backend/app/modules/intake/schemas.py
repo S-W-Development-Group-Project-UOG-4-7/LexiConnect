@@ -40,6 +40,7 @@ class IntakeOut(BaseModel):
 
     id: int
     booking_id: int
+    case_id: Optional[int] = None
     client_id: int
 
     case_type: str

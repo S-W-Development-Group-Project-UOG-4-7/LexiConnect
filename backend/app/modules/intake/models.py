@@ -17,6 +17,12 @@ class IntakeForm(Base):
         nullable=False,
         index=True,
     )
+    case_id = Column(
+        Integer,
+        ForeignKey("cases.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )
 
     client_id = Column(
         Integer,

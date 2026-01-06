@@ -6,7 +6,9 @@ class Document(Base):
     __tablename__ = "documents"
 
     id = Column(Integer, primary_key=True, index=True)
-    booking_id = Column(Integer, ForeignKey("bookings.id"), nullable=False, index=True)
+    booking_id = Column(Integer, ForeignKey("bookings.id"), nullable=True, index=True)
+    case_id = Column(Integer, ForeignKey("cases.id"), nullable=True, index=True)
+    case_id = Column(Integer, ForeignKey("cases.id"), nullable=True, index=True)
 
     title = Column(String, nullable=False)
     file_path = Column(String, nullable=False)

@@ -130,3 +130,19 @@ export const getLawyerIdByUser = async (userId) => {
   const { data } = await api.get(`/api/lawyers/by-user/${userId}`);
   return data?.lawyer_id;
 };
+
+/**
+ * List cases for current client
+ */
+export const listMyCases = async () => {
+  const { data } = await api.get("/api/cases/my");
+  return data;
+};
+
+/**
+ * Create a new case for current client
+ */
+export const createCase = async (payload) => {
+  const { data } = await api.post("/api/cases", payload);
+  return data;
+};
