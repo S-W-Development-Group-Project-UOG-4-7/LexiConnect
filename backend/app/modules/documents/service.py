@@ -7,7 +7,9 @@ from typing import Optional
 from fastapi import UploadFile
 from sqlalchemy.orm import Session
 
-from .model import Document  # module-local model
+from .model import Document  # ✅ correct import (module-local model)
+from sqlalchemy.orm import Session
+from .model import Document
 
 UPLOAD_DIR = "uploads/documents"
 
@@ -30,13 +32,15 @@ def save_upload(file: UploadFile) -> str:
 
 def create_document(
     db: Session,
-    booking_id: int,
+    booking_id: int | None,
+    case_id: int | None,
     title: str,
     original_filename: str,
     file_path: str,
 ) -> Document:
     doc = Document(
         booking_id=booking_id,
+        case_id=case_id,
         title=title,
         original_filename=original_filename,
         file_path=file_path,
@@ -68,6 +72,30 @@ def get_document(db: Session, doc_id: int) -> Optional[Document]:
     return db.query(Document).filter(Document.id == doc_id).first()
 
 
+def get_documents_by_case(db: Session, case_id: int):
+    """
+    List documents scoped to a case, newest first.
+    """
+    return (
+        db.query(Document)
+        .filter(Document.case_id == case_id)
+        .order_by(Document.uploaded_at.desc())
+        .all()
+    )
+
+
+def resolve_case_id_from_booking(db: Session, booking_id: Optional[int]) -> Optional[int]:
+    """
+    Given a booking id, return its case_id if present.
+    """
+    if not booking_id:
+        return None
+    from app.models.booking import Booking  # local import to avoid circular
+
+    booking = db.query(Booking).filter(Booking.id == booking_id).first()
+    return getattr(booking, "case_id", None) if booking else None
+
+
 def delete_document(db: Session, doc_id: int) -> bool:
     """
     Deletes a document record and its file from disk.
@@ -87,3 +115,25 @@ def delete_document(db: Session, doc_id: int) -> bool:
     db.delete(doc)
     db.commit()
     return True
+
+def create_document_for_case(
+    db: Session,
+    case_id: int,
+    title: str,
+    file_path: str,
+    booking_id: int | None = None,
+) -> Document:
+    """
+    Create a document attached to a case (booking_id optional).
+    Keeps backward compatibility with booking-based flow.
+    """
+    doc = Document(
+        case_id=case_id,
+        booking_id=booking_id,
+        title=title,
+        file_path=file_path,
+    )
+    db.add(doc)
+    db.commit()
+    db.refresh(doc)
+    return doc

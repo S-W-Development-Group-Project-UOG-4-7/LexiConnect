@@ -24,3 +24,15 @@ uploads/
 
 # Local environment file
 .env
+EOF
+
+.env 
+__pycache__/
+*.pyc
+__pycache__/
+*.pyc
+.env
+venv/
+.venv/
+backend/venv/
+uploads/

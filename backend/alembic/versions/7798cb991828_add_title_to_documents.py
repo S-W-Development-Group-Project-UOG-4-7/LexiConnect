@@ -10,10 +10,9 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision = "7798cb991828"
-down_revision = "526bd4ed3edb"
+down_revision = "add_documents_table"
 branch_labels = None
 depends_on = None
-
 
 def upgrade() -> None:
     bind = op.get_bind()

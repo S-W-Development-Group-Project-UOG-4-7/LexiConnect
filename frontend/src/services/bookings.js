@@ -110,3 +110,39 @@ export const rejectBooking = async (id) => {
   const { data } = await api.patch(`/api/bookings/${id}/reject`);
   return data;
 };
+
+/**
+ * Public: list active service packages for a lawyer
+ * @param {number} lawyerId
+ * @returns {Promise<Array>}
+ */
+export const getLawyerServicePackages = async (lawyerId) => {
+  const { data } = await api.get(`/api/lawyers/${lawyerId}/service-packages`);
+  return data;
+};
+
+/**
+ * Map a user_id (users table) to a lawyers.id row.
+ * @param {number} userId
+ * @returns {Promise<number>} lawyer_id
+ */
+export const getLawyerIdByUser = async (userId) => {
+  const { data } = await api.get(`/api/lawyers/by-user/${userId}`);
+  return data?.lawyer_id;
+};
+
+/**
+ * List cases for current client
+ */
+export const listMyCases = async () => {
+  const { data } = await api.get("/api/cases/my");
+  return data;
+};
+
+/**
+ * Create a new case for current client
+ */
+export const createCase = async (payload) => {
+  const { data } = await api.post("/api/cases", payload);
+  return data;
+};

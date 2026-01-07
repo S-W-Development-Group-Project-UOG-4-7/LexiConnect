@@ -12,7 +12,15 @@ class IntakeCreate(BaseModel):
 class IntakeOut(BaseModel):
     id: int
     booking_id: int
-    client_notes: Optional[str]
+    case_id: Optional[int] = None
+    client_id: int
+
+    case_type: str
+    subject: str
+    details: str
+    urgency: str
+    answers_json: Dict[str, Any]
+
     created_at: datetime
     updated_at: Optional[datetime]
 

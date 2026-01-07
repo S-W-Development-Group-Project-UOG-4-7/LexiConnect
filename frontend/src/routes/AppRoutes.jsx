@@ -48,6 +48,14 @@ import LawyerBookingDetailPage from "../features/bookings/pages/LawyerBookingDet
 import LawyerDocumentsView from "../features/documents/pages/LawyerDocumentsView";
 import LawyerIntakeViewPage from "../features/intake/pages/LawyerIntakeViewPage";
 import LawyerPublicProfile from "../pages/LawyerPublicProfile";
+import LawyerMyRequestsPage from "../features/cases/pages/LawyerMyRequestsPage";
+
+// ✅ Cases
+import ClientCasesPage from "../features/cases/pages/ClientCasesPage";
+import LawyerCaseFeedPage from "../features/cases/pages/LawyerCaseFeedPage";
+import ClientCaseChecklistPage from "../features/checklist/pages/ClientCaseChecklistPage";
+import LawyerCaseDetailPage from "../features/cases/pages/LawyerCaseDetailPage";
+import ClientCaseDetailPage from "../features/cases/pages/ClientCaseDetailPage";
 
 // Admin pages (real)
 import AdminDashboard from "../pages/admin/AdminDashboard";
@@ -64,7 +72,12 @@ const DashboardRedirect = () => {
   return <Navigate to="/login" replace />;
 };
 
-// ✅ Minimal Lawyer dashboard (no missing file import)
+const RequireAuth = ({ children }) => {
+  const token = localStorage.getItem("access_token");
+  return token ? children : <Navigate to="/" replace />;
+};
+
+// ✅ Minimal Lawyer dashboard (with Case Feed link)
 const LawyerDashboardHome = () => {
   return (
     <div className="space-y-4">
@@ -82,6 +95,15 @@ const LawyerDashboardHome = () => {
         >
           <div className="text-lg font-semibold text-white">Incoming Bookings</div>
           <div className="text-slate-300 text-sm mt-1">Confirm or reject requests</div>
+        </a>
+
+        {/* ✅ ADD: Case Feed button/card */}
+        <a
+          href="/lawyer/cases/feed"
+          className="block bg-slate-800 border border-slate-700 rounded-lg p-5 hover:bg-slate-700"
+        >
+          <div className="text-lg font-semibold text-white">Case Feed</div>
+          <div className="text-slate-300 text-sm mt-1">Browse open cases & request access</div>
         </a>
 
         <a
@@ -123,52 +145,42 @@ const AppRoutes = () => {
       {/* Auth */}
       <Route element={<AuthLayout />}>
         <Route path="/login" element={<Login />} />
-        <Route path="/register" element={<Register />} />
-      </Route>
+    <Route path="/register" element={<Register />} />
+  </Route>
 
-      {/* Client area */}
-      <Route
-        element={
-          <ProtectedRoute allowedRoles={["client"]}>
-            <ClientLayout />
-          </ProtectedRoute>
-        }
-      >
-        {/* ✅ real pages */}
+  {/* Client area */}
+  <Route
+    element={
+      <RequireAuth>
+        <ProtectedRoute allowedRoles={["client"]}>
+          <ClientLayout />
+        </ProtectedRoute>
+      </RequireAuth>
+    }
+  >
         <Route path="/client/dashboard" element={<Dashboard />} />
         <Route path="/client/search" element={<SearchLawyers />} />
         <Route path="/client/profile/:id" element={<LawyerPublicProfile />} />
 
-
-        {/* ✅ Chapa pages MINIMAL (so you can demo but he still has work) */}
-        <Route
-          path="/client/profile/:id"
-          element={<div className="text-white">Lawyer Profile (Chapa - TODO)</div>}
-        />
+        {/* ✅ Cases */}
+        <Route path="/client/cases" element={<ClientCasesPage />} />
+        <Route path="/client/cases/:caseId" element={<ClientCaseDetailPage />} />
+        <Route path="/client/cases/:caseId/checklist" element={<ClientCaseChecklistPage />} />
 
         {/* Booking */}
         <Route path="/client/booking" element={<Booking />} />
         <Route path="/client/booking/:lawyerId" element={<Booking />} />
 
         <Route path="/client/manage-bookings" element={<ManageBookings />} />
-        <Route
-          path="/client/my-bookings"
-          element={<Navigate to="/client/manage-bookings" replace />}
-        />
+        <Route path="/client/my-bookings" element={<Navigate to="/client/manage-bookings" replace />} />
 
         {/* Booking hub */}
         <Route path="/client/bookings/:bookingId" element={<ClientBookingDetailPage />} />
-        <Route
-          path="/client/bookings/:bookingId/intake"
-          element={<ClientIntakeSubmitPage />}
-        />
+        <Route path="/client/bookings/:bookingId/intake" element={<ClientIntakeSubmitPage />} />
 
         {/* Docs */}
         <Route path="/client/bookings/:bookingId/documents" element={<DocumentsList />} />
-        <Route
-          path="/client/bookings/:bookingId/documents/upload"
-          element={<DocumentUpload />}
-        />
+        <Route path="/client/bookings/:bookingId/documents/upload" element={<DocumentUpload />} />
 
         {/* Disputes */}
         <Route path="/disputes/submit" element={<SubmitDisputePage />} />
@@ -176,14 +188,16 @@ const AppRoutes = () => {
         <Route path="/disputes/:id" element={<DisputeDetailPage />} />
       </Route>
 
-      {/* Lawyer area */}
-      <Route
-        element={
-          <ProtectedRoute allowedRoles={["lawyer"]}>
-            <LawyerLayout />
-          </ProtectedRoute>
-        }
-      >
+  {/* Lawyer area */}
+  <Route
+    element={
+      <RequireAuth>
+        <ProtectedRoute allowedRoles={["lawyer"]}>
+          <LawyerLayout />
+        </ProtectedRoute>
+      </RequireAuth>
+    }
+  >
         <Route path="/lawyer/dashboard" element={<LawyerDashboardHome />} />
         <Route path="/lawyer/availability" element={<LawyerAvailabilityDashboard />} />
         <Route path="/lawyer/token-queue" element={<TokenQueue />} />
@@ -195,6 +209,11 @@ const AppRoutes = () => {
         <Route path="/lawyer/bookings/:bookingId" element={<LawyerBookingDetailPage />} />
         <Route path="/lawyer/bookings/:bookingId/documents" element={<LawyerDocumentsView />} />
         <Route path="/lawyer/bookings/:bookingId/intake" element={<LawyerIntakeViewPage />} />
+
+        {/* ✅ ADD: Lawyer Case Feed route (fixes your 404) */}
+        <Route path="/lawyer/cases/feed" element={<LawyerCaseFeedPage />} />
+        <Route path="/lawyer/cases/requests" element={<LawyerMyRequestsPage />} />
+        <Route path="/lawyer/cases/:caseId" element={<LawyerCaseDetailPage />} />
       </Route>
 
       {/* Admin area */}
@@ -215,19 +234,10 @@ const AppRoutes = () => {
       </Route>
 
       {/* Legacy paths redirect to new client routes */}
-      <Route
-        path="/booking/:lawyerId"
-        element={<Navigate to="/client/booking/:lawyerId" replace />}
-      />
+      <Route path="/booking/:lawyerId" element={<Navigate to="/client/booking/:lawyerId" replace />} />
       <Route path="/booking" element={<Navigate to="/client/booking" replace />} />
-      <Route
-        path="/manage-bookings"
-        element={<Navigate to="/client/manage-bookings" replace />}
-      />
-      <Route
-        path="/my-bookings"
-        element={<Navigate to="/client/manage-bookings" replace />}
-      />
+      <Route path="/manage-bookings" element={<Navigate to="/client/manage-bookings" replace />} />
+      <Route path="/my-bookings" element={<Navigate to="/client/manage-bookings" replace />} />
       <Route path="/search" element={<Navigate to="/client/search" replace />} />
       <Route path="/profile/:id" element={<Navigate to="/client/profile/:id" replace />} />
       <Route path="/admin" element={<Navigate to="/admin/dashboard" replace />} />
