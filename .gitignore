@@ -1,2 +1,20 @@
+# dependencies
+node_modules/
+**/node_modules/
+
+# python venvs
+.venv/
+**/.venv/
+backend/.venv/
+
+# uploads
+uploads/
+backend/uploads/
+
+# db files
+*.db
+
+# editor
+.vscode/
 backend/uploads/
 backend/venv/

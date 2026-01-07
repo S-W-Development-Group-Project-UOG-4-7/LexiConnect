@@ -50,10 +50,13 @@ from app.modules.disputes.routes import (
 
 from app.modules.documents.routes import router as documents_router
 from app.modules.intake.routes import router as intake_router
+from app.modules.case_files.router import router as case_files_router
 from app.modules.lawyer_profiles.routes import router as lawyer_profiles_router
 from app.routers.lawyer_availability import router as lawyer_availability_router
 from app.modules.audit_log.routes import router as audit_log_router
 from app.modules.cases.routes import router as cases_router
+
+
 
 # API v1 routers
 from .api.v1 import admin as admin_v1, booking as booking_v1
@@ -102,6 +105,7 @@ def startup():
         db.close()
 
 
+
 # ---- Health check ----
 @app.get("/health")
 def health_check():
@@ -116,6 +120,8 @@ app.include_router(lawyers.router)
 app.include_router(lawyers.router, prefix="/api")
 app.include_router(bookings.router)
 app.include_router(token_queue.router)
+# app.include_router(lawyer_availability.router)  # WRONG: lawyer_availability is a model module
+
 
 # ✅ Keep checklist answers router (your branch)
 app.include_router(checklist_answers_router)
@@ -140,6 +146,7 @@ for module_router in (
     booking_disputes_router,
     documents_router,
     intake_router,
+    case_files_router,
     admin_kyc_router,
     audit_log_router,
     lawyer_profiles_router,
