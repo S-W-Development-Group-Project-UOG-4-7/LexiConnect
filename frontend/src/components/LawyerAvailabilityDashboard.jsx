@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Calendar, Clock, MapPin, Users, Plus, Trash2, Info, CheckCircle, AlertCircle, Save, X } from 'lucide-react';
+import AvailabilityWizard from './AvailabilityWizard';
+import api from '../services/api';
 
 const LawyerAvailabilityDashboard = () => {
   const [timeSlots, setTimeSlots] = useState({
@@ -30,6 +32,8 @@ const LawyerAvailabilityDashboard = () => {
     endTime: '05:00 PM',
     reason: ''
   });
+
+  const [isWizardOpen, setIsWizardOpen] = useState(false);
 
   const weekDays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
@@ -80,9 +84,9 @@ const LawyerAvailabilityDashboard = () => {
 
     // Fallback: fetch first lawyer from backend
     try {
-      const lawyers = await apiRequest('/lawyers/');
-      if (lawyers && Array.isArray(lawyers) && lawyers.length > 0) {
-        const firstLawyerId = lawyers[0].id.toString();
+      const response = await api.get('/lawyers/');
+      if (response.data && Array.isArray(response.data) && response.data.length > 0) {
+        const firstLawyerId = response.data[0].id.toString();
         localStorage.setItem('lawyerId', firstLawyerId);
         return firstLawyerId;
       }
@@ -109,64 +113,33 @@ const LawyerAvailabilityDashboard = () => {
   };
 
   const apiRequest = async (url, options = {}) => {
-    // Use relative URL - Vite proxy will handle forwarding to backend
-    const fullUrl = url;  // No base URL needed with proxy
-    console.log('Making request to:', fullUrl); // Debug log
-    
-    // Add cache-busting for GET requests to avoid 304 issues
-    const requestOptions = {
-      ...options,
-      headers: {
-        ...getAuthHeaders(),
-        ...options.headers
-      },
-      cache: options.method === 'GET' ? 'no-store' : 'default'
-    };
-    
-    const response = await fetch(fullUrl, requestOptions);
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('Error response:', errorText); // Debug log
-      let err;
-      try {
-        err = JSON.parse(errorText);
-      } catch {
-        err = { detail: errorText || `HTTP ${response.status}` };
-      }
-      throw new Error(err.detail || `HTTP ${response.status}`);
-    }
-
-    // Handle empty responses (204, 304, or Content-Length: 0)
-    const contentType = response.headers.get('content-type') || '';
-    const contentLength = response.headers.get('content-length') || '0';
-    
-    if (response.status === 204 || response.status === 304 || contentLength === '0') {
-      console.log('Empty response detected, returning null');
-      return null;
-    }
-    
-    // Only parse JSON if content-type includes application/json
-    if (!contentType.includes('application/json')) {
-      const responseText = await response.text();
-      console.error('Non-JSON response:', responseText);
-      throw new Error('Server returned non-JSON response');
-    }
-
-    const responseText = await response.text();
-    console.log('Response text:', responseText); // Debug log
-    
-    // Handle empty JSON responses
-    if (!responseText.trim()) {
-      console.log('Empty JSON response, returning null');
-      return null;
-    }
+    const method = options.method || 'GET';
+    console.log("API REQUEST:", method, url); // Debug log
     
     try {
-      return JSON.parse(responseText);
-    } catch (e) {
-      console.error('Failed to parse JSON:', e, 'Response was:', responseText);
-      throw new Error('Invalid JSON response from server');
+      const config = {
+        ...options,
+        url: url.startsWith('http') ? url : url
+      };
+      
+      if (method === 'GET') {
+        const response = await api.get(config.url, { ...options });
+        return response.data;
+      } else if (method === 'POST') {
+        const response = await api.post(config.url, options.body, { ...options });
+        return response.data;
+      } else if (method === 'PUT') {
+        const response = await api.put(config.url, options.body, { ...options });
+        return response.data;
+      } else if (method === 'DELETE') {
+        const response = await api.delete(config.url, { ...options });
+        return response.data;
+      } else {
+        throw new Error(`Unsupported method: ${method}`);
+      }
+    } catch (error) {
+      console.error('API Error:', error);
+      throw error;
     }
   };
 
@@ -179,11 +152,34 @@ const LawyerAvailabilityDashboard = () => {
       const lawyerId = await getLawyerId();
       console.log('Using lawyer ID:', lawyerId); // Debug log
 
-      const [availabilityData, branchesData, blackoutData] = await Promise.all([
-        apiRequest(`/api/lawyer-availability/weekly?lawyer_id=${lawyerId}`),
-        apiRequest('/api/lawyer-availability/branches'),
-        apiRequest(`/api/lawyer-availability/blackout?lawyer_id=${lawyerId}`)
-      ]);
+      // Load each API endpoint individually to handle failures gracefully
+      let availabilityData = [];
+      let branchesData = [];
+      let blackoutData = [];
+
+      try {
+        console.log('CALLING: /api/lawyer-availability/weekly?lawyer_id=' + lawyerId);
+        availabilityData = await apiRequest(`/api/lawyer-availability/weekly?lawyer_id=${lawyerId}`);
+      } catch (err) {
+        console.error('Failed to load weekly availability:', err);
+        availabilityData = []; // Use empty array as fallback
+      }
+
+      try {
+        console.log('CALLING: /api/lawyer-availability/branches');
+        branchesData = await apiRequest('/api/lawyer-availability/branches');
+      } catch (err) {
+        console.error('Failed to load branches:', err);
+        branchesData = []; // Use empty array as fallback
+      }
+
+      try {
+        console.log('CALLING: /api/lawyer-availability/blackout?lawyer_id=' + lawyerId);
+        blackoutData = await apiRequest(`/api/lawyer-availability/blackout?lawyer_id=${lawyerId}`);
+      } catch (err) {
+        console.error('Failed to load blackouts:', err);
+        blackoutData = []; // Use empty array as fallback
+      }
 
       // Store branches data for dropdown
       setBranches(branchesData || []);
@@ -562,430 +558,217 @@ const LawyerAvailabilityDashboard = () => {
     );
   };
 
+  // Helper functions for new UI
+  const formatTime12h = (timeStr) => {
+    if (!timeStr) return '';
+    
+    // If already in HH:MM AM/PM format, return as is
+    if (typeof timeStr === 'string' && (timeStr.includes('AM') || timeStr.includes('PM'))) {
+      return timeStr;
+    }
+    
+    // If it's a time string like "09:00:00", convert it
+    if (typeof timeStr === 'string' && timeStr.includes(':')) {
+      const [hours, minutes] = timeStr.split(':');
+      const hour = parseInt(hours, 10);
+      const ampm = hour >= 12 ? 'PM' : 'AM';
+      const hour12 = hour % 12 || 12;
+      return `${hour12}:${minutes.padStart(2, '0')} ${ampm}`;
+    }
+    
+    return timeStr;
+  };
+
+  const getNextOccurrences = (dayOfWeek, startTime, count = 4) => {
+    const days = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+    const today = new Date();
+    const currentDay = today.getDay(); // 0 = Sunday, 1 = Monday, etc.
+    const targetDay = days.indexOf(dayOfWeek.toLowerCase());
+    
+    const occurrences = [];
+    let currentDate = new Date(today);
+    
+    // Find next occurrence of target day
+    let daysUntilTarget = (targetDay - currentDay + 7) % 7;
+    if (daysUntilTarget === 0 && today.getHours() > parseInt(startTime.split(':')[0])) {
+      daysUntilTarget = 7; // If today is the day but time has passed, go to next week
+    }
+    
+    currentDate.setDate(today.getDate() + daysUntilTarget);
+    
+    // Generate occurrences
+    for (let i = 0; i < count; i++) {
+      const occurrence = new Date(currentDate);
+      occurrence.setDate(currentDate.getDate() + (i * 7));
+      occurrences.push(occurrence);
+    }
+    
+    return occurrences;
+  };
+
+  const formatShortDate = (date) => {
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return `${months[date.getMonth()]} ${date.getDate()}`;
+  };
+
+  const getRepeatText = (slot) => {
+    if (slot.weeks_count) {
+      return `${slot.weeks_count} weeks`;
+    } else if (slot.until_date) {
+      const untilDate = new Date(slot.until_date);
+      return `Until ${formatShortDate(untilDate)}`;
+    }
+    return 'Weekly';
+  };
+
+  const getBranchName = (slot) => {
+    if (slot.branch_name) {
+      return slot.branch_name;
+    }
+    const branch = branches.find(b => b.id === slot.branch_id);
+    return branch ? branch.name : `Branch #${slot.branch_id}`;
+  };
+
+  // Transform timeSlots to flat array for new UI
+  const availabilityCards = Object.entries(timeSlots).flatMap(([day, slots]) => 
+    slots.map(slot => ({
+      ...slot,
+      dayName: day
+    }))
+  );
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
-      {/* Error/Success Messages */}
-      {error && (
-        <div className="fixed top-4 right-4 z-50 max-w-md">
-          <div className="bg-red-50 border border-red-200 rounded-lg p-4 shadow-lg">
-            <div className="flex items-start space-x-3">
-              <AlertCircleIcon />
-              <div className="flex-1">
-                <h4 className="text-red-800 font-semibold">Error</h4>
-                <p className="text-red-700 text-sm mt-1">{error}</p>
-              </div>
-              <button onClick={() => setError(null)} className="text-red-500 hover:text-red-700">
-                <XIcon />
-              </button>
-            </div>
+    <div className="min-h-screen bg-gray-50 py-8">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+        {/* Header */}
+        <div className="flex items-center justify-between mb-8">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">Your Scheduled Availability</h1>
+            <p className="text-gray-600 mt-2">Manage your appointment availability and upcoming sessions</p>
           </div>
+          <button
+            onClick={() => setIsWizardOpen(true)}
+            className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            Add new availability
+          </button>
         </div>
-      )}
 
-      {success && (
-        <div className="fixed top-4 right-4 z-50 max-w-md">
-          <div className="bg-green-50 border border-green-200 rounded-lg p-4 shadow-lg">
-            <div className="flex items-start space-x-3">
-              <CheckCircleIcon />
-              <div className="flex-1">
-                <h4 className="text-green-800 font-semibold">Success</h4>
-                <p className="text-green-700 text-sm mt-1">Availability saved successfully!</p>
-              </div>
-              <button onClick={() => setSuccess(false)} className="text-green-500 hover:text-green-700">
-                <XIcon />
-              </button>
-            </div>
+        {/* Loading State */}
+        {loading ? (
+          <div className="flex items-center justify-center py-12">
+            <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+            <span className="ml-3 text-gray-600">Loading availability...</span>
           </div>
-        </div>
-      )}
-
-      <div className="flex">
-        {/* Main Content */}
-        <main className="flex-1 p-8">
-          <div className="max-w-5xl mx-auto">
-            {/* Page Header */}
-            <div className="mb-8">
-              <div>
-                <h1 className="text-3xl font-bold text-slate-900 mb-2">Manage Availability</h1>
-                <p className="text-slate-600">Set your weekly consultation schedule and manage unavailable dates. Changes are saved automatically.</p>
-              </div>
-            </div>
-
-            {/* Weekly Consultation Schedule */}
-            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-8 mb-8">
-              <div className="flex items-center justify-between mb-8">
-                <h2 className="text-xl font-bold text-slate-900">Weekly Consultation Schedule</h2>
-                <div className="flex items-center space-x-2 text-sm text-slate-500">
-                  <CalendarIcon />
-                  <span>Auto-recurring weekly</span>
-                </div>
-              </div>
-
-              {loading ? (
-                <div className="flex items-center justify-center py-12">
-                  <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-                  <span className="ml-3 text-slate-600">Loading availability...</span>
-                </div>
-              ) : (
-                <div className="space-y-6">
-                  {weekDays.map((day) => (
-                    <div key={day} className="border-b border-slate-100 pb-6 last:border-b-0">
-                      <div className="flex items-center justify-between mb-4">
-                        <div className="flex items-center space-x-3">
-                          <h3 className="font-semibold text-slate-900">{day}</h3>
-                          {timeSlots[day].length > 0 && (
-                            <span className="px-3 py-1 bg-blue-100 text-blue-700 text-xs font-semibold rounded-full">
-                              {timeSlots[day].length} slot{timeSlots[day].length !== 1 ? 's' : ''}
-                            </span>
-                          )}
-                        </div>
-
-                        <button
-                          onClick={() => addTimeSlot(day)}
-                          disabled={saving[`add-${day}`]}
-                          className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-all duration-200 shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          {saving[`add-${day}`] ? (
-                            <>
-                              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                              <span className="text-sm font-semibold">Adding...</span>
-                            </>
-                          ) : (
-                            <>
-                              <PlusIcon />
-                              <span className="text-sm font-semibold">Add Time Slot</span>
-                            </>
-                          )}
-                        </button>
-                      </div>
-
-                      {timeSlots[day].length === 0 ? (
-                        <div className="text-center py-12 bg-slate-50 rounded-xl border-2 border-dashed border-slate-200">
-                          <p className="text-slate-500">No availability set for {day}</p>
-                        </div>
-                      ) : (
-                        <div className="space-y-4">
-                          {timeSlots[day].map((slot) => (
-                            <div key={slot.id} className="flex items-center space-x-4 p-5 bg-gradient-to-r from-slate-50 to-blue-50 rounded-xl border border-slate-200">
-                              <div className="flex items-center space-x-3 flex-1">
-                                <div className="p-2 bg-white rounded-lg shadow-sm">
-                                  <ClockIcon />
-                                </div>
-                                <div className="flex items-center space-x-2">
-                                  <input
-                                    type="text"
-                                    value={slot.startTime}
-                                    onChange={(e) => updateSlot(day, slot.id, 'startTime', e.target.value)}
-                                    className="w-24 px-3 py-2 text-sm font-medium bg-slate-800 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                  />
-                                  <span className="text-slate-400 font-medium">-</span>
-                                  <input
-                                    type="text"
-                                    value={slot.endTime}
-                                    onChange={(e) => updateSlot(day, slot.id, 'endTime', e.target.value)}
-                                    className="w-24 px-3 py-2 text-sm font-medium bg-slate-800 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                  />
-                                </div>
-                              </div>
-
-                              <div className="flex items-center space-x-3">
-                                <div className="p-2 bg-white rounded-lg shadow-sm">
-                                  <MapPinIcon />
-                                </div>
-                                <select
-                                  value={slot.branchId || branches.find(b => b.name === slot.branch)?.id || ''}
-                                  onChange={(e) => {
-                                    const branch = branches.find(b => b.id === parseInt(e.target.value, 10));
-                                    updateSlot(day, slot.id, 'branch', branch?.name || slot.branch);
-                                    updateSlot(day, slot.id, 'branchId', branch?.id);
-                                  }}
-                                  className="px-4 py-2 text-sm font-medium bg-slate-800 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                >
-                                  <option value="">Select branch</option>
-                                  {branches.map((branch) => (
-                                    <option key={branch.id} value={branch.id}>{branch.name}</option>
-                                  ))}
-                                </select>
-                              </div>
-
-                              <div className="flex items-center space-x-3">
-                                <div className="p-2 bg-white rounded-lg shadow-sm">
-                                  <UsersIcon />
-                                </div>
-                                <input
-                                  type="number"
-                                  value={slot.maxBookings}
-                                  onChange={(e) => updateSlot(day, slot.id, 'maxBookings', parseInt(e.target.value, 10) || 0)}
-                                  className="w-20 px-3 py-2 text-sm font-medium bg-slate-800 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                  min="1"
-                                />
-                                <span className="text-sm text-slate-600 font-medium">max</span>
-                              </div>
-
-                              {slot.isUnsaved && (
-                                <button
-                                  onClick={() => saveTimeSlot(day, slot)}
-                                  disabled={saving[`${day}-${slot.id}`] || !slot.branchId}
-                                  className="flex items-center space-x-2 px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-all duration-200 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-                                  title={!slot.branchId ? 'Please select a branch' : 'Save time slot'}
-                                >
-                                  {saving[`${day}-${slot.id}`] ? (
-                                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                                  ) : (
-                                    <>
-                                      <SaveIcon />
-                                      <span>Save</span>
-                                    </>
-                                  )}
-                                </button>
-                              )}
-
-                              <button
-                                onClick={() => deleteTimeSlot(day, slot.id)}
-                                disabled={saving[`delete-${slot.id}`]}
-                                className="p-3 text-red-500 hover:bg-red-50 rounded-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-                              >
-                                {saving[`delete-${slot.id}`] ? (
-                                  <div className="w-4 h-4 border-2 border-red-500 border-t-transparent rounded-full animate-spin"></div>
-                                ) : (
-                                  <TrashIcon />
-                                )}
-                              </button>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Blackout Dates Section */}
-            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-8">
-              <div className="flex items-center justify-between mb-8">
-                <h2 className="text-xl font-bold text-slate-900">Blackout Dates</h2>
-                <div className="flex items-center space-x-2 text-sm text-amber-600">
-                  <AlertCircleIcon />
-                  <span>Overrides weekly schedule</span>
-                </div>
-              </div>
-
-              {/* Add Blackout Date Form */}
-              <div className="bg-gradient-to-r from-amber-50 to-orange-50 rounded-xl p-6 mb-8 border border-amber-200">
-                <h3 className="font-semibold text-slate-900 mb-6">Add New Blackout Date</h3>
-                <div className="grid grid-cols-12 gap-4">
-                  <div className="col-span-3">
-                    <label className="block text-sm font-medium text-slate-700 mb-2">Date</label>
-                    <div className="relative">
-                      <input
-                        type="date"
-                        value={newBlackout.date}
-                        onChange={(e) => setNewBlackout(prev => ({ ...prev, date: e.target.value }))}
-                        className="w-full px-4 py-2 pl-10 text-sm font-medium bg-white border border-slate-300 text-slate-900 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
-                      />
-                      <div className="absolute left-3 top-2.5 text-slate-400">
-                        <CalendarIcon />
+        ) : error ? (
+          <div className="text-center py-12">
+            <p className="text-gray-600">Unable to load availability. Please try refreshing the page.</p>
+          </div>
+        ) : availabilityCards.length === 0 ? (
+          /* Empty State */
+          <div className="text-center py-12">
+            <h3 className="text-lg font-medium text-gray-900 mb-2">You don't have any availability yet</h3>
+            <button
+              onClick={() => setIsWizardOpen(true)}
+              className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Add new availability
+            </button>
+          </div>
+        ) : (
+          /* Availability Cards */
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            {availabilityCards.map((slot) => {
+              const upcomingDates = getNextOccurrences(slot.day_of_week, slot.start_time, 4);
+              
+              return (
+                <div key={slot.id} className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                  {/* Card Header */}
+                  <div className="flex items-center justify-between mb-4">
+                    <div>
+                      <h3 className="text-lg font-semibold text-gray-900">
+                        {slot.dayName}s · {formatTime12h(slot.start_time)} – {formatTime12h(slot.end_time)}
+                      </h3>
+                      <div className="mt-1">
+                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                          <MapPin className="w-3 h-3 mr-1" />
+                          {getBranchName(slot)}
+                        </span>
                       </div>
                     </div>
                   </div>
 
-                  <div className="col-span-3">
-                    <label className="block text-sm font-medium text-slate-700 mb-2">Availability</label>
-                    <select
-                      value={newBlackout.availability}
-                      onChange={(e) => setNewBlackout(prev => ({ ...prev, availability: e.target.value }))}
-                      className="w-full px-4 py-2 text-sm font-medium bg-slate-800 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
-                    >
-                      <option value="Full Day">Full Day</option>
-                      <option value="Partial Time">Partial Time</option>
-                    </select>
+                  {/* Repeat Info */}
+                  <div className="mb-4">
+                    <span className="text-sm text-gray-600">
+                      {getRepeatText(slot)}
+                    </span>
                   </div>
 
-                  {newBlackout.availability === 'Partial Time' && (
-                    <>
-                      <div className="col-span-2">
-                        <label className="block text-sm font-medium text-slate-700 mb-2">Start Time</label>
-                        <input
-                          type="text"
-                          value={newBlackout.startTime}
-                          onChange={(e) => setNewBlackout(prev => ({ ...prev, startTime: e.target.value }))}
-                          className="w-full px-4 py-2 text-sm font-medium bg-slate-800 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
-                        />
-                      </div>
-                      <div className="col-span-2">
-                        <label className="block text-sm font-medium text-slate-700 mb-2">End Time</label>
-                        <input
-                          type="text"
-                          value={newBlackout.endTime}
-                          onChange={(e) => setNewBlackout(prev => ({ ...prev, endTime: e.target.value }))}
-                          className="w-full px-4 py-2 text-sm font-medium bg-slate-800 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
-                        />
-                      </div>
-                    </>
-                  )}
-
-                  <div className={`${newBlackout.availability === 'Partial Time' ? 'col-span-2' : 'col-span-4'}`}>
-                    <label className="block text-sm font-medium text-slate-700 mb-2">Reason (optional)</label>
-                    <input
-                      type="text"
-                      placeholder="e.g., Court session, Annual leave"
-                      value={newBlackout.reason}
-                      onChange={(e) => setNewBlackout(prev => ({ ...prev, reason: e.target.value }))}
-                      className="w-full px-4 py-2 text-sm font-medium bg-slate-800 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
-                    />
-                  </div>
-
-                  <div className="col-span-2 flex items-end">
-                    <button
-                      onClick={addBlackoutDate}
-                      disabled={saving['blackout']}
-                      className="w-full px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-all duration-200 font-semibold text-sm shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {saving['blackout'] ? 'Adding...' : 'Add Blackout'}
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              {/* Blackout Dates List */}
-              {loading ? (
-                <div className="flex items-center justify-center py-12">
-                  <div className="w-8 h-8 border-2 border-amber-600 border-t-transparent rounded-full animate-spin"></div>
-                  <span className="ml-3 text-slate-600">Loading blackout dates...</span>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {blackoutDates.length === 0 ? (
-                    <div className="text-center py-12 bg-slate-50 rounded-xl border-2 border-dashed border-slate-200">
-                      <p className="text-slate-500">No blackout dates set</p>
-                    </div>
-                  ) : (
-                    blackoutDates.map((blackout) => (
-                      <div key={blackout.id} className="flex items-center justify-between p-4 bg-gradient-to-r from-red-50 to-pink-50 rounded-xl border border-red-200">
-                        <div className="flex items-center space-x-4">
-                          <div className="p-2 bg-white rounded-lg shadow-sm">
-                            <CalendarIcon />
+                  {/* Upcoming Dates */}
+                  <div>
+                    <div className="text-sm font-medium text-gray-700 mb-2">Upcoming dates</div>
+                    <div className="grid grid-cols-2 gap-2">
+                      {upcomingDates.map((date, index) => (
+                        <div key={index} className="text-center p-2 bg-gray-50 rounded border border-gray-200">
+                          <div className="text-xs font-medium text-gray-600">
+                            {formatShortDate(date)}
                           </div>
-                          <div>
-                            <div className="font-semibold text-slate-900">{blackout.date}</div>
-                            <div className="text-sm text-slate-600">
-                              {blackout.availability === 'Full Day'
-                                ? 'Full Day'
-                                : `${blackout.startTime} - ${blackout.endTime}`}
-                              {blackout.reason && ` • ${blackout.reason}`}
-                            </div>
+                          <div className="text-xs text-gray-500 mt-1">
+                            {formatTime12h(slot.start_time)}
                           </div>
                         </div>
-                        <button
-                          onClick={() => deleteBlackoutDate(blackout.id)}
-                          disabled={saving[`delete-blackout-${blackout.id}`]}
-                          className="p-3 text-red-500 hover:bg-red-50 rounded-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          {saving[`delete-blackout-${blackout.id}`] ? (
-                            <div className="w-4 h-4 border-2 border-red-500 border-t-transparent rounded-full animate-spin"></div>
-                          ) : (
-                            <TrashIcon />
-                          )}
-                        </button>
-                      </div>
-                    ))
-                  )}
+                      ))}
+                    </div>
+                  </div>
                 </div>
-              )}
-            </div>
+              );
+            })}
           </div>
-        </main>
+        )}
 
-        {/* Right Sidebar */}
-        <aside className="w-80 bg-white border-l border-slate-200 p-6">
-          {/* How It Works */}
-          <div className="mb-8">
-            <h3 className="text-lg font-bold text-slate-900 mb-6">How It Works</h3>
-            <div className="space-y-4">
-              <div className="flex items-start space-x-4">
-                <div className="p-2 bg-blue-100 rounded-lg">
-                  <CalendarIcon />
-                </div>
-                <div>
-                  <h4 className="font-semibold text-slate-900 mb-1">Weekly Schedule</h4>
-                  <p className="text-sm text-slate-600">Set your regular availability patterns</p>
-                </div>
-              </div>
-
-              <div className="flex items-start space-x-4">
-                <div className="p-2 bg-green-100 rounded-lg">
-                  <CheckCircleIcon />
-                </div>
-                <div>
-                  <h4 className="font-semibold text-slate-900 mb-1">Auto-Recurring</h4>
-                  <p className="text-sm text-slate-600">Schedule repeats weekly automatically</p>
-                </div>
-              </div>
-
-              <div className="flex items-start space-x-4">
-                <div className="p-2 bg-amber-100 rounded-lg">
-                  <AlertCircleIcon />
-                </div>
-                <div>
-                  <h4 className="font-semibold text-slate-900 mb-1">Blackout Priority</h4>
-                  <p className="text-sm text-slate-600">Blackout dates override weekly schedule</p>
-                </div>
-              </div>
+        {/* Success Message */}
+        {success && (
+          <div className="fixed bottom-4 right-4 flex items-center p-4 bg-green-100 border border-green-400 text-green-700 rounded-lg shadow-lg">
+            <CheckCircle className="w-5 h-5 mr-3" />
+            <div>
+              <h4 className="font-semibold">Success</h4>
+              <p className="text-sm">{success}</p>
             </div>
+            <button onClick={() => setSuccess(null)} className="ml-4 text-green-500 hover:text-green-700">
+              <X className="w-4 h-4" />
+            </button>
           </div>
+        )}
 
-          {/* Current Status */}
-          <div className="mb-8">
-            <h3 className="text-lg font-bold text-slate-900 mb-6">Current Status</h3>
-            <div className="space-y-4">
-              <div className="flex justify-between items-center p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl border border-blue-200">
-                <div>
-                  <div className="text-sm text-slate-600 font-medium">Total Weekly Hours</div>
-                  <div className="text-xl font-bold text-slate-900">{getTotalWeeklyHours()} hrs</div>
-                </div>
-                <div className="p-3 bg-white rounded-lg shadow-sm">
-                  <ClockIcon />
-                </div>
-              </div>
-
-              <div className="flex justify-between items-center p-4 bg-gradient-to-r from-amber-50 to-orange-50 rounded-xl border border-amber-200">
-                <div>
-                  <div className="text-sm text-slate-600 font-medium">Active Blackouts</div>
-                  <div className="text-xl font-bold text-slate-900">{stats.activeBlackouts || blackoutDates.length}</div>
-                </div>
-                <div className="p-3 bg-white rounded-lg shadow-sm">
-                  <AlertCircleIcon />
-                </div>
-              </div>
-
-              <div className="flex justify-between items-center p-4 bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl border border-green-200">
-                <div>
-                  <div className="text-sm text-slate-600 font-medium">Daily Capacity</div>
-                  <div className="text-xl font-bold text-slate-900">{getTotalDailyCapacity()} clients</div>
-                </div>
-                <div className="p-3 bg-white rounded-lg shadow-sm">
-                  <UsersIcon />
-                </div>
-              </div>
+        {/* Error Message */}
+        {error && (
+          <div className="fixed bottom-4 right-4 flex items-center p-4 bg-red-100 border border-red-400 text-red-700 rounded-lg shadow-lg">
+            <AlertCircle className="w-5 h-5 mr-3" />
+            <div>
+              <h4 className="font-semibold">Error</h4>
+              <p className="text-sm">{error}</p>
             </div>
+            <button onClick={() => setError(null)} className="ml-4 text-red-500 hover:text-red-700">
+              <X className="w-4 h-4" />
+            </button>
           </div>
+        )}
 
-          {/* Pro Tip */}
-          <div className="p-6 bg-gradient-to-r from-purple-50 to-pink-50 border border-purple-200 rounded-xl">
-            <div className="flex items-start space-x-3">
-              <div className="p-2 bg-purple-100 rounded-lg">
-                <InfoIcon />
-              </div>
-              <div>
-                <h4 className="font-semibold text-purple-900 mb-2">Pro Tip</h4>
-                <p className="text-sm text-purple-800 leading-relaxed">
-                  Set realistic time buffers between slots to account for session overruns and preparation time.
-                </p>
-              </div>
-            </div>
-          </div>
-        </aside>
+        {/* Availability Wizard */}
+        <AvailabilityWizard
+          isOpen={isWizardOpen}
+          onClose={() => setIsWizardOpen(false)}
+          onSaved={() => {
+            // Refresh availability data after successful save
+            loadAvailabilityData();
+            setIsWizardOpen(false);
+            setSuccess('Availability added successfully!');
+            setTimeout(() => setSuccess(null), 3000);
+          }}
+        />
       </div>
     </div>
   );

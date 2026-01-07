@@ -1,0 +1,26 @@
+﻿
+
+openapi    : 3.1.0
+info       : @{title=LexiConnect API; description=LexiConnect backend API; version=0.1.0}
+paths      : @{/health=; /auth/register=; /auth/login=; /auth/dev/create-admin=; /lawyers/=; 
+             /lawyers/{lawyer_id}=; /api/bookings=; /api/bookings/my=; /api/bookings/{booking_id}=; 
+             /api/bookings/{booking_id}/cancel=; /api/bookings/lawyer/incoming=; 
+             /api/bookings/{booking_id}/confirm=; /api/bookings/{booking_id}/reject=; /token-queue=; 
+             /token-queue/{id}=; /api/lawyer-availability/weekly=; 
+             /api/lawyer-availability/weekly/{slot_id}=; /api/lawyer-availability/weekly/bulk=; 
+             /api/lawyer-availability/blackout=; /api/lawyer-availability/blackout/{blackout_id}=; 
+             /api/lawyer-availability/blackout/bulk=; /api/lawyer-availability/lawyer/{lawyer_id}=; 
+             /api/lawyer-availability/status/{lawyer_id}=; /api/lawyer-availability/branches=; 
+             /api/service-packages=; /api/service-packages/me=; /api/service-packages/{package_id}=; 
+             /api/checklist-templates=; /api/checklist-templates/me=; 
+             /api/checklist-templates/{template_id}=; /admin/overview=; /api/branches=; /api/branches/me=; 
+             /api/branches/{branch_id}=; /api/kyc=; /api/kyc/me=; /dev/seed-users=; /api/disputes/ping=; 
+             /api/disputes=; /api/disputes/my=; /api/disputes/{dispute_id}=; /api/admin/disputes=; 
+             /api/admin/disputes/{dispute_id}=; /api/admin/disputes/{dispute_id}/resolve=; 
+             /api/bookings/{booking_id}/disputes=; /api/documents=; /api/documents/{doc_id}=; 
+             /api/intake=; /admin/health=; /booking/create=}
+components : @{schemas=; securitySchemes=}
+security   : {@{BearerAuth=System.Object[]}}
+
+
+
