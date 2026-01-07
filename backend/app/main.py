@@ -28,6 +28,7 @@ from .models import (  # noqa
     checklist_template,
 )
 from app.modules.cases import models as case_models  # noqa: F401
+from app.modules.intake.routes import router as intake_router
 
 # Routers (existing app routers)
 from .routers import admin, auth, bookings, dev, lawyers, token_queue  # noqa: F401
@@ -62,6 +63,8 @@ from .api.v1 import admin as admin_v1, booking as booking_v1
 # Seed
 from app.seed import seed_all
 
+# Create all database tables (dev-friendly)
+#Base.metadata.create_all(bind=engine)
 
 # ✅ IMPORTANT:
 # Do NOT use Base.metadata.create_all() in a project that uses Alembic migrations.

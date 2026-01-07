@@ -15,9 +15,23 @@ import {
 import { useNavigate } from "react-router-dom";
 import Flatpickr from "react-flatpickr";
 import "flatpickr/dist/themes/material_blue.css";
-import api from "../services/api"; // shared axios client with base /api + auth
+
+import api from "../services/api"; // axios client
+import AvailabilityWizard from "./AvailabilityWizard";
 
 const LawyerAvailabilityDashboard = () => {
+  const navigate = useNavigate();
+
+  const weekDays = [
+    "Monday",
+    "Tuesday",
+    "Wednesday",
+    "Thursday",
+    "Friday",
+    "Saturday",
+    "Sunday",
+  ];
+
   const [timeSlots, setTimeSlots] = useState({
     Monday: [],
     Tuesday: [],
@@ -30,18 +44,24 @@ const LawyerAvailabilityDashboard = () => {
 
   const [blackoutDates, setBlackoutDates] = useState([]);
   const [branches, setBranches] = useState([]);
+
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState({});
+
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
 
   const [stats, setStats] = useState({ activeBlackouts: 0, dailyCapacity: 0 });
 
+  // Preview slots (next 14 days)
   const [slotPreview, setSlotPreview] = useState([]);
   const [previewFrom, setPreviewFrom] = useState("");
   const [previewTo, setPreviewTo] = useState("");
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState("");
+
+  // Wizard modal
+  const [isWizardOpen, setIsWizardOpen] = useState(false);
 
   const [newBlackout, setNewBlackout] = useState({
     date: "",
@@ -51,9 +71,7 @@ const LawyerAvailabilityDashboard = () => {
     reason: "",
   });
 
-  const navigate = useNavigate();
-  const weekDays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
-
+  // ---------- helpers ----------
   const fromApiTime = (timeStr) => {
     if (!timeStr) return "";
     const match = String(timeStr).match(/(\d{2}):(\d{2})/);
@@ -68,6 +86,29 @@ const LawyerAvailabilityDashboard = () => {
     const hours = String(match[1]).padStart(2, "0");
     const minutes = String(match[2]).padStart(2, "0");
     return `${hours}:${minutes}:00`;
+  };
+
+  const parseDay = (v) => {
+    if (typeof v === "string") {
+      const s = v.trim();
+      // Handles "MONDAY" or "monday"
+      const normalized = s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
+      // If backend returns "MONDAY", normalized becomes "Monday"
+      return normalized;
+    }
+    if (typeof v === "number") {
+      const map = [
+        "Monday",
+        "Tuesday",
+        "Wednesday",
+        "Thursday",
+        "Friday",
+        "Saturday",
+        "Sunday",
+      ];
+      return map[v % 7];
+    }
+    return "Monday";
   };
 
   const isSlotValid = (slot) => {
@@ -86,34 +127,30 @@ const LawyerAvailabilityDashboard = () => {
     if (endM <= startM) return false;
 
     if (!slot.maxBookings || slot.maxBookings < 1) return false;
+
     return true;
   };
 
-  const parseDay = (v) => {
-    if (typeof v === "string") return v.charAt(0).toUpperCase() + v.slice(1).toLowerCase();
-    if (typeof v === "number") {
-      const map = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
-      return map[v % 7];
-    }
-    return "Monday";
-  };
-
+  // ---------- load ----------
   const loadAvailabilityData = async () => {
     try {
       setLoading(true);
       setError(null);
 
       let bundle;
+
+      // Try combined endpoint first
       try {
         const { data } = await api.get("/api/lawyer-availability/me");
         bundle = data || {};
       } catch (e) {
-        // Fallback: load individually if /me not available
+        // Fallback: load individually
         const [weeklyRes, branchesRes, blackoutRes] = await Promise.all([
           api.get("/api/lawyer-availability/weekly"),
           api.get("/api/lawyer-availability/branches"),
           api.get("/api/lawyer-availability/blackout"),
         ]);
+
         bundle = {
           weekly: weeklyRes.data || [],
           branches: branchesRes.data || [],
@@ -144,7 +181,7 @@ const LawyerAvailabilityDashboard = () => {
 
       const transformedBlackouts = blackouts.map((b) => ({
         id: b.id,
-        date: b.date,
+        date: b.date, // keep ISO yyyy-mm-dd if backend gives that
         availability: "Full Day",
         startTime: "",
         endTime: "",
@@ -153,6 +190,7 @@ const LawyerAvailabilityDashboard = () => {
 
       setTimeSlots(transformedSlots);
       setBlackoutDates(transformedBlackouts);
+
       setStats({
         activeBlackouts: transformedBlackouts.length,
         dailyCapacity: weekly.reduce((sum, s) => sum + (s.max_bookings || 0), 0),
@@ -162,12 +200,13 @@ const LawyerAvailabilityDashboard = () => {
         navigate("/not-authorized");
         return;
       }
-      setError(err?.response?.data?.detail || err.message || "Failed to load availability");
+      setError(err?.response?.data?.detail || err?.message || "Failed to load availability");
     } finally {
       setLoading(false);
     }
   };
 
+  // ---------- preview slots ----------
   const fetchSlotPreview = async (fromDate, toDate) => {
     if (!fromDate || !toDate) return;
     setPreviewLoading(true);
@@ -179,12 +218,37 @@ const LawyerAvailabilityDashboard = () => {
       setSlotPreview(data || []);
     } catch (err) {
       setPreviewError(
-        err?.response?.data?.detail || err?.response?.data?.message || "Failed to load upcoming slots"
+        err?.response?.data?.detail ||
+          err?.response?.data?.message ||
+          "Failed to load upcoming slots"
       );
       setSlotPreview([]);
     } finally {
       setPreviewLoading(false);
     }
+  };
+
+  // ---------- slots CRUD ----------
+  const addTimeSlot = (day) => {
+    const newSlot = {
+      id: `new-${Date.now()}`,
+      startTime: "09:00",
+      endTime: "17:00",
+      branch: "",
+      branchId: null,
+      maxBookings: 5,
+      isUnsaved: true,
+    };
+    setTimeSlots((prev) => ({ ...prev, [day]: [...prev[day], newSlot] }));
+  };
+
+  const updateSlot = (day, slotId, field, value) => {
+    setTimeSlots((prev) => ({
+      ...prev,
+      [day]: prev[day].map((slot) =>
+        slot.id === slotId ? { ...slot, [field]: value, isUnsaved: true } : slot
+      ),
+    }));
   };
 
   const saveTimeSlot = async (day, slot) => {
@@ -194,7 +258,9 @@ const LawyerAvailabilityDashboard = () => {
       setError(null);
 
       if (!isSlotValid(slot)) {
-        setError("Please select a branch, set valid times, and ensure end time is after start time (max >= 1).");
+        setError(
+          "Please select a branch, set valid times, and ensure end time is after start time (max >= 1)."
+        );
         return;
       }
 
@@ -232,13 +298,15 @@ const LawyerAvailabilityDashboard = () => {
 
       setSuccess("Time slot saved successfully!");
       setTimeout(() => setSuccess(null), 2500);
+
       await loadAvailabilityData();
+      fetchSlotPreview(previewFrom, previewTo);
     } catch (err) {
       if (err?.response?.status === 401 || err?.response?.status === 403) {
         navigate("/not-authorized");
         return;
       }
-      setError(err?.response?.data?.detail || err.message || "Failed to save slot");
+      setError(err?.response?.data?.detail || err?.message || "Failed to save slot");
     } finally {
       setSaving((p) => {
         const next = { ...p };
@@ -260,15 +328,18 @@ const LawyerAvailabilityDashboard = () => {
       await api.delete(`/api/lawyer-availability/weekly/${slotId}`);
 
       setTimeSlots((prev) => ({ ...prev, [day]: prev[day].filter((s) => s.id !== slotId) }));
+
       setSuccess("Time slot deleted successfully!");
       setTimeout(() => setSuccess(null), 2500);
+
       await loadAvailabilityData();
+      fetchSlotPreview(previewFrom, previewTo);
     } catch (err) {
       if (err?.response?.status === 401 || err?.response?.status === 403) {
         navigate("/not-authorized");
         return;
       }
-      setError(err?.response?.data?.detail || err.message || "Failed to delete slot");
+      setError(err?.response?.data?.detail || err?.message || "Failed to delete slot");
     } finally {
       setSaving((p) => {
         const next = { ...p };
@@ -278,26 +349,7 @@ const LawyerAvailabilityDashboard = () => {
     }
   };
 
-  const updateSlot = (day, slotId, field, value) => {
-    setTimeSlots((prev) => ({
-      ...prev,
-      [day]: prev[day].map((slot) => (slot.id === slotId ? { ...slot, [field]: value, isUnsaved: true } : slot)),
-    }));
-  };
-
-  const addTimeSlot = (day) => {
-    const newSlot = {
-      id: `new-${Date.now()}`,
-      startTime: "09:00",
-      endTime: "17:00",
-      branch: "",
-      branchId: null,
-      maxBookings: 5,
-      isUnsaved: true,
-    };
-    setTimeSlots((prev) => ({ ...prev, [day]: [...prev[day], newSlot] }));
-  };
-
+  // ---------- blackout CRUD ----------
   const addBlackoutDate = async () => {
     if (!newBlackout.date) {
       setError("Please select a date");
@@ -307,7 +359,11 @@ const LawyerAvailabilityDashboard = () => {
       setSaving((p) => ({ ...p, blackout: true }));
       setError(null);
 
-      const payload = { date: newBlackout.date, reason: newBlackout.reason || null };
+      const payload = {
+        date: newBlackout.date,
+        reason: newBlackout.reason || null,
+      };
+
       const { data } = await api.post("/api/lawyer-availability/blackout", payload);
 
       setBlackoutDates((prev) => [
@@ -322,17 +378,25 @@ const LawyerAvailabilityDashboard = () => {
         },
       ]);
 
-      setNewBlackout({ date: "", availability: "Full Day", startTime: "09:00", endTime: "17:00", reason: "" });
+      setNewBlackout({
+        date: "",
+        availability: "Full Day",
+        startTime: "09:00",
+        endTime: "17:00",
+        reason: "",
+      });
 
       setSuccess("Blackout date added successfully!");
       setTimeout(() => setSuccess(null), 2500);
+
       await loadAvailabilityData();
+      fetchSlotPreview(previewFrom, previewTo);
     } catch (err) {
       if (err?.response?.status === 401 || err?.response?.status === 403) {
         navigate("/not-authorized");
         return;
       }
-      setError(err?.response?.data?.detail || err.message || "Failed to add blackout");
+      setError(err?.response?.data?.detail || err?.message || "Failed to add blackout");
     } finally {
       setSaving((p) => {
         const next = { ...p };
@@ -343,10 +407,6 @@ const LawyerAvailabilityDashboard = () => {
   };
 
   const deleteBlackoutDate = async (id) => {
-    if (String(id).startsWith("new-")) {
-      setBlackoutDates((prev) => prev.filter((b) => b.id !== id));
-      return;
-    }
     try {
       setSaving((p) => ({ ...p, [`delete-blackout-${id}`]: true }));
       setError(null);
@@ -354,15 +414,18 @@ const LawyerAvailabilityDashboard = () => {
       await api.delete(`/api/lawyer-availability/blackout/${id}`);
 
       setBlackoutDates((prev) => prev.filter((b) => b.id !== id));
+
       setSuccess("Blackout date deleted successfully!");
       setTimeout(() => setSuccess(null), 2500);
+
       await loadAvailabilityData();
+      fetchSlotPreview(previewFrom, previewTo);
     } catch (err) {
       if (err?.response?.status === 401 || err?.response?.status === 403) {
         navigate("/not-authorized");
         return;
       }
-      setError(err?.response?.data?.detail || err.message || "Failed to delete blackout");
+      setError(err?.response?.data?.detail || err?.message || "Failed to delete blackout");
     } finally {
       setSaving((p) => {
         const next = { ...p };
@@ -372,31 +435,7 @@ const LawyerAvailabilityDashboard = () => {
     }
   };
 
-  const getTotalWeeklyHours = () => {
-    let totalHours = 0;
-    Object.values(timeSlots).forEach((slots) => {
-      slots.forEach((slot) => {
-        const m1 = String(slot.startTime).match(/(\d+):(\d+)/);
-        const m2 = String(slot.endTime).match(/(\d+):(\d+)/);
-        if (m1 && m2) {
-          const sh = parseInt(m1[1], 10);
-          const sm = parseInt(m1[2], 10);
-          const eh = parseInt(m2[1], 10);
-          const em = parseInt(m2[2], 10);
-          totalHours += (eh * 60 + em - (sh * 60 + sm)) / 60;
-        }
-      });
-    });
-    return Math.max(0, Math.round(totalHours * 10) / 10);
-  };
-
-  const getTotalDailyCapacity = () =>
-    stats.dailyCapacity ||
-    Object.values(timeSlots).reduce(
-      (total, slots) => total + slots.reduce((dayTotal, slot) => dayTotal + (slot.maxBookings || 0), 0),
-      0
-    );
-
+  // Cancel a specific day from preview (creates blackout)
   const cancelDay = async (dateStr) => {
     const key = `cancel-${dateStr}`;
     try {
@@ -409,6 +448,8 @@ const LawyerAvailabilityDashboard = () => {
       });
 
       setSuccess("Day cancelled");
+      setTimeout(() => setSuccess(null), 2500);
+
       fetchSlotPreview(previewFrom, previewTo);
       await loadAvailabilityData();
     } catch (err) {
@@ -422,6 +463,32 @@ const LawyerAvailabilityDashboard = () => {
     }
   };
 
+  // ---------- stats ----------
+  const getTotalWeeklyHours = () => {
+    let totalMinutes = 0;
+    Object.values(timeSlots).forEach((slots) => {
+      slots.forEach((slot) => {
+        const m1 = String(slot.startTime).match(/(\d{1,2}):(\d{2})/);
+        const m2 = String(slot.endTime).match(/(\d{1,2}):(\d{2})/);
+        if (m1 && m2) {
+          const s = parseInt(m1[1], 10) * 60 + parseInt(m1[2], 10);
+          const e = parseInt(m2[1], 10) * 60 + parseInt(m2[2], 10);
+          if (e > s) totalMinutes += e - s;
+        }
+      });
+    });
+    return Math.round((totalMinutes / 60) * 10) / 10;
+  };
+
+  const getTotalDailyCapacity = () =>
+    stats.dailyCapacity ||
+    Object.values(timeSlots).reduce(
+      (total, slots) =>
+        total + slots.reduce((dayTotal, slot) => dayTotal + (slot.maxBookings || 0), 0),
+      0
+    );
+
+  // ---------- effects ----------
   useEffect(() => {
     loadAvailabilityData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -438,6 +505,7 @@ const LawyerAvailabilityDashboard = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // ---------- icons as components ----------
   const TrashIcon = () => <Trash2 className="w-4 h-4" />;
   const PlusIcon = () => <Plus className="w-4 h-4" />;
   const ClockIcon = () => <Clock className="w-4 h-4" />;
@@ -451,24 +519,8 @@ const LawyerAvailabilityDashboard = () => {
   const XIcon = () => <X className="w-4 h-4" />;
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      {error && (
-        <div className="fixed top-4 right-4 z-50 max-w-md">
-          <div className="bg-red-50 border border-red-200 rounded-lg p-4 shadow-lg">
-            <div className="flex items-start space-x-3">
-              <AlertCircleIcon />
-              <div className="flex-1">
-                <h4 className="text-red-800 font-semibold">Error</h4>
-                <p className="text-red-700 text-sm mt-1">{error}</p>
-              </div>
-              <button onClick={() => setError(null)} className="text-red-500 hover:text-red-700">
-                <XIcon />
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
+    <div className="min-h-screen bg-gray-50">
+      {/* Toasts */}
       {success && (
         <div className="fixed top-4 right-4 z-50 max-w-md">
           <div className="bg-green-50 border border-green-200 rounded-lg p-4 shadow-lg">
@@ -486,17 +538,47 @@ const LawyerAvailabilityDashboard = () => {
         </div>
       )}
 
+      {error && (
+        <div className="fixed top-4 left-4 z-50 max-w-md">
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4 shadow-lg">
+            <div className="flex items-start space-x-3">
+              <AlertCircleIcon />
+              <div className="flex-1">
+                <h4 className="text-red-800 font-semibold">Error</h4>
+                <p className="text-red-700 text-sm mt-1">{String(error)}</p>
+              </div>
+              <button onClick={() => setError(null)} className="text-red-500 hover:text-red-700">
+                <XIcon />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Header bar */}
+      <div className="bg-white border-b border-slate-200">
+        <div className="max-w-6xl mx-auto px-6 py-5 flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-slate-900">Manage Availability</h1>
+            <p className="text-slate-600 text-sm">
+              Set your weekly consultation schedule and manage unavailable dates.
+            </p>
+          </div>
+
+          <button
+            onClick={() => setIsWizardOpen(true)}
+            className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-all shadow-sm"
+          >
+            <PlusIcon />
+            <span className="text-sm font-semibold">Add new availability (Wizard)</span>
+          </button>
+        </div>
+      </div>
+
       <div className="flex">
         <main className="flex-1 p-8">
           <div className="max-w-5xl mx-auto">
-            <div className="mb-8">
-              <h1 className="text-3xl font-bold text-slate-900 mb-2">Manage Availability</h1>
-              <p className="text-slate-600">
-                Set your weekly consultation schedule and manage unavailable dates. Changes are saved automatically.
-              </p>
-            </div>
-
-            {/* Weekly Schedule */}
+            {/* Weekly schedule */}
             <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-8 mb-8">
               <div className="flex items-center justify-between mb-8">
                 <h2 className="text-xl font-bold text-slate-900">Weekly Consultation Schedule</h2>
@@ -514,7 +596,7 @@ const LawyerAvailabilityDashboard = () => {
 
               {loading ? (
                 <div className="flex items-center justify-center py-12">
-                  <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                  <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
                   <span className="ml-3 text-slate-600">Loading availability...</span>
                 </div>
               ) : (
@@ -533,20 +615,10 @@ const LawyerAvailabilityDashboard = () => {
 
                         <button
                           onClick={() => addTimeSlot(day)}
-                          disabled={saving[`add-${day}`]}
-                          className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-all duration-200 shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+                          className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-all shadow-sm"
                         >
-                          {saving[`add-${day}`] ? (
-                            <>
-                              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                              <span className="text-sm font-semibold">Adding...</span>
-                            </>
-                          ) : (
-                            <>
-                              <PlusIcon />
-                              <span className="text-sm font-semibold">Add Time Slot</span>
-                            </>
-                          )}
+                          <PlusIcon />
+                          <span className="text-sm font-semibold">Add Time Slot</span>
                         </button>
                       </div>
 
@@ -561,6 +633,7 @@ const LawyerAvailabilityDashboard = () => {
                               key={slot.id}
                               className="flex items-center space-x-4 p-5 bg-gradient-to-r from-slate-50 to-blue-50 rounded-xl border border-slate-200"
                             >
+                              {/* time */}
                               <div className="flex items-center space-x-3 flex-1">
                                 <div className="p-2 bg-white rounded-lg shadow-sm">
                                   <ClockIcon />
@@ -570,18 +643,19 @@ const LawyerAvailabilityDashboard = () => {
                                     type="time"
                                     value={slot.startTime}
                                     onChange={(e) => updateSlot(day, slot.id, "startTime", e.target.value)}
-                                    className="w-24 px-3 py-2 text-sm font-medium bg-slate-800 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    className="w-28 px-3 py-2 text-sm font-medium bg-slate-800 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                                   />
                                   <span className="text-slate-400 font-medium">-</span>
                                   <input
                                     type="time"
                                     value={slot.endTime}
                                     onChange={(e) => updateSlot(day, slot.id, "endTime", e.target.value)}
-                                    className="w-24 px-3 py-2 text-sm font-medium bg-slate-800 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    className="w-28 px-3 py-2 text-sm font-medium bg-slate-800 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                                   />
                                 </div>
                               </div>
 
+                              {/* branch */}
                               <div className="flex items-center space-x-3">
                                 <div className="p-2 bg-white rounded-lg shadow-sm">
                                   <MapPinIcon />
@@ -605,6 +679,7 @@ const LawyerAvailabilityDashboard = () => {
                                 </select>
                               </div>
 
+                              {/* max bookings */}
                               <div className="flex items-center space-x-3">
                                 <div className="p-2 bg-white rounded-lg shadow-sm">
                                   <UsersIcon />
@@ -621,15 +696,16 @@ const LawyerAvailabilityDashboard = () => {
                                 <span className="text-sm text-slate-600 font-medium">max</span>
                               </div>
 
+                              {/* save button */}
                               {slot.isUnsaved && (
                                 <button
                                   onClick={() => saveTimeSlot(day, slot)}
                                   disabled={saving[`${day}-${slot.id}`] || !isSlotValid(slot)}
-                                  className="flex items-center space-x-2 px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-all duration-200 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                                  className="flex items-center space-x-2 px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-all text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                                   title={!slot.branchId ? "Please select a branch" : "Save time slot"}
                                 >
                                   {saving[`${day}-${slot.id}`] ? (
-                                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                                   ) : (
                                     <>
                                       <SaveIcon />
@@ -639,13 +715,14 @@ const LawyerAvailabilityDashboard = () => {
                                 </button>
                               )}
 
+                              {/* delete */}
                               <button
                                 onClick={() => deleteTimeSlot(day, slot.id)}
                                 disabled={saving[`delete-${slot.id}`]}
-                                className="p-3 text-red-500 hover:bg-red-50 rounded-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                                className="p-3 text-red-500 hover:bg-red-50 rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                               >
                                 {saving[`delete-${slot.id}`] ? (
-                                  <div className="w-4 h-4 border-2 border-red-500 border-t-transparent rounded-full animate-spin"></div>
+                                  <div className="w-4 h-4 border-2 border-red-500 border-t-transparent rounded-full animate-spin" />
                                 ) : (
                                   <TrashIcon />
                                 )}
@@ -660,7 +737,7 @@ const LawyerAvailabilityDashboard = () => {
               )}
             </div>
 
-            {/* Upcoming Slots */}
+            {/* Upcoming slots */}
             <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-8 mb-8">
               <div className="flex items-center justify-between mb-4">
                 <div>
@@ -672,7 +749,7 @@ const LawyerAvailabilityDashboard = () => {
 
               {previewLoading ? (
                 <div className="flex items-center justify-center py-8 text-slate-500 text-sm">
-                  <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin mr-2"></div>
+                  <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin mr-2" />
                   Loading upcoming slots...
                 </div>
               ) : slotPreview.length === 0 ? (
@@ -689,7 +766,9 @@ const LawyerAvailabilityDashboard = () => {
                   const dateLabel = new Date(d + "T00:00:00");
                   const niceDate = isNaN(dateLabel.getTime())
                     ? d
-                    : `${dateLabel.toLocaleDateString()} (${dateLabel.toLocaleDateString(undefined, { weekday: "long" })})`;
+                    : `${dateLabel.toLocaleDateString()} (${dateLabel.toLocaleDateString(undefined, {
+                        weekday: "long",
+                      })})`;
 
                   const isBlackoutDay = slotsForDay.every((s) => s.is_blackout);
                   const cancelKey = `cancel-${d}`;
@@ -751,7 +830,7 @@ const LawyerAvailabilityDashboard = () => {
                 <h3 className="font-semibold text-slate-900 mb-6">Add New Blackout Date</h3>
 
                 <div className="grid grid-cols-12 gap-4">
-                  <div className="col-span-3">
+                  <div className="col-span-4">
                     <label className="block text-sm font-medium text-slate-700 mb-2">Date</label>
                     <div className="relative">
                       <Flatpickr
@@ -776,18 +855,7 @@ const LawyerAvailabilityDashboard = () => {
                     </div>
                   </div>
 
-                  <div className="col-span-3">
-                    <label className="block text-sm font-medium text-slate-700 mb-2">Availability</label>
-                    <select
-                      value={newBlackout.availability}
-                      onChange={(e) => setNewBlackout((p) => ({ ...p, availability: e.target.value }))}
-                      className="w-full px-4 py-2 text-sm font-medium bg-slate-800 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
-                    >
-                      <option value="Full Day">Full Day</option>
-                    </select>
-                  </div>
-
-                  <div className="col-span-4">
+                  <div className="col-span-5">
                     <label className="block text-sm font-medium text-slate-700 mb-2">Reason (optional)</label>
                     <input
                       type="text"
@@ -798,11 +866,11 @@ const LawyerAvailabilityDashboard = () => {
                     />
                   </div>
 
-                  <div className="col-span-2 flex items-end">
+                  <div className="col-span-3 flex items-end">
                     <button
                       onClick={addBlackoutDate}
                       disabled={saving.blackout}
-                      className="w-full px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-all duration-200 font-semibold text-sm shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="w-full px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-all font-semibold text-sm shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {saving.blackout ? "Adding..." : "Add Blackout"}
                     </button>
@@ -812,7 +880,7 @@ const LawyerAvailabilityDashboard = () => {
 
               {loading ? (
                 <div className="flex items-center justify-center py-12">
-                  <div className="w-8 h-8 border-2 border-amber-600 border-t-transparent rounded-full animate-spin"></div>
+                  <div className="w-8 h-8 border-2 border-amber-600 border-t-transparent rounded-full animate-spin" />
                   <span className="ml-3 text-slate-600">Loading blackout dates...</span>
                 </div>
               ) : (
@@ -834,7 +902,7 @@ const LawyerAvailabilityDashboard = () => {
                           <div>
                             <div className="font-semibold text-slate-900">{blackout.date}</div>
                             <div className="text-sm text-slate-600">
-                              Full Day{blackout.reason && ` • ${blackout.reason}`}
+                              Full Day{blackout.reason ? ` • ${blackout.reason}` : ""}
                             </div>
                           </div>
                         </div>
@@ -842,10 +910,10 @@ const LawyerAvailabilityDashboard = () => {
                         <button
                           onClick={() => deleteBlackoutDate(blackout.id)}
                           disabled={saving[`delete-blackout-${blackout.id}`]}
-                          className="p-3 text-red-500 hover:bg-red-50 rounded-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                          className="p-3 text-red-500 hover:bg-red-100 rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           {saving[`delete-blackout-${blackout.id}`] ? (
-                            <div className="w-4 h-4 border-2 border-red-500 border-t-transparent rounded-full animate-spin"></div>
+                            <div className="w-4 h-4 border-2 border-red-500 border-t-transparent rounded-full animate-spin" />
                           ) : (
                             <TrashIcon />
                           )}
@@ -859,8 +927,8 @@ const LawyerAvailabilityDashboard = () => {
           </div>
         </main>
 
-        {/* Right Sidebar */}
-        <aside className="w-80 bg-white border-l border-slate-200 p-6">
+        {/* Sidebar */}
+        <aside className="w-80 bg-white border-l border-slate-200 p-6 hidden lg:block">
           <div className="mb-8">
             <h3 className="text-lg font-bold text-slate-900 mb-6">How It Works</h3>
             <div className="space-y-4">
@@ -912,7 +980,9 @@ const LawyerAvailabilityDashboard = () => {
               <div className="flex justify-between items-center p-4 bg-gradient-to-r from-amber-50 to-orange-50 rounded-xl border border-amber-200">
                 <div>
                   <div className="text-sm text-slate-600 font-medium">Active Blackouts</div>
-                  <div className="text-xl font-bold text-slate-900">{stats.activeBlackouts || blackoutDates.length}</div>
+                  <div className="text-xl font-bold text-slate-900">
+                    {stats.activeBlackouts || blackoutDates.length}
+                  </div>
                 </div>
                 <div className="p-3 bg-white rounded-lg shadow-sm">
                   <AlertCircleIcon />
@@ -939,13 +1009,26 @@ const LawyerAvailabilityDashboard = () => {
               <div>
                 <h4 className="font-semibold text-purple-900 mb-2">Pro Tip</h4>
                 <p className="text-sm text-purple-800 leading-relaxed">
-                  Set realistic time buffers between slots to account for session overruns and preparation time.
+                  Keep buffers between sessions to handle overruns and prep time.
                 </p>
               </div>
             </div>
           </div>
         </aside>
       </div>
+
+      {/* Wizard modal */}
+      <AvailabilityWizard
+        isOpen={isWizardOpen}
+        onClose={() => setIsWizardOpen(false)}
+        onSaved={async () => {
+          setIsWizardOpen(false);
+          await loadAvailabilityData();
+          fetchSlotPreview(previewFrom, previewTo);
+          setSuccess("Availability added successfully!");
+          setTimeout(() => setSuccess(null), 2500);
+        }}
+      />
     </div>
   );
 };

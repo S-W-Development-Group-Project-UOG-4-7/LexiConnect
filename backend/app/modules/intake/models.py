@@ -1,3 +1,5 @@
+from sqlalchemy import Column, Integer, Text, DateTime, ForeignKey, String
+from sqlalchemy.dialects.postgresql import JSON
 # backend/app/modules/intake/models.py
 
 from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey
@@ -38,6 +40,7 @@ class IntakeForm(Base):
     details = Column(Text, nullable=False)
     urgency = Column(String(50), nullable=False)
 
+    answers_json = Column(JSON, nullable=False, default=dict)
     # JSON answers (Postgres)
     answers_json = Column(JSONB, nullable=False, default=dict)
 

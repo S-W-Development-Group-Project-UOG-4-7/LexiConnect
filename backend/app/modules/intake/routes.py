@@ -1,5 +1,6 @@
 from typing import Optional
 
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 
@@ -10,6 +11,8 @@ from app.routers.auth import get_current_user
 from app.modules.cases.models import Case
 
 from app.modules.intake.models import IntakeForm
+from app.modules.intake.schemas import IntakeCreate, IntakeUpdate, IntakeOut
+
 from app.modules.intake.schemas import IntakeOut, IntakeCreate, IntakeUpdate
 
 router = APIRouter(prefix="/api/intake", tags=["Intake"])
@@ -42,12 +45,10 @@ def _get_booking_or_404(db: Session, booking_id: int) -> Booking:
 
 
 def _booking_client_id(booking: Booking) -> Optional[int]:
-    # support both patterns: Booking.client_id OR Booking.user_id
     return getattr(booking, "client_id", None) or getattr(booking, "user_id", None)
 
 
 def _booking_lawyer_id(booking: Booking) -> Optional[int]:
-    # support both patterns: Booking.lawyer_id OR Booking.assigned_lawyer_id
     return getattr(booking, "lawyer_id", None) or getattr(booking, "assigned_lawyer_id", None)
 
 
@@ -68,15 +69,10 @@ def _ensure_can_view_intake(current_user, booking: Booking):
 
 
 def _ensure_can_edit_intake(current_user, booking: Booking):
-    """
-    Edit/Delete: client who owns booking OR admin.
-    Lawyer is view-only.
-    """
     booking_client_id = _booking_client_id(booking)
 
     if _is_admin(current_user):
         return
-
     if _is_client(current_user) and booking_client_id == current_user.id:
         return
 
@@ -84,7 +80,7 @@ def _ensure_can_edit_intake(current_user, booking: Booking):
 
 
 # -------------------------
-# CREATE
+# CREATE (booking-based)
 # -------------------------
 
 @router.post("", response_model=IntakeOut, status_code=status.HTTP_201_CREATED)
@@ -102,7 +98,7 @@ def create_intake_form(
     if booking_client_id is None:
         raise HTTPException(
             status_code=500,
-            detail="Booking model missing client identifier (client_id/user_id). Fix Booking model field names.",
+            detail="Booking model missing client identifier (client_id/user_id).",
         )
 
     if booking_client_id != current_user.id:
@@ -130,6 +126,7 @@ def create_intake_form(
 
 
 # -------------------------
+# READ latest by booking_id
 # READ (by booking)
 # -------------------------
 
@@ -155,13 +152,13 @@ def get_latest_intake(
 
 
 # -------------------------
-# UPDATE (PATCH)
+# UPDATE (PATCH) by booking_id
 # -------------------------
 
 @router.patch("", response_model=IntakeOut)
 def update_intake_form(
     payload: IntakeUpdate,
-    booking_id: int = Query(..., gt=0, description="Booking ID to update the intake form for"),
+    booking_id: int = Query(..., gt=0),
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
@@ -189,12 +186,12 @@ def update_intake_form(
 
 
 # -------------------------
-# DELETE
+# DELETE by booking_id
 # -------------------------
 
 @router.delete("", status_code=status.HTTP_204_NO_CONTENT)
 def delete_intake_form(
-    booking_id: int = Query(..., gt=0, description="Booking ID to delete the intake form for"),
+    booking_id: int = Query(..., gt=0),
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
@@ -211,7 +208,7 @@ def delete_intake_form(
 
 
 # -------------------------
-# CASE-based endpoints
+# CASE-based read
 # -------------------------
 
 def _can_access_case_intake(db: Session, case_id: int, current_user):

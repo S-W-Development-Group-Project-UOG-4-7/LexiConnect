@@ -14,6 +14,14 @@ class IntakeCreate(BaseModel):
     subject: str
     details: str
     urgency: str
+    answers_json: Dict[str, Any] = {}
+
+
+class IntakeUpdate(BaseModel):
+    case_type: Optional[str] = None
+    subject: Optional[str] = None
+    details: Optional[str] = None
+    urgency: Optional[str] = None
     answers_json: Optional[Dict[str, Any]] = None
 
 
