@@ -48,6 +48,7 @@ def upload_document(
         booking_id=booking_id,
         case_id=resolve_case_id_from_booking(db, booking_id),
         title=file_name,
+        original_filename=file.filename or file_name,
         file_path=file_path,
     )
     # ensure case_id stored if resolvable
@@ -57,6 +58,7 @@ def upload_document(
         db.commit()
         db.refresh(doc)
     return doc
+
 
 
 @router.get("", response_model=List[DocumentOut])

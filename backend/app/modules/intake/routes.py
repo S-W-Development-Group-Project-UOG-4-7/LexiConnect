@@ -1,8 +1,4 @@
-# backend/app/modules/intake/routes.py
-
-from typing import Optional
-
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -11,8 +7,6 @@ from app.models.user import UserRole
 from app.routers.auth import get_current_user
 from app.modules.cases.models import Case
 
-from .models import IntakeForm
-from .schemas import IntakeCreate, IntakeOut, IntakeUpdate
 
 router = APIRouter(prefix="/api/intake", tags=["Intake"])
 
@@ -132,22 +126,21 @@ def create_intake_form(
 
     db.add(intake)
     db.commit()
-    db.refresh(intake)
-    return intake
+    db.refresh(obj)
+    return obj
 
-
-# -------------------------
-# READ
-# -------------------------
 
 @router.get("", response_model=IntakeOut)
-def get_intake_form(
-    booking_id: int = Query(..., gt=0, description="Booking ID to retrieve the intake form for"),
-    db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
-):
-    booking = _get_booking_or_404(db, booking_id)
-    _ensure_can_view_intake(current_user, booking)
+def get_latest_intake(booking_id: int, db: Session = Depends(get_db)):
+    obj = (
+        db.query(IntakeForm)
+        .filter(IntakeForm.booking_id == booking_id)
+        .order_by(IntakeForm.id.desc())
+        .first()
+    )
+    if not obj:
+        raise HTTPException(status_code=404, detail="Intake form not found")
+    return obj
 
     intake = db.query(IntakeForm).filter(IntakeForm.booking_id == booking_id).first()
     if not intake:

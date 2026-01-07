@@ -24,8 +24,6 @@ def save_upload(file: UploadFile) -> str:
     filename = f"{uuid4().hex}{ext}"
     path = os.path.join(UPLOAD_DIR, filename)
 
-    # NOTE: This reads the whole file into memory; fine for small demo files.
-    # For large files, you would stream in chunks.
     with open(path, "wb") as f:
         f.write(file.file.read())
 
@@ -37,17 +35,17 @@ def create_document(
     booking_id: int | None,
     case_id: int | None,
     title: str,
+    original_filename: str,
     file_path: str,
 ) -> Document:
-    """
-    Creates a document DB record.
-    """
     doc = Document(
         booking_id=booking_id,
         case_id=case_id,
         title=title,
+        original_filename=original_filename,
         file_path=file_path,
     )
+
     db.add(doc)
     db.commit()
     db.refresh(doc)
@@ -58,7 +56,7 @@ def list_documents(db: Session, booking_id: Optional[int] = None):
     """
     Lists documents.
     - If booking_id is provided: returns documents for that booking
-    - If booking_id is None: returns all documents (admin/dev convenience)
+    - If booking_id is None: returns all documents
     """
     q = db.query(Document)
     if booking_id is not None:
@@ -112,7 +110,7 @@ def delete_document(db: Session, doc_id: int) -> bool:
         try:
             os.remove(doc.file_path)
         except OSError:
-            pass  # still delete DB record even if file removal fails
+            pass
 
     db.delete(doc)
     db.commit()
