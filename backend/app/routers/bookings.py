@@ -3,10 +3,12 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models.booking import Booking
+from app.modules.cases.models import Case
 from app.routers.auth import get_current_user
 from app.schemas.booking import BookingCreate, BookingOut, BookingCancelOut
 from app.models.user import User
 from app.modules.audit_log.service import log_event
+from app.modules.blackouts.models import BlackoutDay
 
 router = APIRouter(prefix="/api/bookings", tags=["bookings"])
 
@@ -24,12 +26,36 @@ def create_booking(
             detail="Only clients can create bookings",
         )
 
+    if booking_in.case_id is None:
+        raise HTTPException(status_code=422, detail="case_id required")
+
+    case = db.query(Case).filter(Case.id == booking_in.case_id).first()
+    if not case or case.client_id != current_user.id:
+        raise HTTPException(status_code=400, detail="Invalid case for this client")
+
+    # Prevent bookings on blackout days for the lawyer
+    if booking_in.scheduled_at:
+        try:
+            scheduled_date = booking_in.scheduled_at.date()
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid scheduled_at value")
+
+        blackout = (
+            db.query(BlackoutDay)
+            .filter(BlackoutDay.lawyer_id == booking_in.lawyer_id, BlackoutDay.date == scheduled_date)
+            .first()
+        )
+        if blackout:
+            raise HTTPException(status_code=400, detail="Lawyer unavailable on this date")
+
     booking = Booking(
         client_id=current_user.id,
         lawyer_id=booking_in.lawyer_id,
         branch_id=booking_in.branch_id,
         scheduled_at=booking_in.scheduled_at,
         note=booking_in.note,
+        service_package_id=booking_in.service_package_id,
+        case_id=booking_in.case_id,
         status="pending",
     )
     db.add(booking)

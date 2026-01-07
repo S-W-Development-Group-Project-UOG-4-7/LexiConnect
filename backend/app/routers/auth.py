@@ -9,6 +9,8 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models.user import User, UserRole
+from app.models.lawyer import Lawyer
+from app.modules.lawyer_profiles.models import LawyerProfile
 from app.schemas.auth import Token
 from app.schemas.user import UserCreate, UserOut
 
@@ -93,6 +95,38 @@ def register(user_in: UserCreate, db: Session = Depends(get_db)):
     db.add(user)
     db.commit()
     db.refresh(user)
+
+    # If lawyer, ensure Lawyer and LawyerProfile records exist (idempotent)
+    is_lawyer = str(user.role).lower() == "lawyer"
+    if is_lawyer:
+        try:
+            lawyer_row = db.query(Lawyer).filter(Lawyer.email == user.email).first()
+            if not lawyer_row:
+                lawyer_row = Lawyer(name=user.full_name, email=user.email)
+                db.add(lawyer_row)
+                db.commit()
+                db.refresh(lawyer_row)
+
+            profile_row = db.query(LawyerProfile).filter(LawyerProfile.user_id == user.id).first()
+            if not profile_row:
+                profile_row = LawyerProfile(
+                    user_id=user.id,
+                    district="Colombo",
+                    city="Colombo",
+                    specialization="General",
+                    languages=["Sinhala", "English"],
+                    years_of_experience=5,
+                    bio="New lawyer profile",
+                    rating=0.0,
+                    is_verified=False,
+                )
+                db.add(profile_row)
+                db.commit()
+                db.refresh(profile_row)
+        except Exception as e:
+            db.rollback()
+            raise HTTPException(status_code=500, detail=f"Failed creating lawyer records: {e}")
+
     return user
 
 

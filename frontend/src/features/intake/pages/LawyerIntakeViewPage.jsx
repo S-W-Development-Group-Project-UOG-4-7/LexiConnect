@@ -3,7 +3,9 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   getIntakeByBooking,
+  getIntakeByCase,
 } from "../services/intake.service";
+import { getBookingById } from "../../../services/bookings";
 
 export default function LawyerIntakeViewPage() {
   const { bookingId } = useParams();
@@ -29,11 +31,31 @@ export default function LawyerIntakeViewPage() {
       setErr("");
 
       try {
-        const res = await getIntakeByBooking(bookingId);
+        // Fetch booking to resolve case_id if present
+        const booking = await getBookingById(bookingId);
+
+        // Decide which intake endpoint to call
+        let intakePayload = null;
+        if (booking?.case_id) {
+          try {
+            intakePayload = await getIntakeByCase(booking.case_id);
+          } catch (caseErr) {
+            // If case-based fetch fails (404), treat as no intake
+            if (caseErr?.response?.status === 404) {
+              intakePayload = null;
+            } else {
+              throw caseErr;
+            }
+          }
+        } else {
+          const res = await getIntakeByBooking(bookingId);
+          intakePayload = res.data;
+        }
+
+        const d = intakePayload;
         if (!mounted) return;
 
-        const d = res.data;
-        setData(d);
+        setData(d || null);
 
         // load form state
         setCaseType(d?.case_type ?? "");

@@ -14,3 +14,15 @@ node_modules/
 
 # OS
 .DS_Store
+EOF
+
+.env 
+__pycache__/
+*.pyc
+__pycache__/
+*.pyc
+.env
+venv/
+.venv/
+backend/venv/
+uploads/

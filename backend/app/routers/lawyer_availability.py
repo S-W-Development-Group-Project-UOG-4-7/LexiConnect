@@ -1,4 +1,4 @@
-from datetime import date, time
+from datetime import date, time, timedelta
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status, Query
@@ -10,6 +10,7 @@ from app.models.user import User, UserRole
 from app.models.lawyer_availability import WeeklyAvailability, WeekDay
 from app.modules.blackouts.models import BlackoutDay
 from app.models.branch import Branch
+from app.models.lawyer import Lawyer
 from app.routers.auth import get_current_user
 from app.modules.branches.service import get_lawyer_by_user
 
@@ -446,3 +447,74 @@ def delete_blackout_legacy(
     current_user: User = Depends(get_current_user),
 ):
     return delete_blackout(entry_id, db, current_user)
+
+
+@router.get("/slots")
+def preview_slots(
+    from_date: str = Query(..., description="YYYY-MM-DD"),
+    to_date: str = Query(..., description="YYYY-MM-DD"),
+    lawyer_id: Optional[int] = Query(None, description="Required for clients/admins; optional for lawyers"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    # ✅ allow both lawyer + client, but apply rules
+
+    try:
+        start = date.fromisoformat(from_date)
+        end = date.fromisoformat(to_date)
+    except Exception:
+        raise HTTPException(status_code=422, detail="Invalid date format, expected YYYY-MM-DD")
+
+    if end < start:
+        raise HTTPException(status_code=422, detail="to_date must be on or after from_date")
+
+    # Determine target lawyer
+    if current_user.role == UserRole.lawyer:
+        lawyer_row = _current_lawyer(db, current_user)
+        target_lawyer_id = lawyer_id or lawyer_row.id
+        if target_lawyer_id != lawyer_row.id:
+            raise HTTPException(status_code=403, detail="Cannot view another lawyer's slots")
+    else:
+        if lawyer_id is None:
+            raise HTTPException(status_code=422, detail="lawyer_id is required")
+        target_lawyer_id = lawyer_id
+        lawyer_row = db.query(Lawyer).filter(Lawyer.id == target_lawyer_id).first()
+        if not lawyer_row:
+            raise HTTPException(status_code=404, detail="Lawyer not found")
+
+    # weekly availability uses lawyer_id (Lawyer table id)
+    weekly_rows = (
+        db.query(WeeklyAvailability)
+        .filter(WeeklyAvailability.lawyer_id == target_lawyer_id, WeeklyAvailability.is_active.is_(True))
+        .all()
+    )
+
+    weekly_by_day = {}
+    for row in weekly_rows:
+        key = row.day_of_week.name.upper()
+        weekly_by_day.setdefault(key, []).append(row)
+
+    branch_map = {b.id: b.name for b in db.query(Branch).filter(Branch.lawyer_id == target_lawyer_id).all()}
+
+    # ✅ optional: ignore blackouts for now (per your message)
+    blackout_dates = set()
+
+    slots = []
+    current = start
+    while current <= end:
+        day_key = current.strftime("%A").upper()
+        is_blackout = current in blackout_dates
+        for row in weekly_by_day.get(day_key, []):
+            slots.append(
+                {
+                    "date": current.isoformat(),
+                    "start_time": row.start_time,
+                    "end_time": row.end_time,
+                    "branch_id": row.branch_id,
+                    "branch_name": branch_map.get(row.branch_id) if row.branch_id else None,
+                    "is_blackout": is_blackout,
+                }
+            )
+        current += timedelta(days=1)
+
+    return slots

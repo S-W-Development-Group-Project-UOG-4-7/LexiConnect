@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import PageShell from "../components/ui/PageShell";
 import StatGrid from "../components/ui/StatGrid";
 import EmptyState from "../components/ui/EmptyState";
@@ -10,6 +10,7 @@ export default function LawyerDashboard() {
   const [incoming, setIncoming] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const navigate = useNavigate();
 
   useEffect(() => {
     const load = async () => {
@@ -35,78 +36,116 @@ export default function LawyerDashboard() {
   const stats = useMemo(() => {
     const incomingCount = typeof incoming?.length === "number" ? incoming.length : "—";
     return [
-      { label: "Incoming bookings", value: incomingCount || "—" },
-      { label: "Token queue today", value: "—", hint: "Coming soon" },
-      { label: "KYC status", value: <StatusPill status="Pending" /> },
+      { label: "Today’s Bookings", value: incomingCount || "—", hint: "New requests" },
+      { label: "Pending Requests", value: "—", hint: "Case feed / requests" },
+      { label: "Open Cases", value: "—", hint: "Case feed" },
+      { label: "Verified Status", value: <StatusPill status="Pending" /> },
     ];
   }, [incoming]);
 
   return (
     <PageShell
       title="Lawyer Dashboard"
-      subtitle="Overview of your practice activity"
-      actions={
-        <div className="flex flex-wrap gap-2">
-          <Link
-            to="/lawyer/bookings/incoming"
-            className="px-4 py-2 rounded-lg bg-amber-600 hover:bg-amber-700 text-sm font-medium text-white transition-colors"
-          >
-            Incoming
-          </Link>
-          <Link
-            to="/lawyer/availability"
-            className="px-4 py-2 rounded-lg bg-slate-800 border border-slate-600 hover:bg-slate-700 text-sm font-medium text-white transition-colors"
-          >
-            Availability
-          </Link>
-        </div>
-      }
-      contentClassName="space-y-6"
+      subtitle="Stay on top of your practice and case opportunities"
+      contentClassName="space-y-8"
     >
-      <StatGrid items={stats} className="md:grid-cols-3" />
-
-      <section className="bg-slate-800 border border-slate-700 rounded-lg p-5 space-y-4">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <div className="text-lg font-semibold text-white">Quick Links</div>
-            <div className="text-sm text-slate-400">Move faster on daily tasks</div>
+      {/* Hero */}
+      <section className="rounded-2xl border border-slate-800 bg-gradient-to-br from-slate-900/80 via-slate-900 to-slate-950 p-6 md:p-8 shadow-lg shadow-slate-900/30">
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
+          <div className="space-y-2">
+            <p className="text-sm uppercase tracking-[0.2em] text-amber-300">For Lawyers</p>
+            <h1 className="text-3xl md:text-4xl font-bold text-white">
+              Grow your practice. Win the right cases.
+            </h1>
+            <p className="text-slate-300 max-w-3xl">
+              Review incoming bookings, manage your availability, and jump into the case feed to request access to new clients.
+            </p>
           </div>
-          <div className="flex flex-wrap gap-2">
-            <Link
-              to="/lawyer/bookings/incoming"
-              className="px-3 py-2 rounded-lg bg-amber-600 hover:bg-amber-700 text-sm font-medium text-white transition-colors"
+          <div className="flex flex-wrap gap-3">
+            <button
+              onClick={() => navigate("/lawyer/cases/feed")}
+              className="px-5 py-3 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-semibold shadow-md shadow-amber-500/25 transition-transform hover:-translate-y-0.5"
+            >
+              Go to Case Feed
+            </button>
+            <button
+              onClick={() => navigate("/lawyer/bookings/incoming")}
+              className="px-5 py-3 rounded-xl bg-slate-800 border border-slate-700 hover:bg-slate-700 text-white font-semibold transition-colors"
             >
               Incoming Bookings
-            </Link>
-            <Link
-              to="/lawyer/availability"
-              className="px-3 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-sm font-medium text-white transition-colors"
+            </button>
+            <button
+              onClick={() => navigate("/lawyer/cases/requests")}
+              className="px-5 py-3 rounded-xl bg-slate-800 border border-slate-700 hover:bg-slate-700 text-white font-semibold transition-colors"
+            >
+              My Requests
+            </button>
+            <button
+              onClick={() => navigate("/lawyer/availability")}
+              className="px-5 py-3 rounded-xl bg-slate-800 border border-slate-700 hover:bg-slate-700 text-white font-semibold transition-colors"
             >
               Availability
-            </Link>
-            <Link
-              to="/lawyer/token-queue"
-              className="px-3 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-sm font-medium text-white transition-colors"
-            >
-              Token Queue
-            </Link>
-            <Link
-              to="/lawyer/kyc"
-              className="px-3 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-sm font-medium text-white transition-colors"
-            >
-              KYC
-            </Link>
-            <Link
-              to="/lawyer/branches"
-              className="px-3 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-sm font-medium text-white transition-colors"
-            >
-              Branches
-            </Link>
+            </button>
           </div>
         </div>
       </section>
 
-      <section className="bg-slate-800 border border-slate-700 rounded-lg p-5">
+      {/* Stats */}
+      <StatGrid items={stats} className="md:grid-cols-4" />
+
+      {/* Premium quick links */}
+      <section className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {[
+          {
+            title: "Case Feed",
+            desc: "Browse open cases and request access.",
+            onClick: () => navigate("/lawyer/cases/feed"),
+            accent: "from-amber-500/20 via-slate-900 to-slate-950",
+          },
+          {
+            title: "Incoming Bookings",
+            desc: "Confirm or reject client booking requests.",
+            onClick: () => navigate("/lawyer/bookings/incoming"),
+            accent: "from-blue-500/20 via-slate-900 to-slate-950",
+          },
+          {
+            title: "My Requests",
+            desc: "Track your case access requests.",
+            onClick: () => navigate("/lawyer/cases/requests"),
+            accent: "from-emerald-500/20 via-slate-900 to-slate-950",
+          },
+          {
+            title: "Availability",
+            desc: "Manage your weekly schedule and blackouts.",
+            onClick: () => navigate("/lawyer/availability"),
+            accent: "from-purple-500/20 via-slate-900 to-slate-950",
+          },
+          {
+            title: "Token Queue",
+            desc: "See today’s consultation queue.",
+            onClick: () => navigate("/lawyer/token-queue"),
+            accent: "from-cyan-500/20 via-slate-900 to-slate-950",
+          },
+          {
+            title: "KYC & Branches",
+            desc: "Maintain compliance and locations.",
+            onClick: () => navigate("/lawyer/kyc"),
+            accent: "from-rose-500/20 via-slate-900 to-slate-950",
+          },
+        ].map((card) => (
+          <button
+            key={card.title}
+            onClick={card.onClick}
+            className={`text-left rounded-2xl border border-slate-800 bg-gradient-to-br ${card.accent} p-4 hover:-translate-y-0.5 transition-transform shadow-lg shadow-slate-900/30`}
+          >
+            <div className="text-lg font-semibold text-white">{card.title}</div>
+            <div className="text-sm text-slate-300 mt-1">{card.desc}</div>
+          </button>
+        ))}
+      </section>
+
+      {/* Incoming bookings preview */}
+      <section className="bg-slate-900/70 border border-slate-800 rounded-2xl p-6 shadow-lg shadow-slate-900/30">
         <div className="flex items-center justify-between mb-4">
           <div>
             <div className="text-lg font-semibold text-white">Incoming bookings</div>

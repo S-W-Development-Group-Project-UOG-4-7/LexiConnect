@@ -4,6 +4,9 @@ import PageShell from "../../../components/ui/PageShell";
 import StatusPill from "../../../components/ui/StatusPill";
 import EmptyState from "../../../components/ui/EmptyState";
 import { getBookingById } from "../../../services/bookings";
+import api from "../../../services/api";
+import { getIntakeByBooking, getIntakeByCase } from "../../intake/services/intake.service";
+import { getBookingChecklist } from "../services/bookingChecklist.service";
 
 const formatDateTime = (value) => {
   if (!value) return "—";
@@ -19,9 +22,22 @@ export default function LawyerBookingDetailPage() {
   const [booking, setBooking] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [docs, setDocs] = useState([]);
+  const [intake, setIntake] = useState(null);
+  const [docError, setDocError] = useState("");
+  const [intakeError, setIntakeError] = useState("");
+  const [checklist, setChecklist] = useState(null);
+  const [checklistError, setChecklistError] = useState("");
+  const [checklistLoading, setChecklistLoading] = useState(false);
 
   useEffect(() => {
-    const load = async () => {
+    setBooking(null);
+    setDocs([]);
+    setDocError("");
+    setIntake(null);
+    setIntakeError("");
+
+    const loadBooking = async () => {
       setLoading(true);
       setError("");
       try {
@@ -38,8 +54,66 @@ export default function LawyerBookingDetailPage() {
       }
     };
 
-    load();
+    loadBooking();
   }, [bookingId]);
+
+  useEffect(() => {
+    if (!booking) return;
+
+    const loadDocs = async () => {
+      try {
+        if (booking?.case_id) {
+          const { data: caseDocs } = await api.get(`/api/documents/by-case/${booking.case_id}`);
+          setDocs(caseDocs || []);
+        } else {
+          const { data: bookingDocs } = await api.get(`/api/documents`, { params: { booking_id: bookingId } });
+          setDocs(bookingDocs || []);
+        }
+      } catch (e) {
+        setDocError(e?.response?.data?.detail || "Failed to load documents");
+      }
+    };
+
+    const loadIntake = async () => {
+      try {
+        if (booking?.case_id) {
+          const intakeData = await getIntakeByCase(booking.case_id);
+          setIntake(intakeData || null);
+        } else {
+          const { data: intakeData } = await getIntakeByBooking(bookingId);
+          setIntake(intakeData || null);
+        }
+      } catch (e) {
+        setIntake(null);
+        if (e?.response?.status === 404) {
+          setIntake(null);
+        } else {
+          setIntakeError(e?.response?.data?.detail || "Failed to load intake");
+        }
+      }
+    };
+
+    const loadChecklist = async () => {
+      setChecklistLoading(true);
+      setChecklistError("");
+      try {
+        const data = await getBookingChecklist(bookingId);
+        setChecklist(data || null);
+      } catch (e) {
+        if (e?.response?.status === 404) {
+          setChecklist(null);
+        } else {
+          setChecklistError(e?.response?.data?.detail || "Failed to load checklist");
+        }
+      } finally {
+        setChecklistLoading(false);
+      }
+    };
+
+    loadDocs();
+    loadIntake();
+    loadChecklist();
+  }, [bookingId, booking?.id, booking?.case_id, booking]);
 
   const statusClass = useMemo(() => booking?.status, [booking]);
 
@@ -107,7 +181,9 @@ export default function LawyerBookingDetailPage() {
         <div className="flex items-center justify-between">
           <div>
             <div className="text-lg font-semibold text-white">Documents</div>
-            <div className="text-sm text-slate-400">View uploaded documents (read-only).</div>
+            <div className="text-sm text-slate-400">
+              View uploaded documents (read-only). {docError && <span className="text-red-400">{docError}</span>}
+            </div>
           </div>
           <Link
             to={`/lawyer/bookings/${booking.id}/documents`}
@@ -116,13 +192,16 @@ export default function LawyerBookingDetailPage() {
             Open Documents
           </Link>
         </div>
+        <div className="text-xs text-slate-400">Items: {docs.length}</div>
       </div>
 
       <div className="bg-slate-800 border border-slate-700 rounded-lg p-5 space-y-2">
         <div className="flex items-center justify-between">
           <div>
             <div className="text-lg font-semibold text-white">Intake</div>
-            <div className="text-sm text-slate-400">Review intake details (view only).</div>
+            <div className="text-sm text-slate-400">
+              Review intake details (view only). {intakeError && <span className="text-red-400">{intakeError}</span>}
+            </div>
           </div>
           <Link
             to={`/lawyer/bookings/${booking.id}/intake`}
@@ -131,6 +210,65 @@ export default function LawyerBookingDetailPage() {
             View Intake
           </Link>
         </div>
+        <div className="text-xs text-slate-400">
+          Status: {intake ? "Submitted" : intakeError ? "Error" : "Not submitted"}
+        </div>
+      </div>
+
+      <div className="bg-slate-800 border border-slate-700 rounded-lg p-5 space-y-3">
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="text-lg font-semibold text-white">Checklist</div>
+            <div className="text-sm text-slate-400">
+              Review required items for this booking.{" "}
+              {checklistError && <span className="text-red-400">{checklistError}</span>}
+            </div>
+          </div>
+        </div>
+
+        {checklistLoading && <div className="text-slate-300 text-sm">Loading checklist…</div>}
+
+        {!checklistLoading && checklist && checklist.missing_required?.length > 0 && (
+          <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg text-amber-100 text-sm">
+            <div className="font-semibold">Some required items are missing.</div>
+            <ul className="list-disc list-inside mt-1 space-y-1">
+              {checklist.missing_required.map((m) => (
+                <li key={m.template_id}>{m.question || `Template #${m.template_id}`}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {!checklistLoading && checklist && (
+          <>
+            <div className="text-sm text-slate-200">
+              Required: <b>{checklist.completed_required}</b> / <b>{checklist.total_required}</b> completed
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-sm text-slate-200">
+                <thead>
+                  <tr className="text-left text-slate-400 border-b border-slate-700">
+                    <th className="py-2 pr-4">Question</th>
+                    <th className="py-2 pr-4">Answer</th>
+                    <th className="py-2">Document</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(checklist.items || []).map((item) => (
+                    <tr key={item.template_id} className="border-b border-slate-800">
+                      <td className="py-2 pr-4 text-white">{item.question || `Template #${item.template_id}`}</td>
+                      <td className="py-2 pr-4 text-slate-200">
+                        {(item.answer_text || "").trim() ? item.answer_text : "Not provided"}
+                      </td>
+                      <td className="py-2 text-slate-300">{item.document_id ?? "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
       </div>
     </PageShell>
   );
