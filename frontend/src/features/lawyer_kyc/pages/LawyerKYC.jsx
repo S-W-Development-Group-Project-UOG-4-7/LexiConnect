@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { submitKyc, getMyKyc } from "../services/lawyerKyc.service";
+import "../../../pages/availability-ui.css";
 
 function LawyerKYC() {
   const [kycStatus, setKycStatus] = useState("not_submitted");
@@ -36,11 +37,11 @@ function LawyerKYC() {
     rejected: "Your KYC was rejected. Please resubmit.",
   }[kycStatus];
 
-  const bannerClasses = {
-    not_submitted: "bg-slate-100 border border-slate-200 text-slate-700",
-    pending: "bg-blue-50 border border-blue-200 text-blue-700",
-    approved: "bg-green-50 border border-green-200 text-green-700",
-    rejected: "bg-red-50 border border-red-200 text-red-700",
+  const statusHelperText = {
+    not_submitted: "",
+    pending: "We are verifying your submitted documents. This usually takes 1-2 business days.",
+    approved: "",
+    rejected: "",
   }[kycStatus];
 
   const handleChange = (e) => {
@@ -62,114 +63,197 @@ function LawyerKYC() {
   const handleResubmit = () => setKycStatus("not_submitted");
 
   return (
-    <div className="min-h-screen bg-[#1e1f23] py-8 px-4">
-      <div className="max-w-6xl mx-auto space-y-6">
+    <div className="lc-page">
+      <div className="lc-card">
 
-        {/* STATUS */}
-        <div className={`rounded-md px-4 py-3 ${bannerClasses}`}>
-          <div className="flex gap-2">
-            <div className="mt-1 h-2.5 w-2.5 rounded-full bg-current" />
-            <div>
-              <div className="text-sm font-semibold">Status</div>
-              <p className="text-sm mt-1">{statusText}</p>
-            </div>
+        <div className="lc-header">
+          <div className="lc-icon">🛡️</div>
+          <div>
+            <h1 className="lc-title">KYC Status</h1>
+            <p className="lc-subtitle">Your verification status</p>
           </div>
         </div>
 
-        {/* FORM */}
-        {!isApproved && (
-          <div className="bg-white rounded-md border shadow-sm">
-            <div className="border-b px-4 py-3">
-              <h2 className="font-semibold text-slate-800">
-                Submit KYC Documents
-              </h2>
-            </div>
+        <div className={`lc-status-banner ${kycStatus}`}>
+          <div className="lc-status-icon">
+            {kycStatus === "pending" && "⚠️"}
+            {kycStatus === "approved" && "✓"}
+            {kycStatus === "rejected" && "✕"}
+            {kycStatus === "not_submitted" && "ℹ️"}
+          </div>
+          <div className="lc-status-text">
+            <div className="lc-status-title">{statusText}</div>
+            {statusHelperText && (
+              <p className="lc-status-desc">{statusHelperText}</p>
+            )}
+          </div>
+          <span className={`lc-chip ${kycStatus.replace("_", "-")}`}>
+            {kycStatus === "not_submitted" ? "Not Submitted" : kycStatus.charAt(0).toUpperCase() + kycStatus.slice(1)}
+          </span>
+        </div>
 
-            <form onSubmit={handleSubmit} className="p-4 space-y-4">
+        {!isApproved && (
+          <>
+            <h2 className="lc-title" style={{ marginBottom: "1.5rem", fontSize: "1.25rem" }}>
+              Submit KYC Information
+            </h2>
+
+            <form onSubmit={handleSubmit} className="availability-form">
               {isRejected && (
-                <div className="bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded text-sm">
-                  Your KYC was rejected. Please review and resubmit.
+                <div className="alert alert-error" style={{ marginBottom: "1.5rem" }}>
+                  Your KYC was rejected. Please review and resubmit your details.
                 </div>
               )}
 
-              <div className="grid md:grid-cols-2 gap-3">
-                <Input label="Full Name" name="full_name" value={form.full_name} onChange={handleChange} disabled={isPending} />
-                <Input label="NIC Number" name="nic_number" value={form.nic_number} onChange={handleChange} disabled={isPending} />
-              </div>
-
-              <div className="grid md:grid-cols-2 gap-3">
-                <Input label="Bar Council ID" name="bar_council_id" value={form.bar_council_id} onChange={handleChange} disabled={isPending} />
-                <Input label="Contact Number" name="contact_number" value={form.contact_number} onChange={handleChange} disabled={isPending} />
-              </div>
-
-              <div>
-                <label className="text-xs uppercase text-slate-600">Address</label>
-                <textarea
-                  name="address"
-                  value={form.address}
-                  onChange={handleChange}
-                  disabled={isPending}
-                  rows={3}
-                  className="w-full border rounded bg-slate-100 px-3 py-2 text-sm"
-                />
-              </div>
-
-              {/* URL INPUT (REPLACES FILE UPLOAD) */}
-              <div>
-                <label className="text-xs uppercase text-slate-600">
-                  Bar Council Certificate URL
-                </label>
-                <div className="border-dashed border rounded bg-slate-50 px-4 py-6">
+              <div className="lc-form-grid">
+                <div className="form-group">
+                  <label htmlFor="full_name" className="form-label">
+                    Full Name <span className="required-star">*</span>
+                  </label>
                   <input
-                    name="bar_certificate_url"
-                    value={form.bar_certificate_url}
+                    type="text"
+                    id="full_name"
+                    name="full_name"
+                    value={form.full_name}
                     onChange={handleChange}
                     disabled={isPending}
-                    placeholder="https://drive.google.com/..."
-                    className="w-full border rounded px-3 py-2 text-sm"
+                    placeholder="As per Bar Council registration"
+                    className="lc-input"
                     required
                   />
-                  <p className="text-xs text-slate-500 mt-2">
-                    Upload the certificate to Google Drive / Cloudinary and paste the link here
-                  </p>
+                </div>
+
+                <div className="form-group">
+                  <label htmlFor="nic_number" className="form-label">
+                    NIC Number <span className="required-star">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    id="nic_number"
+                    name="nic_number"
+                    value={form.nic_number}
+                    onChange={handleChange}
+                    disabled={isPending}
+                    placeholder="e.g., 199012345678"
+                    className="lc-input"
+                    required
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label htmlFor="bar_council_id" className="form-label">
+                    Bar Council ID <span className="required-star">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    id="bar_council_id"
+                    name="bar_council_id"
+                    value={form.bar_council_id}
+                    onChange={handleChange}
+                    disabled={isPending}
+                    placeholder="Your Bar Council registration number"
+                    className="lc-input"
+                    required
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label htmlFor="contact_number" className="form-label">
+                    Contact Number <span className="required-star">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    id="contact_number"
+                    name="contact_number"
+                    value={form.contact_number}
+                    onChange={handleChange}
+                    disabled={isPending}
+                    placeholder="e.g., +94 77 123 4567"
+                    className="lc-input"
+                    required
+                  />
+                </div>
+
+                <div className="form-group" style={{ gridColumn: "1 / -1" }}>
+                  <label htmlFor="address" className="form-label">
+                    Address <span className="required-star">*</span>
+                  </label>
+                  <textarea
+                    id="address"
+                    name="address"
+                    value={form.address}
+                    onChange={handleChange}
+                    disabled={isPending}
+                    placeholder="Your registered address"
+                    className="lc-textarea"
+                    required
+                  />
+                </div>
+
+                <div className="form-group" style={{ gridColumn: "1 / -1" }}>
+                  <label htmlFor="bar_certificate_url" className="form-label">
+                    Bar Council Certificate URL <span className="required-star">*</span>
+                  </label>
+                  <div style={{ display: "flex", gap: "0.75rem" }}>
+                    <input
+                      type="text"
+                      id="bar_certificate_url"
+                      name="bar_certificate_url"
+                      value={form.bar_certificate_url}
+                      onChange={handleChange}
+                      disabled={isPending}
+                      placeholder="Upload your certificate and paste the URL here"
+                      className="lc-input"
+                      style={{ flex: 1 }}
+                      required
+                    />
+                    <button
+                      type="button"
+                      className="lc-primary-btn"
+                      style={{ width: "auto", minWidth: "120px" }}
+                      disabled={isPending}
+                      onClick={() => {}}
+                    >
+                      📤 Upload
+                    </button>
+                  </div>
+                  <div className="field-hint" style={{ marginTop: "0.5rem" }}>
+                    Please ensure the certificate is clear and all text is readable
+                  </div>
                 </div>
               </div>
 
-              <div className="flex gap-2 pt-2">
-                <button
-                  type="submit"
-                  disabled={isPending}
-                  className="w-full bg-blue-500 hover:bg-blue-600 text-white py-2.5 rounded disabled:opacity-60"
-                >
-                  Submit for Verification
-                </button>
-
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.75rem", marginTop: "1.5rem" }}>
                 {isRejected && (
                   <button
                     type="button"
+                    className="availability-danger-btn"
                     onClick={handleResubmit}
-                    className="border bg-white px-3 py-2 rounded text-black"
                   >
                     Start Over
                   </button>
                 )}
+                <button
+                  type="submit"
+                  className="lc-primary-btn"
+                  disabled={isPending}
+                >
+                  🛡️ Submit for Verification
+                </button>
               </div>
             </form>
+          </>
+        )}
+
+        {isApproved && (
+          <div className="alert alert-success" style={{ marginTop: "1.5rem" }}>
+            <div style={{ fontSize: "1.1rem", fontWeight: 650, marginBottom: "0.5rem" }}>
+              ✓ KYC Approved
+            </div>
+            <p>Your KYC has been approved. No further action is required.</p>
           </div>
         )}
       </div>
-    </div>
-  );
-}
-
-function Input({ label, ...props }) {
-  return (
-    <div>
-      <label className="text-xs uppercase text-slate-600">{label}</label>
-      <input
-        {...props}
-        className="w-full border rounded bg-slate-100 px-3 py-2 text-sm"
-      />
     </div>
   );
 }
