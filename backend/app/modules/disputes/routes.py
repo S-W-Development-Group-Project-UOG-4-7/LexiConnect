@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.routers.auth import get_current_user
 from app.models.user import UserRole
+from app.modules.audit_log.service import log_event
 
 from .models import Dispute
 from .schemas import DisputeCreate, DisputeOut, DisputeUpdate, DisputeAdminUpdate
@@ -218,4 +219,11 @@ def admin_resolve_dispute(
 
     db.commit()
     db.refresh(dispute)
+    log_event(
+        db,
+        user=current_user,
+        action="DISPUTE_RESOLVED",
+        description=f"Dispute {dispute.id} resolved with status {dispute.status}",
+        meta={"dispute_id": dispute.id, "status": dispute.status, "client_id": dispute.client_id},
+    )
     return dispute

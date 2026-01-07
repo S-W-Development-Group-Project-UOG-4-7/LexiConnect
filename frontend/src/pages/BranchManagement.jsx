@@ -118,39 +118,24 @@ function BranchManagement() {
   };
 
   return (
-    <div className="availability-page">
-      <div className="availability-card">
-        <div className="availability-card-header">
-          <div className="availability-brand">
-            <span className="availability-logo">⚖️</span>
-            <div className="availability-brand-text">
-              <div className="availability-brand-name">LEXICONNECT</div>
-              <div className="availability-brand-subtitle">
-                Manage your branch locations
-              </div>
-            </div>
+    <div className="lc-page">
+      <div className="lc-card">
+        <div className="lc-header">
+          <div className="lc-icon">📍</div>
+          <div>
+            <h1 className="lc-title">My Branches</h1>
+            <p className="lc-subtitle">Manage your branch locations</p>
           </div>
-          <h1 className="availability-title">My Branches</h1>
         </div>
 
-        {/* Error banner */}
-        {error ? (
-          <div
-            style={{
-              padding: "0.75rem 1rem",
-              borderRadius: "10px",
-              marginBottom: "1rem",
-              border: "1px solid rgba(255,0,0,0.25)",
-              background: "rgba(255,0,0,0.06)",
-              fontSize: "0.95rem",
-            }}
-          >
+        {error && (
+          <div className="alert alert-error" style={{ marginBottom: "1.5rem" }}>
             {error}
           </div>
-        ) : null}
+        )}
 
         <form onSubmit={handleSubmit} className="availability-form">
-          <div className="availability-form-grid">
+          <div className="lc-form-grid">
             <div className="form-group">
               <label htmlFor="name" className="form-label">
                 Branch Name <span className="required-star">*</span>
@@ -161,8 +146,8 @@ function BranchManagement() {
                 name="name"
                 value={form.name}
                 onChange={handleChange}
-                placeholder="Enter branch name"
-                className="form-control"
+                placeholder="e.g., Main Office"
+                className="lc-input"
               />
             </div>
 
@@ -176,8 +161,8 @@ function BranchManagement() {
                 name="district"
                 value={form.district}
                 onChange={handleChange}
-                placeholder="Enter district"
-                className="form-control"
+                placeholder="e.g., Colombo"
+                className="lc-input"
               />
             </div>
 
@@ -191,14 +176,14 @@ function BranchManagement() {
                 name="city"
                 value={form.city}
                 onChange={handleChange}
-                placeholder="Enter city"
-                className="form-control"
+                placeholder="e.g., Colombo 03"
+                className="lc-input"
               />
             </div>
 
-            <div className="form-group">
+            <div className="form-group" style={{ gridColumn: "1 / -1" }}>
               <label htmlFor="address" className="form-label">
-                Address <span className="required-star">*</span>
+                Full Address <span className="required-star">*</span>
               </label>
               <input
                 type="text"
@@ -206,18 +191,29 @@ function BranchManagement() {
                 name="address"
                 value={form.address}
                 onChange={handleChange}
-                placeholder="Enter full address"
-                className="form-control"
+                placeholder="e.g., No. 123, Galle Road"
+                className="lc-input"
               />
             </div>
           </div>
 
-          <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.75rem", marginTop: "1rem" }}>
+            {isEditing && (
+              <button
+                type="button"
+                className="availability-danger-btn"
+                onClick={resetForm}
+                disabled={submitting}
+              >
+                Cancel
+              </button>
+            )}
             <button
               type="submit"
-              className="availability-primary-btn"
+              className="lc-primary-btn"
               disabled={submitting}
             >
+              <span>+</span>
               {submitting
                 ? isEditing
                   ? "Saving..."
@@ -226,21 +222,10 @@ function BranchManagement() {
                 ? "Save Changes"
                 : "Add Branch"}
             </button>
-
-            {isEditing ? (
-              <button
-                type="button"
-                className="availability-danger-btn"
-                onClick={resetForm}
-                disabled={submitting}
-              >
-                Cancel Edit
-              </button>
-            ) : null}
           </div>
         </form>
 
-        <div className="availability-divider" />
+        <div className="lc-divider" />
 
         <div className="availability-section-header">
           <h2>Your Branches</h2>
@@ -257,77 +242,55 @@ function BranchManagement() {
             <p className="empty-sub">Add your first branch to get started.</p>
             <button
               type="button"
-              className="availability-primary-btn"
+              className="lc-primary-btn"
               style={{ marginTop: "1rem" }}
               onClick={() => {
-                // focus the first field
                 const el = document.getElementById("name");
                 if (el) el.focus();
               }}
             >
+              <span>+</span>
               Add First Branch
             </button>
           </div>
         ) : (
-          <div className="availability-slots">
+          <div className="lc-list">
             {branches.map((b) => (
-              <div key={b.id} className="slot-item">
-                <div className="slot-info">
-                  <div className="slot-time">{b.name}</div>
-                  <div className="slot-meta">
-                    <span>{b.city}</span>
-                    {b.district && (
-                      <>
-                        <span className="slot-sep">•</span>
-                        <span>{b.district}</span>
-                      </>
-                    )}
+              <div key={b.id} className="lc-list-card">
+                <div className="lc-list-card-content">
+                  <div className="lc-list-card-title">{b.name}</div>
+                  <div className="lc-list-card-meta">
+                    {b.city}
+                    {b.district && `, ${b.district}`}
                   </div>
-                  {b.address ? (
-                    <div style={{ fontSize: "0.9rem", opacity: 0.85 }}>
+                  {b.address && (
+                    <div className="lc-list-card-meta" style={{ marginTop: "0.25rem" }}>
                       {b.address}
                     </div>
-                  ) : null}
+                  )}
                 </div>
-
                 <div style={{ display: "flex", gap: "0.5rem" }}>
                   <button
                     type="button"
-                    className="availability-primary-btn"
-                    style={{
-                      height: "40px",
-                      padding: "0 0.9rem",
-                      fontSize: "0.85rem",
-                    }}
+                    className="lc-icon-btn edit"
                     onClick={() => handleEdit(b)}
+                    title="Edit"
                   >
-                    Edit
+                    ✏️
                   </button>
                   <button
                     type="button"
-                    className="availability-danger-btn"
+                    className="lc-icon-btn delete"
                     onClick={() => handleDelete(b.id)}
+                    title="Delete"
                   >
-                    Delete
+                    🗑️
                   </button>
                 </div>
               </div>
             ))}
           </div>
         )}
-
-        {/* Quick refresh link */}
-        <div style={{ marginTop: "1rem" }}>
-          <button
-            type="button"
-            className="availability-primary-btn"
-            style={{ height: "40px", padding: "0 0.9rem", fontSize: "0.85rem" }}
-            onClick={fetchBranches}
-            disabled={loading}
-          >
-            Refresh
-          </button>
-        </div>
       </div>
     </div>
   );

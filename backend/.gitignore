@@ -1,9 +1,10 @@
-cat << EOF >> .gitignore
-
 # Python
 __pycache__/
 *.pyc
-venv/
+
+# Virtual environment
+backend/.venv/
+backend/.venv/**
 
 # Alembic
 backend/alembic/__pycache__/
@@ -11,13 +12,27 @@ backend/alembic/__pycache__/
 # Node
 node_modules/
 
-# Uploads
-backend/uploads/
-uploads/
-
-
 # OS
 .DS_Store
+
+# Python virtual environment
+.venv/
+venv/
+
+# Uploaded files (runtime only)
+uploads/
+
+# Local environment file
+.env
 EOF
 
 .env 
+__pycache__/
+*.pyc
+__pycache__/
+*.pyc
+.env
+venv/
+.venv/
+backend/venv/
+uploads/

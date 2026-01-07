@@ -11,6 +11,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
 from fastapi.staticfiles import StaticFiles  # ✅ for serving uploads
 
+# ✅ Checklist Answers module router
+from app.modules.checklist_answers.router import router as checklist_answers_router
+
 # Core DB
 from .database import Base, engine, SessionLocal
 
@@ -24,15 +27,20 @@ from .models import (  # noqa
     service_package,
     checklist_template,
 )
+from app.modules.cases import models as case_models  # noqa: F401
 
 # Routers (existing app routers)
 from .routers import admin, auth, bookings, dev, lawyers, token_queue  # noqa: F401
+from .routers import admin_overview  # noqa: F401
 
 # Module routers (new modular structure)
 from app.modules.kyc.router import router as kyc_router
+from app.modules.kyc.router import admin_router as admin_kyc_router
 from app.modules.branches.router import router as branches_router
 from app.modules.service_packages.router import router as service_packages_router
 from app.modules.checklist_templates.router import router as checklist_router
+from app.modules.availability.router import router as availability_router
+from app.modules.blackouts.router import router as blackouts_router
 
 from app.modules.disputes.routes import (
     router as disputes_router,
@@ -42,6 +50,13 @@ from app.modules.disputes.routes import (
 
 from app.modules.documents.routes import router as documents_router
 from app.modules.intake.routes import router as intake_router
+from app.modules.case_files.router import router as case_files_router
+from app.modules.lawyer_profiles.routes import router as lawyer_profiles_router
+from app.routers.lawyer_availability import router as lawyer_availability_router
+from app.modules.audit_log.routes import router as audit_log_router
+from app.modules.cases.routes import router as cases_router
+
+
 
 # API v1 routers
 from .api.v1 import admin as admin_v1, booking as booking_v1
@@ -89,18 +104,27 @@ def startup():
     finally:
         db.close()
 
+
+
 # ---- Health check ----
 @app.get("/health")
 def health_check():
     return {"status": "ok"}
+
 
 # ---- Routers ----
 
 # Core auth/booking/lawyers
 app.include_router(auth.router)
 app.include_router(lawyers.router)
+app.include_router(lawyers.router, prefix="/api")
 app.include_router(bookings.router)
 app.include_router(token_queue.router)
+# app.include_router(lawyer_availability.router)  # WRONG: lawyer_availability is a model module
+
+
+# ✅ Keep checklist answers router (your branch)
+app.include_router(checklist_answers_router)
 
 # Feature modules
 app.include_router(service_packages_router)
@@ -109,8 +133,11 @@ app.include_router(checklist_router)
 # Admin / Dev / Branches / KYC
 app.include_router(admin.router)
 app.include_router(branches_router)
+app.include_router(availability_router)
+app.include_router(blackouts_router)
 app.include_router(kyc_router)
 app.include_router(dev.router)  # DEV-ONLY endpoints
+app.include_router(admin_overview.router)
 
 # Modules (grouped to avoid duplicate includes and Swagger noise)
 for module_router in (
@@ -119,12 +146,21 @@ for module_router in (
     booking_disputes_router,
     documents_router,
     intake_router,
+    case_files_router,
+    admin_kyc_router,
+    audit_log_router,
+    lawyer_profiles_router,
 ):
     app.include_router(module_router)
+
+# Dedicated router include (keeps optional grouping clear)
+app.include_router(lawyer_availability_router, prefix="/api")
+app.include_router(cases_router, prefix="/api")
 
 # API v1 routers
 app.include_router(admin_v1.router)
 app.include_router(booking_v1.router)
+
 
 # ---- Custom OpenAPI (JWT Bearer Auth in Swagger) ----
 def custom_openapi():
