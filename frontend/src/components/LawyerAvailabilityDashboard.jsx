@@ -125,6 +125,7 @@ const LawyerAvailabilityDashboard = () => {
     const endM = toMinutes(slot.endTime);
     if (startM === null || endM === null) return false;
     if (endM <= startM) return false;
+
     if (!slot.maxBookings || slot.maxBookings < 1) return false;
 
     return true;

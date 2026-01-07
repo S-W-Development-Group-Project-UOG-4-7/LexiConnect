@@ -1,6 +1,7 @@
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -12,6 +13,7 @@ from app.modules.cases.models import Case
 from app.modules.intake.models import IntakeForm
 from app.modules.intake.schemas import IntakeCreate, IntakeUpdate, IntakeOut
 
+from app.modules.intake.schemas import IntakeOut, IntakeCreate, IntakeUpdate
 
 router = APIRouter(prefix="/api/intake", tags=["Intake"])
 
@@ -125,6 +127,7 @@ def create_intake_form(
 
 # -------------------------
 # READ latest by booking_id
+# READ (by booking)
 # -------------------------
 
 @router.get("", response_model=IntakeOut)
@@ -144,6 +147,7 @@ def get_latest_intake(
     )
     if not intake:
         raise HTTPException(status_code=404, detail="Intake form not found")
+
     return intake
 
 
@@ -241,4 +245,40 @@ def get_intake_by_case(
     intake = db.query(IntakeForm).filter(IntakeForm.case_id == case_id).first()
     if not intake:
         raise HTTPException(status_code=404, detail="Intake not found")
+    return intake
+
+
+@router.post("/cases/{case_id}", response_model=IntakeOut, status_code=status.HTTP_201_CREATED)
+def create_intake_for_case(
+    case_id: int,
+    payload: IntakeCreate,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    case = _can_access_case_intake(db, case_id, current_user)
+
+    if not _is_client(current_user):
+        raise HTTPException(status_code=403, detail="Only clients can submit intake forms")
+
+    if getattr(case, "client_id", None) != current_user.id:
+        raise HTTPException(status_code=403, detail="Only owner client can submit intake for this case")
+
+    existing = db.query(IntakeForm).filter(IntakeForm.case_id == case_id).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="Intake already submitted for this case")
+
+    intake = IntakeForm(
+        booking_id=payload.booking_id,
+        case_id=case_id,
+        client_id=current_user.id,
+        case_type=payload.case_type,
+        subject=payload.subject,
+        details=payload.details,
+        urgency=payload.urgency,
+        answers_json=payload.answers_json or {},
+    )
+
+    db.add(intake)
+    db.commit()
+    db.refresh(intake)
     return intake

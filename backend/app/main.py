@@ -15,7 +15,7 @@ from fastapi.staticfiles import StaticFiles  # ✅ for serving uploads
 from app.modules.checklist_answers.router import router as checklist_answers_router
 
 # Core DB
-from .database import Base, engine, SessionLocal
+from .database import SessionLocal
 
 # Ensure models are loaded (so Alembic / SQLAlchemy sees them)
 # Add/remove here only if these models exist in backend/app/models
@@ -57,8 +57,6 @@ from app.routers.lawyer_availability import router as lawyer_availability_router
 from app.modules.audit_log.routes import router as audit_log_router
 from app.modules.cases.routes import router as cases_router
 
-
-
 # API v1 routers
 from .api.v1 import admin as admin_v1, booking as booking_v1
 
@@ -68,6 +66,13 @@ from app.seed import seed_all
 # Create all database tables (dev-friendly)
 #Base.metadata.create_all(bind=engine)
 
+# ✅ IMPORTANT:
+# Do NOT use Base.metadata.create_all() in a project that uses Alembic migrations.
+# It can cause duplicate index/table errors (like the ix_case_intakes_case_id crash).
+# Use: alembic upgrade head
+# (So we removed create_all completely.)
+
+
 # FastAPI app
 app = FastAPI(
     title="LexiConnect API",
@@ -76,7 +81,7 @@ app = FastAPI(
 )
 
 # ✅ Serve uploaded files so frontend can open PDFs/images in browser
-# Example URL: http://127.0.0.1:8000/uploads/documents/<file>.pdf
+# Example URL: http://127.0.0.1:8000/uploads/<file>
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 # ---- CORS for React (Vite) frontend ----
@@ -106,7 +111,6 @@ def startup():
         db.close()
 
 
-
 # ---- Health check ----
 @app.get("/health")
 def health_check():
@@ -121,10 +125,8 @@ app.include_router(lawyers.router)
 app.include_router(lawyers.router, prefix="/api")
 app.include_router(bookings.router)
 app.include_router(token_queue.router)
-# app.include_router(lawyer_availability.router)  # WRONG: lawyer_availability is a model module
 
-
-# ✅ Keep checklist answers router (your branch)
+# ✅ Checklist Answers router (your branch)
 app.include_router(checklist_answers_router)
 
 # Feature modules
