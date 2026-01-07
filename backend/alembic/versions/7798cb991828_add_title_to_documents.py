@@ -1,3 +1,10 @@
+"""add title to documents
+
+Revision ID: 7798cb991828
+Revises: 526bd4ed3edb
+Create Date: 2025-12-29
+"""
+
 from alembic import op
 import sqlalchemy as sa
 
@@ -10,7 +17,8 @@ depends_on = None
 def upgrade() -> None:
     bind = op.get_bind()
     exists = bind.execute(
-        sa.text("""
+        sa.text(
+            """
             SELECT EXISTS (
                 SELECT 1
                 FROM information_schema.columns
@@ -18,7 +26,8 @@ def upgrade() -> None:
                   AND table_name='documents'
                   AND column_name='title'
             )
-        """)
+            """
+        )
     ).scalar()
 
     if exists:
@@ -26,11 +35,13 @@ def upgrade() -> None:
 
     op.add_column("documents", sa.Column("title", sa.String(length=255), nullable=True))
 
+
 def downgrade() -> None:
     # Only drop if it exists
     bind = op.get_bind()
     exists = bind.execute(
-        sa.text("""
+        sa.text(
+            """
             SELECT EXISTS (
                 SELECT 1
                 FROM information_schema.columns
@@ -38,7 +49,8 @@ def downgrade() -> None:
                   AND table_name='documents'
                   AND column_name='title'
             )
-        """)
+            """
+        )
     ).scalar()
 
     if not exists:

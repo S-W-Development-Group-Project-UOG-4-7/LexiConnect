@@ -229,7 +229,7 @@ export default function ClientIntakeSubmitPage() {
       <div className="max-w-3xl mx-auto">
         <div className="flex items-start justify-between gap-4 mb-6">
           <div>
-            <h1 className="text-2xl font-bold">Intake Form</h1>
+            <h1 className="text-2xl font-bold">Client Intake Form</h1>
             <div className="text-sm opacity-80 mt-1">
               Booking{" "}
               <span className="font-semibold">

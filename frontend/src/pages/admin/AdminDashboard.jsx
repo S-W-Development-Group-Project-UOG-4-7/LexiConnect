@@ -65,10 +65,10 @@ export default function AdminDashboard() {
         <div className="admin-dashboard-container">
           <section className="admin-overview-section">
             <div className="admin-overview-card">
-              <h1 className="admin-overview-title">ADMIN CONSOLE</h1>
-              <h2 className="admin-overview-subtitle">System Overview</h2>
+              <h1 className="admin-overview-title">Admin Dashboard</h1>
+              <h2 className="admin-overview-subtitle">Case Management Overview</h2>
               <p className="admin-overview-description">
-                Monitor platform activity, manage verifications, and oversee operations.
+                Track platform activity, review verifications, and monitor operational status at a glance.
               </p>
             </div>
           </section>

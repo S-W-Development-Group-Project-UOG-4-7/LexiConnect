@@ -14,6 +14,16 @@ node_modules/
 
 # OS
 .DS_Store
+
+# Python virtual environment
+.venv/
+venv/
+
+# Uploaded files (runtime only)
+uploads/
+
+# Local environment file
+.env
 EOF
 
 .env 

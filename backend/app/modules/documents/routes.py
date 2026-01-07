@@ -1,4 +1,6 @@
 # backend/app/modules/documents/routes.py
+from fastapi import HTTPException, status
+from app.models.appointment import Appointment, AppointmentStatus
 
 from typing import Optional, List
 
