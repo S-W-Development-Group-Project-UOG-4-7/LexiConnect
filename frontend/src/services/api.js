@@ -1,26 +1,30 @@
 import axios from "axios";
 
 // Single shared axios client.
-// Default to relative /api so Vite proxy works in dev; allow override via env.
+// Uses Vite proxy in dev via relative /api
+// Can be overridden via VITE_API_BASE_URL for production
 const api = axios.create({
-<<<<<<< HEAD
-  // No baseURL to use Vite proxy for development
-=======
   baseURL: import.meta.env.VITE_API_BASE_URL || "/api",
+  headers: {
+    "Content-Type": "application/json",
+  },
   withCredentials: false,
->>>>>>> origin/dev
 });
 
-api.interceptors.request.use((config) => {
-  const token =
-    localStorage.getItem("access_token") ||
-    localStorage.getItem("token") ||
-    localStorage.getItem("authToken");
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
-});
+// Attach auth token automatically if present
+api.interceptors.request.use(
+  (config) => {
+    const token =
+      localStorage.getItem("access_token") ||
+      localStorage.getItem("token") ||
+      localStorage.getItem("authToken");
+
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
 
 export default api;
-

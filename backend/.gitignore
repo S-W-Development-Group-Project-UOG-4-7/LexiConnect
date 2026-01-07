@@ -1,12 +1,17 @@
 # Python
 __pycache__/
-*.pyc
+*.py[cod]
 
-# Virtual environment
+# Virtual environments
+.venv/
+venv/
+backend/venv/
 backend/.venv/
-backend/.venv/**
 
-# Alembic
+# Env files
+.env
+
+# Alembic cache
 backend/alembic/__pycache__/
 
 # Node
@@ -15,24 +20,5 @@ node_modules/
 # OS
 .DS_Store
 
-# Python virtual environment
-.venv/
-venv/
-
 # Uploaded files (runtime only)
-uploads/
-
-# Local environment file
-.env
-EOF
-
-.env 
-__pycache__/
-*.pyc
-__pycache__/
-*.pyc
-.env
-venv/
-.venv/
-backend/venv/
 uploads/

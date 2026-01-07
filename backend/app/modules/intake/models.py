@@ -1,4 +1,5 @@
-from sqlalchemy import Column, Integer, Text, DateTime, ForeignKey
+from sqlalchemy import Column, Integer, Text, DateTime, ForeignKey, String
+from sqlalchemy.dialects.postgresql import JSON
 from sqlalchemy.sql import func
 
 from app.database import Base
@@ -8,12 +9,14 @@ class IntakeForm(Base):
     __tablename__ = "intake_forms"
 
     id = Column(Integer, primary_key=True, index=True)
+
     booking_id = Column(
         Integer,
         ForeignKey("bookings.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
+
     case_id = Column(
         Integer,
         ForeignKey("cases.id", ondelete="CASCADE"),
@@ -33,9 +36,7 @@ class IntakeForm(Base):
     details = Column(Text, nullable=False)
     urgency = Column(String(50), nullable=False)
 
-    # default dict avoids null JSON issues
     answers_json = Column(JSON, nullable=False, default=dict)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), onupdate=func.now(), nullable=True)
-
