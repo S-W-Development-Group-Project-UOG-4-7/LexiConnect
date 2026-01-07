@@ -1,10 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import api from "../services/api";
 import PageShell from "../components/ui/PageShell";
 import EmptyState from "../components/ui/EmptyState";
+import useRequireAuth from "../hooks/useRequireAuth";
+import LoginRequiredModal from "../components/ui/LoginRequiredModal";
 
 export default function SearchLawyers() {
+  const navigate = useNavigate();
+  const { requireAuth, modalOpen, closeModal } = useRequireAuth();
   const [filters, setFilters] = useState({
     district: "",
     city: "",
@@ -148,18 +152,24 @@ export default function SearchLawyers() {
                     : "Languages not set"}
                 </div>
                 <div className="flex justify-end">
-                  <Link
-                    to={`/client/profile/${lawyer.id}`}
+                  <button
+                    onClick={() => requireAuth(() => navigate(`/client/profile/${lawyer.id}`))}
                     className="px-3 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-sm font-medium text-white transition-colors"
                   >
                     View Profile
-                  </Link>
+                  </button>
                 </div>
               </div>
             ))}
           </div>
         )}
       </div>
+      <LoginRequiredModal
+        open={modalOpen}
+        onClose={closeModal}
+        title="Login to view full profile"
+        description="Sign in or create an account to see lawyer details."
+      />
     </PageShell>
   );
 }

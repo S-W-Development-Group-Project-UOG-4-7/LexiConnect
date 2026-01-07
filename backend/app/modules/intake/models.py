@@ -14,7 +14,28 @@ class IntakeForm(Base):
         nullable=False,
         index=True,
     )
-    client_notes = Column(Text, nullable=True)
+    case_id = Column(
+        Integer,
+        ForeignKey("cases.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )
+
+    client_id = Column(
+        Integer,
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+
+    case_type = Column(String(100), nullable=False)
+    subject = Column(String(255), nullable=False)
+    details = Column(Text, nullable=False)
+    urgency = Column(String(50), nullable=False)
+
+    # default dict avoids null JSON issues
+    answers_json = Column(JSON, nullable=False, default=dict)
+
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), onupdate=func.now(), nullable=True)
 

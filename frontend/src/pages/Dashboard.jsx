@@ -60,48 +60,72 @@ export default function Dashboard() {
     <PageShell
       title="Dashboard"
       subtitle="Overview of your legal activity"
-      actions={
-        <div className="flex gap-2">
-          <Link
-            to="/client/search"
-            className="px-4 py-2 rounded-lg bg-amber-600 hover:bg-amber-700 text-sm font-medium text-white transition-colors"
-          >
-            Find a Lawyer
-          </Link>
-          <Link
-            to="/client/manage-bookings"
-            className="px-4 py-2 rounded-lg bg-slate-800 border border-slate-600 hover:bg-slate-700 text-sm font-medium text-white transition-colors"
-          >
-            My Bookings
-          </Link>
-        </div>
-      }
-      contentClassName="space-y-6"
+      contentClassName="space-y-8"
     >
-      <StatGrid items={stats} />
-
-      <section className="bg-slate-800 border border-slate-700 rounded-lg p-5 space-y-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <div className="text-lg font-semibold text-white">Quick Actions</div>
-            <div className="text-sm text-slate-400">Jump into common tasks</div>
+      <section className="rounded-2xl border border-slate-700 bg-gradient-to-br from-slate-900/80 via-slate-900 to-slate-950 p-6 md:p-8 shadow-lg shadow-slate-900/30">
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
+          <div className="space-y-2">
+            <p className="text-sm uppercase tracking-[0.2em] text-amber-300">Client Portal</p>
+            <h1 className="text-3xl md:text-4xl font-bold text-white">
+              Find the right lawyer. Move your case forward.
+            </h1>
+            <p className="text-slate-300 max-w-3xl">
+              Post your legal issue, compare lawyers, book appointments, and keep documents in one secure place.
+            </p>
           </div>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-3">
+            <Link
+              to="/client/cases?create=1"
+              className="px-5 py-3 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-semibold shadow-md shadow-amber-500/25 transition-colors"
+            >
+              Post Legal Issue
+            </Link>
             <Link
               to="/client/search"
-              className="px-3 py-2 rounded-lg bg-amber-600 hover:bg-amber-700 text-sm font-medium text-white transition-colors"
+              className="px-5 py-3 rounded-xl bg-slate-800 border border-slate-700 hover:bg-slate-700 text-white font-semibold transition-colors"
             >
               Search Lawyers
             </Link>
             <Link
               to="/client/manage-bookings"
-              className="px-3 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-sm font-medium text-white transition-colors"
+              className="px-5 py-3 rounded-xl bg-slate-800 border border-slate-700 hover:bg-slate-700 text-white font-semibold transition-colors"
+            >
+              My Bookings
+            </Link>
+          </div>
+        </div>
+      </section>
+
+      <StatGrid items={stats} />
+
+      <section className="bg-slate-900/60 border border-slate-800 rounded-2xl p-6 space-y-4 shadow-lg shadow-slate-900/30">
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="text-lg font-semibold text-white">Quick Actions</div>
+            <div className="text-sm text-slate-400">Start faster with these shortcuts</div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Link
+              to="/client/cases?create=1"
+              className="px-3 py-2 rounded-lg bg-amber-500 hover:bg-amber-600 text-sm font-semibold text-slate-950 transition-colors"
+            >
+              Post Legal Issue
+            </Link>
+            <Link
+              to="/client/search"
+              className="px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 hover:bg-slate-700 text-sm font-semibold text-white transition-colors"
+            >
+              Search Lawyers
+            </Link>
+            <Link
+              to="/client/manage-bookings"
+              className="px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 hover:bg-slate-700 text-sm font-semibold text-white transition-colors"
             >
               Manage Bookings
             </Link>
             <Link
               to="/disputes/submit"
-              className="px-3 py-2 rounded-lg bg-rose-600 hover:bg-rose-700 text-sm font-medium text-white transition-colors"
+              className="px-3 py-2 rounded-lg bg-rose-600 hover:bg-rose-700 text-sm font-semibold text-white transition-colors"
             >
               Submit Dispute
             </Link>
@@ -109,7 +133,7 @@ export default function Dashboard() {
         </div>
       </section>
 
-      <section className="bg-slate-800 border border-slate-700 rounded-lg p-5">
+      <section className="bg-slate-900/60 border border-slate-800 rounded-2xl p-6 shadow-lg shadow-slate-900/30">
         <div className="flex items-center justify-between mb-4">
           <div>
             <div className="text-lg font-semibold text-white">Recent Bookings</div>
@@ -148,7 +172,7 @@ export default function Dashboard() {
             {recentBookings.map((booking) => (
               <div
                 key={booking.id}
-                className="bg-slate-900/60 border border-slate-700 rounded-lg p-4 flex items-center justify-between"
+                className="bg-slate-900/70 border border-slate-800 rounded-xl p-4 flex items-center justify-between hover:border-slate-700 transition-colors"
               >
                 <div>
                   <div className="flex items-center gap-3 mb-1">
@@ -162,7 +186,7 @@ export default function Dashboard() {
                 <div className="flex gap-2">
                   <Link
                     to={`/client/bookings/${booking.id}`}
-                    className="px-3 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-sm font-medium text-white transition-colors"
+                    className="px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 hover:bg-slate-700 text-sm font-medium text-white transition-colors"
                   >
                     View
                   </Link>

@@ -1,11 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import api from "../services/api";
 import PageShell from "../components/ui/PageShell";
 import EmptyState from "../components/ui/EmptyState";
+import useRequireAuth from "../hooks/useRequireAuth";
+import LoginRequiredModal from "../components/ui/LoginRequiredModal";
 
 export default function LawyerPublicProfile() {
   const { id } = useParams();
+  const navigate = useNavigate();
+  const { requireAuth, modalOpen, closeModal } = useRequireAuth();
   const [lawyer, setLawyer] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -69,19 +73,20 @@ export default function LawyerPublicProfile() {
   }
 
   return (
-    <PageShell
-      title={lawyer.full_name || "Lawyer"}
-      subtitle="Public profile"
-      actions={
-        <Link
-          to={`/client/booking/${lawyer.id}`}
-          className="px-4 py-2 rounded-lg bg-amber-600 hover:bg-amber-700 text-sm font-medium text-white transition-colors"
-        >
-          Book Appointment
-        </Link>
-      }
-      contentClassName="space-y-6 max-w-4xl"
-    >
+    <>
+      <PageShell
+        title={lawyer.full_name || "Lawyer"}
+        subtitle="Public profile"
+        actions={
+          <button
+            onClick={() => requireAuth(() => navigate(`/client/booking/${lawyer.id}`))}
+            className="px-4 py-2 rounded-lg bg-amber-600 hover:bg-amber-700 text-sm font-medium text-white transition-colors"
+          >
+            Book Appointment
+          </button>
+        }
+        contentClassName="space-y-6 max-w-4xl"
+      >
       <div className="bg-slate-800 border border-slate-700 rounded-lg p-5 space-y-4">
         <div className="flex items-start justify-between gap-4">
           <div>
@@ -136,10 +141,17 @@ export default function LawyerPublicProfile() {
         </div>
       </div>
 
-      <div className="bg-slate-800 border border-slate-700 rounded-lg p-5 text-slate-300">
-        <div className="text-lg font-semibold text-white mb-1">Reviews</div>
-        <div className="text-sm text-slate-400">Coming soon.</div>
-      </div>
-    </PageShell>
+        <div className="bg-slate-800 border border-slate-700 rounded-lg p-5 text-slate-300">
+          <div className="text-lg font-semibold text-white mb-1">Reviews</div>
+          <div className="text-sm text-slate-400">Coming soon.</div>
+        </div>
+      </PageShell>
+      <LoginRequiredModal
+        open={modalOpen}
+        onClose={closeModal}
+        title="Login to request a booking"
+        description="Sign up to book, upload documents, and submit intake details."
+      />
+    </>
   );
 }

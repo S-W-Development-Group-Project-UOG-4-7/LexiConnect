@@ -1,5 +1,5 @@
 import { NavLink, useNavigate } from "react-router-dom";
-import { logout, getUserFromToken } from "../services/auth";
+import { getUserFromToken } from "../services/auth";
 
 const TopNav = ({ links = [], brand = "LexiConnect" }) => {
   const navigate = useNavigate();
@@ -8,10 +8,19 @@ const TopNav = ({ links = [], brand = "LexiConnect" }) => {
   const email = localStorage.getItem("email") || "User";
 
   const handleLogout = () => {
-    logout();
+    // 1️⃣ Clear auth data
+    localStorage.removeItem("access_token");
+    localStorage.removeItem("user");
     localStorage.removeItem("role");
     localStorage.removeItem("email");
-    navigate("/login");
+
+    // 2️⃣ Optional: clear axios default header if you set it globally
+    if (window.axios) {
+      delete window.axios.defaults.headers.common["Authorization"];
+    }
+
+    // 3️⃣ Redirect to landing page
+    navigate("/", { replace: true });
   };
 
   return (
