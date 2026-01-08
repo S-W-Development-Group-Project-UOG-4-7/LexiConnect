@@ -1,0 +1,372 @@
+import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { createCase, getMyCases } from "../services/cases.service";
+
+export default function ClientCasesPage() {
+  const navigate = useNavigate();
+  const [cases, setCases] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [search, setSearch] = useState("");
+  const [districtFilter, setDistrictFilter] = useState("All");
+  const [sortOrder, setSortOrder] = useState("Newest");
+
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm] = useState({
+    title: "",
+    category: "",
+    district: "",
+    summary_public: "",
+    summary_private: "",
+  });
+  const [submitting, setSubmitting] = useState(false);
+  const [formError, setFormError] = useState("");
+
+  const loadCases = async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const data = await getMyCases();
+      setCases(data || []);
+    } catch (err) {
+      const message =
+        err?.response?.data?.detail ||
+        err?.response?.data?.message ||
+        "Failed to load cases.";
+      setError(message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadCases();
+  }, []);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setSubmitting(true);
+    setFormError("");
+    try {
+      await createCase(form);
+      setShowForm(false);
+      setForm({
+        title: "",
+        category: "",
+        district: "",
+        summary_public: "",
+        summary_private: "",
+      });
+      await loadCases();
+    } catch (err) {
+      const message =
+        err?.response?.data?.detail ||
+        err?.response?.data?.message ||
+        "Failed to create case.";
+      setFormError(message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const formattedDate = (value) => {
+    if (!value) return "—";
+    try {
+      return new Intl.DateTimeFormat(undefined, {
+        dateStyle: "medium",
+        timeStyle: "short",
+      }).format(new Date(value));
+    } catch {
+      return value;
+    }
+  };
+
+  const stats = (() => {
+    const total = cases.length;
+    const open = cases.filter((c) => (c.status || "open").toLowerCase() !== "closed").length || total;
+    const latest = cases[0]?.title || "—";
+    const districts = new Set(cases.map((c) => (c.district || "").trim()).filter(Boolean)).size || "—";
+    return [
+      { label: "Total Cases", value: total || "—" },
+      { label: "Open Cases", value: open || "—" },
+      { label: "Latest Case", value: latest },
+      { label: "Districts", value: districts },
+    ];
+  })();
+
+  const uniqueDistricts = ["All", ...Array.from(new Set(cases.map((c) => c.district).filter(Boolean)))];
+
+  const filteredCases = cases
+    .filter((c) => {
+      const q = search.trim().toLowerCase();
+      const matchesSearch =
+        !q ||
+        (c.title || "").toLowerCase().includes(q) ||
+        (c.category || "").toLowerCase().includes(q) ||
+        (c.district || "").toLowerCase().includes(q);
+      const matchesDistrict = districtFilter === "All" || (c.district || "").toLowerCase() === districtFilter.toLowerCase();
+      return matchesSearch && matchesDistrict;
+    })
+    .sort((a, b) => {
+      const aDate = new Date(a.created_at || 0).getTime();
+      const bDate = new Date(b.created_at || 0).getTime();
+      if (sortOrder === "Newest") return bDate - aDate;
+      if (sortOrder === "Oldest") return aDate - bDate;
+      return (a.title || "").localeCompare(b.title || "");
+    });
+
+  return (
+    <div className="min-h-screen bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 text-white">
+      <div className="max-w-6xl mx-auto px-4 py-10 space-y-8">
+        <section className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6 md:p-8 shadow-lg shadow-slate-900/30 flex flex-col md:flex-row md:items-center md:justify-between gap-6">
+          <div className="space-y-2">
+            <p className="text-sm uppercase tracking-[0.2em] text-amber-300">Cases</p>
+            <h1 className="text-3xl font-bold text-white">My Cases</h1>
+            <p className="text-slate-300">
+              Track your legal issues, lawyer requests, and case progress.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-3">
+            <button
+              onClick={() => setShowForm(true)}
+              className="px-5 py-3 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-semibold shadow-md shadow-amber-500/25 transition-colors"
+            >
+              Post Legal Issue
+            </button>
+            <button
+              onClick={() => navigate("/client/search")}
+              className="px-5 py-3 rounded-xl bg-slate-800 border border-slate-700 hover:bg-slate-700 text-white font-semibold transition-colors"
+            >
+              Browse Lawyers
+            </button>
+          </div>
+        </section>
+
+        <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {stats.map((s) => (
+            <div
+              key={s.label}
+              className="rounded-xl border border-slate-800 bg-slate-900/70 p-4 shadow-sm shadow-slate-900/30"
+            >
+              <div className="text-xs uppercase text-slate-400 tracking-wide">{s.label}</div>
+              <div className="text-2xl font-bold text-white mt-1">{s.value}</div>
+            </div>
+          ))}
+        </section>
+
+        <section className="bg-slate-900/70 border border-slate-800 rounded-2xl p-4 md:p-6 shadow-lg shadow-slate-900/30 space-y-4">
+          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
+            <div className="flex flex-1 gap-3 flex-wrap">
+              <input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search by title, category, or district"
+                className="flex-1 min-w-[220px] px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-sm placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500"
+              />
+              <select
+                value={districtFilter}
+                onChange={(e) => setDistrictFilter(e.target.value)}
+                className="px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+              >
+                {uniqueDistricts.map((d) => (
+                  <option key={d} value={d}>
+                    {d}
+                  </option>
+                ))}
+              </select>
+              <select
+                value={sortOrder}
+                onChange={(e) => setSortOrder(e.target.value)}
+                className="px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+              >
+                {["Newest", "Oldest", "A–Z"].map((s) => (
+                  <option key={s} value={s}>
+                    {s}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setShowForm((v) => !v)}
+                className="px-4 py-2 rounded-lg bg-slate-800 border border-slate-700 hover:bg-slate-700 text-sm font-semibold"
+              >
+                {showForm ? "Close Form" : "Create Case"}
+              </button>
+            </div>
+          </div>
+        </section>
+
+        {showForm && (
+          <form
+            onSubmit={handleSubmit}
+            className="border border-slate-800 rounded-2xl bg-slate-900/80 p-4 md:p-6 space-y-4 shadow-lg shadow-slate-900/30"
+          >
+            <div className="grid md:grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs text-slate-400">Title</label>
+                <input
+                  required
+                  value={form.title}
+                  onChange={(e) => setForm({ ...form, title: e.target.value })}
+                  className="mt-1 w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  placeholder="Case title"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-slate-400">Category</label>
+                <input
+                  required
+                  value={form.category}
+                  onChange={(e) => setForm({ ...form, category: e.target.value })}
+                  className="mt-1 w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  placeholder="Category"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-slate-400">District</label>
+                <input
+                  required
+                  value={form.district}
+                  onChange={(e) => setForm({ ...form, district: e.target.value })}
+                  className="mt-1 w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  placeholder="District"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-slate-400">Summary (public)</label>
+                <textarea
+                  required
+                  value={form.summary_public}
+                  onChange={(e) => setForm({ ...form, summary_public: e.target.value })}
+                  className="mt-1 w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  placeholder="Brief public summary"
+                />
+              </div>
+              <div className="md:col-span-2">
+                <label className="text-xs text-slate-400">Summary (private, optional)</label>
+                <textarea
+                  value={form.summary_private}
+                  onChange={(e) => setForm({ ...form, summary_private: e.target.value })}
+                  className="mt-1 w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  placeholder="Private notes for your lawyer (optional)"
+                />
+              </div>
+            </div>
+            {formError && (
+              <div className="text-sm text-red-300 border border-red-700 bg-red-900/30 rounded-lg p-2">
+                <div className="font-semibold">Error creating case</div>
+                <div>{formError}</div>
+              </div>
+            )}
+            <div className="flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setShowForm(false)}
+                className="px-4 py-2 rounded-lg border border-slate-700 bg-slate-800 hover:bg-slate-700 text-sm"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={submitting}
+                className="px-4 py-2 rounded-lg bg-amber-600 hover:bg-amber-700 text-sm font-semibold disabled:opacity-60"
+              >
+                {submitting ? "Saving..." : "Save Case"}
+              </button>
+            </div>
+          </form>
+        )}
+
+        {loading && (
+          <div className="space-y-3">
+            {[1, 2, 3, 4].map((k) => (
+              <div
+                key={k}
+                className="animate-pulse bg-slate-900/60 border border-slate-800 rounded-2xl h-28"
+              />
+            ))}
+          </div>
+        )}
+        {error && !loading && (
+          <div className="text-sm text-red-300 border border-red-700 bg-red-900/30 rounded-lg p-3">
+            <div className="font-semibold mb-1">API error</div>
+            <div>{error}</div>
+          </div>
+        )}
+
+        {!loading && !error && filteredCases.length === 0 && (
+          <div className="border border-slate-800 bg-slate-900/60 rounded-2xl p-6 text-center space-y-3 shadow-lg shadow-slate-900/30">
+            <h3 className="text-lg font-semibold text-white">No cases yet</h3>
+            <p className="text-slate-400 text-sm">Post your first legal issue to get started.</p>
+            <button
+              onClick={() => setShowForm(true)}
+              className="px-4 py-2 rounded-lg bg-amber-500 hover:bg-amber-600 text-slate-950 font-semibold transition-colors"
+            >
+              Post your first legal issue
+            </button>
+          </div>
+        )}
+
+        {!loading && !error && filteredCases.length > 0 && (
+          <div className="grid md:grid-cols-2 gap-4">
+            {filteredCases.map((c) => (
+              <div
+                key={c.id}
+                className="border border-slate-800 rounded-2xl bg-slate-900/70 p-5 space-y-3 shadow-lg shadow-slate-900/30 hover:border-slate-700 transition-colors animate-fade-in"
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <div className="text-lg font-semibold text-white">{c.title}</div>
+                  <span className="px-3 py-1 rounded-full text-xs font-semibold bg-emerald-900/30 text-emerald-200 border border-emerald-700/40">
+                    {(c.status || "Open").toString()}
+                  </span>
+                </div>
+                <div className="flex flex-wrap gap-2 text-xs">
+                  {c.category && (
+                    <span className="px-3 py-1 rounded-full bg-slate-800 border border-slate-700 text-amber-200">
+                      {c.category}
+                    </span>
+                  )}
+                  {c.district && (
+                    <span className="px-3 py-1 rounded-full bg-slate-800 border border-slate-700 text-slate-200">
+                      {c.district}
+                    </span>
+                  )}
+                  <span className="px-3 py-1 rounded-full bg-slate-800 border border-slate-700 text-slate-300">
+                    {c.created_at ? formattedDate(c.created_at) : "—"}
+                  </span>
+                </div>
+                <div className="text-sm text-slate-300">
+                  {c.summary_public || c.summary || "No summary provided yet."}
+                </div>
+                <div className="flex flex-col sm:flex-row gap-2 sm:items-center sm:justify-end">
+                  <button
+                    type="button"
+                    onClick={() => navigate(`/client/cases/${c.id}`)}
+                    className="px-4 py-2 rounded-lg bg-slate-800 border border-slate-700 hover:bg-slate-700 text-sm font-semibold text-white transition-colors"
+                  >
+                    Open Case
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => navigate(`/client/cases/${c.id}`)}
+                    className="px-4 py-2 rounded-lg bg-slate-800 border border-slate-700 hover:bg-slate-700 text-sm font-semibold text-white transition-colors"
+                  >
+                    Requests
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowForm(true)}
+                    className="px-4 py-2 rounded-lg bg-slate-900 border border-slate-800 hover:bg-slate-800 text-sm font-semibold text-white transition-colors"
+                  >
+                    Edit
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

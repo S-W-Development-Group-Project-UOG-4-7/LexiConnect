@@ -3,9 +3,12 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models.booking import Booking
+from app.modules.cases.models import Case
 from app.routers.auth import get_current_user
 from app.schemas.booking import BookingCreate, BookingOut, BookingCancelOut
 from app.models.user import User
+from app.modules.audit_log.service import log_event
+from app.modules.blackouts.models import BlackoutDay
 
 router = APIRouter(prefix="/api/bookings", tags=["bookings"])
 
@@ -23,12 +26,36 @@ def create_booking(
             detail="Only clients can create bookings",
         )
 
+    if booking_in.case_id is None:
+        raise HTTPException(status_code=422, detail="case_id required")
+
+    case = db.query(Case).filter(Case.id == booking_in.case_id).first()
+    if not case or case.client_id != current_user.id:
+        raise HTTPException(status_code=400, detail="Invalid case for this client")
+
+    # Prevent bookings on blackout days for the lawyer
+    if booking_in.scheduled_at:
+        try:
+            scheduled_date = booking_in.scheduled_at.date()
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid scheduled_at value")
+
+        blackout = (
+            db.query(BlackoutDay)
+            .filter(BlackoutDay.lawyer_id == booking_in.lawyer_id, BlackoutDay.date == scheduled_date)
+            .first()
+        )
+        if blackout:
+            raise HTTPException(status_code=400, detail="Lawyer unavailable on this date")
+
     booking = Booking(
         client_id=current_user.id,
         lawyer_id=booking_in.lawyer_id,
         branch_id=booking_in.branch_id,
         scheduled_at=booking_in.scheduled_at,
         note=booking_in.note,
+        service_package_id=booking_in.service_package_id,
+        case_id=booking_in.case_id,
         status="pending",
     )
     db.add(booking)
@@ -117,4 +144,144 @@ def cancel_booking(
     booking.status = "cancelled"
     db.commit()
     db.refresh(booking)
+    log_event(
+        db,
+        user=current_user,
+        action="BOOKING_CANCELLED",
+        description=f"Booking {booking.id} cancelled by client",
+        meta={
+            "booking_id": booking.id,
+            "client_id": booking.client_id,
+            "lawyer_id": booking.lawyer_id,
+        },
+    )
     return BookingCancelOut.model_validate(booking)
+
+
+@router.get("/lawyer/incoming", response_model=list[BookingOut])
+def list_lawyer_incoming_bookings(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """List incoming booking requests for the current lawyer (status: pending).
+    Only available for lawyers.
+    """
+    if current_user.role != "lawyer":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only lawyers can view incoming bookings",
+        )
+
+    bookings = (
+        db.query(Booking)
+        .filter(
+            Booking.lawyer_id == current_user.id,
+            Booking.status == "pending",
+        )
+        .order_by(Booking.created_at.desc())
+        .all()
+    )
+
+    return [BookingOut.model_validate(b) for b in bookings]
+
+
+@router.patch("/{booking_id}/confirm", response_model=BookingOut)
+def confirm_booking(
+    booking_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Confirm a booking request. Only the assigned lawyer can confirm pending bookings."""
+    if current_user.role != "lawyer":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only lawyers can confirm bookings",
+        )
+
+    booking = db.query(Booking).filter(Booking.id == booking_id).first()
+    if not booking:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Booking not found",
+        )
+
+    # Check if user is the assigned lawyer
+    if booking.lawyer_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You can only confirm bookings assigned to you",
+        )
+
+    # Check if booking is pending
+    if booking.status != "pending":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Cannot confirm booking with status '{booking.status}'. Only pending bookings can be confirmed.",
+        )
+
+    booking.status = "confirmed"
+    db.commit()
+    db.refresh(booking)
+    log_event(
+        db,
+        user=current_user,
+        action="BOOKING_CONFIRMED",
+        description=f"Booking {booking.id} confirmed by lawyer",
+        meta={
+            "booking_id": booking.id,
+            "lawyer_id": booking.lawyer_id,
+            "client_id": booking.client_id,
+        },
+    )
+    return BookingOut.model_validate(booking)
+
+
+@router.patch("/{booking_id}/reject", response_model=BookingOut)
+def reject_booking(
+    booking_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Reject a booking request. Only the assigned lawyer can reject pending bookings."""
+    if current_user.role != "lawyer":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only lawyers can reject bookings",
+        )
+
+    booking = db.query(Booking).filter(Booking.id == booking_id).first()
+    if not booking:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Booking not found",
+        )
+
+    # Check if user is the assigned lawyer
+    if booking.lawyer_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You can only reject bookings assigned to you",
+        )
+
+    # Check if booking is pending
+    if booking.status != "pending":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Cannot reject booking with status '{booking.status}'. Only pending bookings can be rejected.",
+        )
+
+    booking.status = "rejected"
+    db.commit()
+    db.refresh(booking)
+    log_event(
+        db,
+        user=current_user,
+        action="BOOKING_REJECTED",
+        description=f"Booking {booking.id} rejected by lawyer",
+        meta={
+            "booking_id": booking.id,
+            "lawyer_id": booking.lawyer_id,
+            "client_id": booking.client_id,
+        },
+    )
+    return BookingOut.model_validate(booking)

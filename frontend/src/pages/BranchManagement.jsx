@@ -1,5 +1,6 @@
-import { useState } from "react";
-import './availability-ui.css';
+import { useEffect, useMemo, useState } from "react";
+import "./availability-ui.css";
+import api from "../services/api"; // ✅ uses env base URL + attaches token
 
 function BranchManagement() {
   const [branches, setBranches] = useState([]);
@@ -10,44 +11,131 @@ function BranchManagement() {
     address: "",
   });
 
-  const handleChange = (e) => {
-    setForm({...form, [e.target.name]: e.target.value});
+  const [loading, setLoading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
+  const [editingId, setEditingId] = useState(null);
+
+  const isEditing = useMemo(() => editingId !== null, [editingId]);
+
+  const resetForm = () => {
+    setForm({ name: "", district: "", city: "", address: "" });
+    setEditingId(null);
   };
 
-  const handleSubmit = (e) => {
+  const fetchBranches = async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const res = await api.get("/api/branches/me");
+      setBranches(res.data || []);
+    } catch (err) {
+      const msg =
+        err?.response?.data?.detail ||
+        err?.message ||
+        "Failed to load branches.";
+      setError(msg);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchBranches();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleChange = (e) => {
+    setForm({ ...form, [e.target.name]: e.target.value });
+  };
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    const newBranch = {
-      id: Date.now(),
-      name: form.name,
-      district: form.district,
-      city: form.city,
-      address: form.address,
-    };
-    setBranches([...branches, newBranch]);
+    setSubmitting(true);
+    setError("");
+
+    try {
+      if (!form.name || !form.district || !form.city || !form.address) {
+        setError("Please fill all required fields.");
+        return;
+      }
+
+      if (isEditing) {
+        // ✅ Update branch
+        const res = await api.patch(`/api/branches/${editingId}`, form);
+
+        // update local list without refetch
+        setBranches((prev) =>
+          prev.map((b) => (b.id === editingId ? res.data : b))
+        );
+      } else {
+        // ✅ Create branch
+        const res = await api.post("/api/branches", form);
+        setBranches((prev) => [...prev, res.data]);
+      }
+
+      resetForm();
+    } catch (err) {
+      const msg =
+        err?.response?.data?.detail ||
+        err?.message ||
+        "Failed to save branch.";
+      setError(msg);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleEdit = (branch) => {
+    setEditingId(branch.id);
     setForm({
-      name: "",
-      district: "",
-      city: "",
-      address: "",
+      name: branch.name || "",
+      district: branch.district || "",
+      city: branch.city || "",
+      address: branch.address || "",
     });
+    setError("");
+  };
+
+  const handleDelete = async (branchId) => {
+    const ok = window.confirm("Delete this branch?");
+    if (!ok) return;
+
+    setError("");
+    try {
+      await api.delete(`/api/branches/${branchId}`);
+      setBranches((prev) => prev.filter((b) => b.id !== branchId));
+
+      // if deleting the branch you're editing, reset
+      if (editingId === branchId) resetForm();
+    } catch (err) {
+      const msg =
+        err?.response?.data?.detail ||
+        err?.message ||
+        "Failed to delete branch.";
+      setError(msg);
+    }
   };
 
   return (
-    <div className="availability-page">
-      <div className="availability-card">
-        <div className="availability-card-header">
-          <div className="availability-brand">
-            <span className="availability-logo">⚖️</span>
-            <div className="availability-brand-text">
-              <div className="availability-brand-name">LEXICONNECT</div>
-              <div className="availability-brand-subtitle">Manage your branch locations</div>
-            </div>
+    <div className="lc-page">
+      <div className="lc-card">
+        <div className="lc-header">
+          <div className="lc-icon">📍</div>
+          <div>
+            <h1 className="lc-title">My Branches</h1>
+            <p className="lc-subtitle">Manage your branch locations</p>
           </div>
-          <h1 className="availability-title">My Branches</h1>
         </div>
 
+        {error && (
+          <div className="alert alert-error" style={{ marginBottom: "1.5rem" }}>
+            {error}
+          </div>
+        )}
+
         <form onSubmit={handleSubmit} className="availability-form">
-          <div className="availability-form-grid">
+          <div className="lc-form-grid">
             <div className="form-group">
               <label htmlFor="name" className="form-label">
                 Branch Name <span className="required-star">*</span>
@@ -58,8 +146,8 @@ function BranchManagement() {
                 name="name"
                 value={form.name}
                 onChange={handleChange}
-                placeholder="Enter branch name"
-                className="form-control"
+                placeholder="e.g., Main Office"
+                className="lc-input"
               />
             </div>
 
@@ -73,8 +161,8 @@ function BranchManagement() {
                 name="district"
                 value={form.district}
                 onChange={handleChange}
-                placeholder="Enter district"
-                className="form-control"
+                placeholder="e.g., Colombo"
+                className="lc-input"
               />
             </div>
 
@@ -88,14 +176,14 @@ function BranchManagement() {
                 name="city"
                 value={form.city}
                 onChange={handleChange}
-                placeholder="Enter city"
-                className="form-control"
+                placeholder="e.g., Colombo 03"
+                className="lc-input"
               />
             </div>
 
-            <div className="form-group">
+            <div className="form-group" style={{ gridColumn: "1 / -1" }}>
               <label htmlFor="address" className="form-label">
-                Address <span className="required-star">*</span>
+                Full Address <span className="required-star">*</span>
               </label>
               <input
                 type="text"
@@ -103,66 +191,100 @@ function BranchManagement() {
                 name="address"
                 value={form.address}
                 onChange={handleChange}
-                placeholder="Enter full address"
-                className="form-control"
+                placeholder="e.g., No. 123, Galle Road"
+                className="lc-input"
               />
             </div>
           </div>
 
-          <button type="submit" className="availability-primary-btn">
-            Add Branch
-          </button>
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.75rem", marginTop: "1rem" }}>
+            {isEditing && (
+              <button
+                type="button"
+                className="availability-danger-btn"
+                onClick={resetForm}
+                disabled={submitting}
+              >
+                Cancel
+              </button>
+            )}
+            <button
+              type="submit"
+              className="lc-primary-btn"
+              disabled={submitting}
+            >
+              <span>+</span>
+              {submitting
+                ? isEditing
+                  ? "Saving..."
+                  : "Adding..."
+                : isEditing
+                ? "Save Changes"
+                : "Add Branch"}
+            </button>
+          </div>
         </form>
 
-        <div className="availability-divider" />
+        <div className="lc-divider" />
 
         <div className="availability-section-header">
           <h2>Your Branches</h2>
           <p>Manage your existing branch locations.</p>
         </div>
 
-        {branches.length === 0 ? (
+        {loading ? (
+          <div className="empty-state">
+            <p>Loading branches...</p>
+          </div>
+        ) : branches.length === 0 ? (
           <div className="empty-state">
             <p>No branches yet</p>
             <p className="empty-sub">Add your first branch to get started.</p>
-            <button 
+            <button
               type="button"
-              className="availability-primary-btn"
-              style={{ marginTop: '1rem' }}
-              onClick={() => {}}
+              className="lc-primary-btn"
+              style={{ marginTop: "1rem" }}
+              onClick={() => {
+                const el = document.getElementById("name");
+                if (el) el.focus();
+              }}
             >
+              <span>+</span>
               Add First Branch
             </button>
           </div>
         ) : (
-          <div className="availability-slots">
-            {branches.map(b => (
-              <div key={b.id} className="slot-item">
-                <div className="slot-info">
-                  <div className="slot-time">{b.name}</div>
-                  <div className="slot-meta">
-                    <span>{b.city}</span>
-                    {b.district && (
-                      <>
-                        <span className="slot-sep">•</span>
-                        <span>{b.district}</span>
-                      </>
-                    )}
+          <div className="lc-list">
+            {branches.map((b) => (
+              <div key={b.id} className="lc-list-card">
+                <div className="lc-list-card-content">
+                  <div className="lc-list-card-title">{b.name}</div>
+                  <div className="lc-list-card-meta">
+                    {b.city}
+                    {b.district && `, ${b.district}`}
                   </div>
+                  {b.address && (
+                    <div className="lc-list-card-meta" style={{ marginTop: "0.25rem" }}>
+                      {b.address}
+                    </div>
+                  )}
                 </div>
-                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                <div style={{ display: "flex", gap: "0.5rem" }}>
                   <button
                     type="button"
-                    className="availability-primary-btn"
-                    style={{ height: '40px', padding: '0 0.9rem', fontSize: '0.85rem' }}
+                    className="lc-icon-btn edit"
+                    onClick={() => handleEdit(b)}
+                    title="Edit"
                   >
-                    Edit
+                    ✏️
                   </button>
                   <button
                     type="button"
-                    className="availability-danger-btn"
+                    className="lc-icon-btn delete"
+                    onClick={() => handleDelete(b.id)}
+                    title="Delete"
                   >
-                    Delete
+                    🗑️
                   </button>
                 </div>
               </div>

@@ -46,3 +46,103 @@ export const cancelBooking = async (id) => {
   const { data } = await api.patch(`/api/bookings/${id}/cancel`);
   return data;
 };
+
+/**
+ * List incoming booking requests for lawyer (status: pending)
+ * Lawyer only endpoint
+ * @returns {Promise<Array>} Array of pending booking objects
+ */
+export const lawyerListIncomingBookings = async () => {
+  const { data } = await api.get("/api/bookings/lawyer/incoming");
+  return data;
+};
+
+/**
+ * Confirm a booking request (lawyer only)
+ * Only the assigned lawyer can confirm, only if status is PENDING
+ * @param {number} bookingId - Booking ID
+ * @returns {Promise<Object>} Confirmed booking object
+ */
+export const lawyerConfirmBooking = async (bookingId) => {
+  const { data } = await api.patch(`/api/bookings/${bookingId}/confirm`);
+  return data;
+};
+
+/**
+ * Reject a booking request (lawyer only)
+ * Only the assigned lawyer can reject, only if status is PENDING
+ * @param {number} bookingId - Booking ID
+ * @returns {Promise<Object>} Rejected booking object
+ */
+export const lawyerRejectBooking = async (bookingId) => {
+  const { data } = await api.patch(`/api/bookings/${bookingId}/reject`);
+  return data;
+};
+
+/**
+ * Get incoming booking requests for lawyer (status: pending)
+ * Lawyer only endpoint
+ * @returns {Promise<Array>} Array of pending booking objects
+ */
+export const getLawyerIncomingBookings = async () => {
+  const { data } = await api.get("/api/bookings/lawyer/incoming");
+  return data;
+};
+
+/**
+ * Confirm a booking request (lawyer only)
+ * Only the assigned lawyer can confirm, only if status is PENDING
+ * @param {number} id - Booking ID
+ * @returns {Promise<Object>} Confirmed booking object
+ */
+export const confirmBooking = async (id) => {
+  const { data } = await api.patch(`/api/bookings/${id}/confirm`);
+  return data;
+};
+
+/**
+ * Reject a booking request (lawyer only)
+ * Only the assigned lawyer can reject, only if status is PENDING
+ * @param {number} id - Booking ID
+ * @returns {Promise<Object>} Rejected booking object
+ */
+export const rejectBooking = async (id) => {
+  const { data } = await api.patch(`/api/bookings/${id}/reject`);
+  return data;
+};
+
+/**
+ * Public: list active service packages for a lawyer
+ * @param {number} lawyerId
+ * @returns {Promise<Array>}
+ */
+export const getLawyerServicePackages = async (lawyerId) => {
+  const { data } = await api.get(`/api/lawyers/${lawyerId}/service-packages`);
+  return data;
+};
+
+/**
+ * Map a user_id (users table) to a lawyers.id row.
+ * @param {number} userId
+ * @returns {Promise<number>} lawyer_id
+ */
+export const getLawyerIdByUser = async (userId) => {
+  const { data } = await api.get(`/api/lawyers/by-user/${userId}`);
+  return data?.lawyer_id;
+};
+
+/**
+ * List cases for current client
+ */
+export const listMyCases = async () => {
+  const { data } = await api.get("/api/cases/my");
+  return data;
+};
+
+/**
+ * Create a new case for current client
+ */
+export const createCase = async (payload) => {
+  const { data } = await api.post("/api/cases", payload);
+  return data;
+};

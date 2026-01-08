@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { format, parseISO, isBefore } from 'date-fns';
 import './availability-ui.css';
+import ImageGallery from '../components/ImageGallery';
+import '../styles/ImageGallery.css';
 
-const API_BASE = 'http://127.0.0.1:8000';
+const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000";
 
 const AvailabilityEditor = () => {
   // Form state with validation
@@ -259,6 +261,9 @@ const AvailabilityEditor = () => {
 
   return (
     <div className="availability-page">
+      {/* Image Gallery */}
+      <ImageGallery />
+      
       {/* Header */}
       <div className="availability-card">
         <div className="availability-card-header">

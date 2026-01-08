@@ -4,11 +4,18 @@ from typing import Optional
 from pydantic import BaseModel, ConfigDict
 
 
+from os import getenv
+
+ALLOW_LEGACY = getenv("ALLOW_LEGACY_BOOKING", "").lower() == "true"
+
+
 class BookingCreate(BaseModel):
     lawyer_id: int
     branch_id: Optional[int] = None
     scheduled_at: Optional[datetime] = None
     note: Optional[str] = None
+    service_package_id: Optional[int] = None
+    case_id: int | None = None if ALLOW_LEGACY else ...  # required unless legacy flag set
 
 
 class BookingOut(BaseModel):
@@ -16,6 +23,8 @@ class BookingOut(BaseModel):
     client_id: int
     lawyer_id: int
     branch_id: Optional[int] = None
+    service_package_id: Optional[int] = None
+    case_id: Optional[int] = None
     scheduled_at: Optional[datetime] = None
     note: Optional[str] = None
     status: str
@@ -31,10 +40,33 @@ class BookingUpdate(BaseModel):
     scheduled_at: Optional[datetime] = None
     note: Optional[str] = None
     status: Optional[str] = None
+    service_package_id: Optional[int] = None
+    case_id: Optional[int] = None
 
 
 class BookingCancelOut(BaseModel):
     id: int
     status: str
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class BookingDraftCreate(BaseModel):
+    lawyer_id: int
+    scheduled_at: Optional[datetime] = None
+    service_package_id: Optional[int] = None
+    client_note: Optional[str] = None
+    case_id: Optional[int] = None
+
+
+class BookingDraftOut(BaseModel):
+    id: int
+    status: str
+    lawyer_id: int
+    client_id: int
+    service_package_id: Optional[int] = None
+    case_id: Optional[int] = None
+    scheduled_at: Optional[datetime] = None
+    note: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
