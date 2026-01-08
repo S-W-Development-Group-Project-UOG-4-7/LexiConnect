@@ -64,15 +64,12 @@ def upgrade() -> None:
     )
     op.create_index(op.f('ix_lawyer_profiles_id'), 'lawyer_profiles', ['id'], unique=False)
     op.create_index(op.f('ix_lawyer_profiles_user_id'), 'lawyer_profiles', ['user_id'], unique=True)
-    op.drop_index('ix_service_packages_id', table_name='service_packages')
-    op.drop_table('service_packages')
-    op.drop_index('ix_checklist_templates_id', table_name='checklist_templates')
-    op.drop_table('checklist_templates')
-    op.drop_constraint('disputes_client_id_fkey', 'disputes', type_='foreignkey')
-    op.drop_constraint('disputes_booking_id_fkey', 'disputes', type_='foreignkey')
+    
+    op.execute("ALTER TABLE disputes DROP CONSTRAINT IF EXISTS disputes_client_id_fkey")
+    op.execute("ALTER TABLE disputes DROP CONSTRAINT IF EXISTS disputes_booking_id_fkey")
     op.create_foreign_key(None, 'disputes', 'bookings', ['booking_id'], ['id'], ondelete='SET NULL')
     op.create_foreign_key(None, 'disputes', 'users', ['client_id'], ['id'], ondelete='CASCADE')
-    op.create_index(op.f('ix_documents_id'), 'documents', ['id'], unique=False)
+    op.execute("CREATE INDEX IF NOT EXISTS ix_documents_id ON documents (id)")
     op.alter_column('intake_forms', 'case_type',
                existing_type=sa.VARCHAR(length=100),
                nullable=False)

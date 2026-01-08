@@ -31,6 +31,16 @@ def upgrade() -> None:
     op.execute("""
     DO $$
     BEGIN
+        -- If service_packages table isn't created yet (different head/branch), skip FK for now
+        IF NOT EXISTS (
+            SELECT 1
+            FROM information_schema.tables
+            WHERE table_schema = 'public'
+              AND table_name = 'service_packages'
+        ) THEN
+            RETURN;
+        END IF;
+
         IF NOT EXISTS (
             SELECT 1 FROM pg_constraint WHERE conname = 'fk_bookings_service_package_id'
         ) THEN
@@ -44,6 +54,16 @@ def upgrade() -> None:
     op.execute("""
     DO $$
     BEGIN
+        -- If cases table isn't created yet (different head/branch), skip FK for now
+        IF NOT EXISTS (
+            SELECT 1
+            FROM information_schema.tables
+            WHERE table_schema = 'public'
+              AND table_name = 'cases'
+        ) THEN
+            RETURN;
+        END IF;
+
         IF NOT EXISTS (
             SELECT 1 FROM pg_constraint WHERE conname = 'fk_bookings_case_id'
         ) THEN
