@@ -1,7 +1,7 @@
 """cases module tables
 
 Revision ID: 3a70ff1079e2
-Revises: 01748acc3a52
+Revises: f39e5b575deb
 Create Date: 2025-12-31 16:48:24.104739
 
 """
@@ -13,7 +13,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision: str = '3a70ff1079e2'
-down_revision: Union[str, None] = '01748acc3a52'
+down_revision: Union[str, None] = 'f39e5b575deb'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
