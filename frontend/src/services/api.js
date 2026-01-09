@@ -4,7 +4,7 @@ import axios from "axios";
 // Uses Vite proxy in dev via relative /api
 // Can be overridden via VITE_API_BASE_URL for production
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || "/api",
+  baseURL: import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000",
   headers: {
     "Content-Type": "application/json",
   },

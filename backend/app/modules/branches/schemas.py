@@ -23,6 +23,9 @@ class BranchResponse(BaseModel):
     district: str
     city: str
     address: str
+    is_active: bool = True
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
    
     class Config:
         from_attributes = True
