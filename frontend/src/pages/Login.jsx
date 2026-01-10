@@ -26,8 +26,12 @@ const Login = () => {
         },
       });
       const token = data.access_token;
+      const refresh = data.refresh_token;
       localStorage.setItem("access_token", token);
       localStorage.setItem("token", token);
+      if (refresh) {
+        localStorage.setItem("refresh_token", refresh);
+      }
 
       // Decode role from JWT payload
       let role = null;

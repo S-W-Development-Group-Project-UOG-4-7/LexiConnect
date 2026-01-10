@@ -31,10 +31,11 @@ router = APIRouter(prefix="/lawyer-availability", tags=["Lawyer Availability"])
 # Schemas
 # ---------------------------------------------------------------------------
 class WeeklyBase(BaseModel):
-    day_of_week: str = Field(..., description="MONDAY..SUNDAY")
+    day_of_week: str = Field(..., description="mon..sun (case-insensitive)")
     start_time: time
     end_time: time
     branch_id: Optional[int] = None
+    location: Optional[str] = None
     max_bookings: Optional[int] = None
     is_active: Optional[bool] = True
 
@@ -43,19 +44,19 @@ class WeeklyBase(BaseModel):
     def normalize_day(cls, v: str):
         if not isinstance(v, str):
             raise ValueError("day_of_week must be a string")
-        upper = v.strip().upper()
-        allowed = {
-            "MONDAY": WeekDay.MONDAY,
-            "TUESDAY": WeekDay.TUESDAY,
-            "WEDNESDAY": WeekDay.WEDNESDAY,
-            "THURSDAY": WeekDay.THURSDAY,
-            "FRIDAY": WeekDay.FRIDAY,
-            "SATURDAY": WeekDay.SATURDAY,
-            "SUNDAY": WeekDay.SUNDAY,
+        cleaned = v.strip().upper()
+        short_map = {
+            "MON": "MONDAY",
+            "TUE": "TUESDAY",
+            "WED": "WEDNESDAY",
+            "THU": "THURSDAY",
+            "FRI": "FRIDAY",
+            "SAT": "SATURDAY",
+            "SUN": "SUNDAY",
         }
-        if upper not in allowed:
-            raise ValueError("day_of_week must be one of MONDAY..SUNDAY")
-        return upper
+        if cleaned in short_map:
+            cleaned = short_map[cleaned]
+        return cleaned
 
 
 class WeeklyCreate(WeeklyBase):
@@ -67,6 +68,7 @@ class WeeklyUpdate(BaseModel):
     start_time: Optional[time] = None
     end_time: Optional[time] = None
     branch_id: Optional[int] = None
+    location: Optional[str] = None
     max_bookings: Optional[int] = None
     is_active: Optional[bool] = None
 
@@ -119,27 +121,59 @@ def _current_lawyer(db: Session, current_user: User):
 
 
 def _to_weekday(day_str: str) -> WeekDay:
-    mapping = {
+    DAY_TO_ENUM = {
+        "MON": WeekDay.MONDAY,
         "MONDAY": WeekDay.MONDAY,
+        "TUE": WeekDay.TUESDAY,
         "TUESDAY": WeekDay.TUESDAY,
+        "WED": WeekDay.WEDNESDAY,
         "WEDNESDAY": WeekDay.WEDNESDAY,
+        "THU": WeekDay.THURSDAY,
         "THURSDAY": WeekDay.THURSDAY,
+        "FRI": WeekDay.FRIDAY,
         "FRIDAY": WeekDay.FRIDAY,
+        "SAT": WeekDay.SATURDAY,
         "SATURDAY": WeekDay.SATURDAY,
+        "SUN": WeekDay.SUNDAY,
         "SUNDAY": WeekDay.SUNDAY,
     }
-    return mapping[day_str]
+    key = day_str.strip().upper()
+    if key not in DAY_TO_ENUM:
+        allowed = list(DAY_TO_ENUM.keys())
+        raise HTTPException(
+            status_code=422,
+            detail=f"Invalid day_of_week '{day_str}'. Allowed values: {', '.join(sorted(set(allowed)))}",
+        )
+    return DAY_TO_ENUM[key]
 
 
 def _branch_for_lawyer(db: Session, branch_id: Optional[int], lawyer_id: int) -> Optional[Branch]:
     if branch_id is None:
-        return None
+        raise HTTPException(status_code=400, detail="branch_id is required")
     branch = db.query(Branch).filter(Branch.id == branch_id).first()
     if not branch:
         raise HTTPException(status_code=404, detail="Branch not found")
     if branch.lawyer_id and branch.lawyer_id != lawyer_id:
         raise HTTPException(status_code=403, detail="Branch does not belong to this lawyer")
     return branch
+
+
+def _derive_location(branch: Optional[Branch], provided_location: Optional[str]) -> str:
+    """
+    Use the provided location when present; otherwise build one from the branch
+    name/address or fall back to an online placeholder.
+    """
+    if provided_location:
+        cleaned = provided_location.strip()
+        if cleaned:
+            return cleaned
+
+    if branch:
+        parts = [branch.name, branch.address]
+        combined = " - ".join([p for p in parts if p])
+        return combined or "Online Consultation"
+
+    return "Online Consultation"
 
 
 # ---------------------------------------------------------------------------
@@ -167,6 +201,7 @@ def get_my_availability(
             start_time=row.start_time,
             end_time=row.end_time,
             branch_id=row.branch_id,
+            location=row.location,
             max_bookings=row.max_bookings,
             is_active=row.is_active,
         )
@@ -216,6 +251,7 @@ def list_weekly(
             start_time=row.start_time,
             end_time=row.end_time,
             branch_id=row.branch_id,
+            location=row.location,
             max_bookings=row.max_bookings,
             is_active=row.is_active,
         )
@@ -262,43 +298,87 @@ def list_blackouts(
 @router.post("/weekly", response_model=WeeklyOut, status_code=status.HTTP_201_CREATED)
 def create_weekly_slot(
     payload: WeeklyCreate,
-    lawyer_id: Optional[int] = Query(None, description="Compatibility param (optional)"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    """
+    Create weekly availability for the authenticated lawyer only.
+    Ignores any client-supplied lawyer_id and uses the JWT user instead.
+    """
     _require_lawyer(current_user)
     lawyer = _current_lawyer(db, current_user)
-    target_id = lawyer_id or lawyer.id
-    if target_id != lawyer.id:
-        raise HTTPException(status_code=403, detail="Cannot create availability for another lawyer")
+    target_id = lawyer.id
+
+    print("[availability] create_weekly_slot payload", payload.model_dump())
 
     if payload.start_time >= payload.end_time:
         raise HTTPException(status_code=400, detail="start_time must be before end_time")
 
-    _branch_for_lawyer(db, payload.branch_id, target_id)
+    try:
+        branch = _branch_for_lawyer(db, payload.branch_id, target_id)
+        location_value = _derive_location(branch, payload.location)
+        weekday = _to_weekday(payload.day_of_week)
 
-    entry = WeeklyAvailability(
-        lawyer_id=target_id,
-        branch_id=payload.branch_id,
-        day_of_week=_to_weekday(payload.day_of_week),
-        start_time=payload.start_time,
-        end_time=payload.end_time,
-        max_bookings=payload.max_bookings,
-        is_active=payload.is_active if payload.is_active is not None else True,
-    )
-    db.add(entry)
-    db.commit()
-    db.refresh(entry)
+        normalized_payload = {
+            "lawyer_id": target_id,
+            "branch_id": payload.branch_id,
+            "day_of_week": weekday.name,
+            "start_time": payload.start_time.isoformat(),
+            "end_time": payload.end_time.isoformat(),
+            "max_bookings": payload.max_bookings or 1,
+            "is_active": payload.is_active if payload.is_active is not None else True,
+        }
+        print("[availability] normalized payload", normalized_payload)
 
-    return WeeklyOut(
-        id=entry.id,
-        day_of_week=entry.day_of_week.name.upper(),
-        start_time=entry.start_time,
-        end_time=entry.end_time,
-        branch_id=entry.branch_id,
-        max_bookings=entry.max_bookings,
-        is_active=entry.is_active,
-    )
+        existing = (
+            db.query(WeeklyAvailability)
+            .filter(
+                WeeklyAvailability.lawyer_id == target_id,
+                WeeklyAvailability.branch_id == payload.branch_id,
+                WeeklyAvailability.day_of_week == weekday,
+                WeeklyAvailability.start_time == payload.start_time,
+                WeeklyAvailability.end_time == payload.end_time,
+            )
+            .first()
+        )
+
+        if existing:
+            raise HTTPException(
+                status_code=409,
+                detail="Availability already exists for this day/time/branch",
+            )
+
+        entry = WeeklyAvailability(
+            lawyer_id=target_id,
+            branch_id=payload.branch_id,
+            location=location_value,
+            day_of_week=weekday,
+            start_time=payload.start_time,
+            end_time=payload.end_time,
+            max_bookings=payload.max_bookings or 1,
+            is_active=payload.is_active if payload.is_active is not None else True,
+        )
+        db.add(entry)
+        db.commit()
+        db.refresh(entry)
+        print(f"[availability] inserted weekly row id={entry.id}")
+
+        return WeeklyOut(
+            id=entry.id,
+            day_of_week=entry.day_of_week.name.upper(),
+            start_time=entry.start_time,
+            end_time=entry.end_time,
+            branch_id=entry.branch_id,
+            location=entry.location,
+            max_bookings=entry.max_bookings,
+            is_active=entry.is_active,
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        db.rollback()
+        print("[availability] create_weekly_slot error", exc)
+        raise HTTPException(status_code=500, detail=str(exc))
 
 
 @router.patch("/weekly/{entry_id}", response_model=WeeklyOut)
@@ -319,17 +399,24 @@ def update_weekly_slot(
         raise HTTPException(status_code=404, detail="Weekly availability not found")
 
     updates = payload.model_dump(exclude_unset=True)
+    print("[availability] update_weekly_slot payload", {"entry_id": entry_id, **updates})
+    provided_location = updates.pop("location", None)
+    if provided_location is not None:
+        provided_location = provided_location.strip() or None
 
     if "day_of_week" in updates:
         updates["day_of_week"] = _to_weekday(updates["day_of_week"])
 
-    if "branch_id" in updates:
-        _branch_for_lawyer(db, updates["branch_id"], lawyer.id)
+    target_branch_id = updates.get("branch_id", entry.branch_id)
+    branch = _branch_for_lawyer(db, target_branch_id, lawyer.id)
 
     start_time = updates.get("start_time", entry.start_time)
     end_time = updates.get("end_time", entry.end_time)
     if start_time and end_time and start_time >= end_time:
         raise HTTPException(status_code=400, detail="start_time must be before end_time")
+
+    if provided_location is not None or "branch_id" in updates:
+        updates["location"] = _derive_location(branch, provided_location)
 
     for field, value in updates.items():
         setattr(entry, field, value)
@@ -342,6 +429,7 @@ def update_weekly_slot(
         start_time=entry.start_time,
         end_time=entry.end_time,
         branch_id=entry.branch_id,
+        location=entry.location,
         max_bookings=entry.max_bookings,
         is_active=entry.is_active,
     )
@@ -494,7 +582,7 @@ def preview_slots(
         key = row.day_of_week.name.upper()
         weekly_by_day.setdefault(key, []).append(row)
 
-    branch_map = {b.id: b.name for b in db.query(Branch).filter(Branch.lawyer_id == target_lawyer_id).all()}
+    branch_map = {b.id: b for b in db.query(Branch).filter(Branch.lawyer_id == target_lawyer_id).all()}
 
     # ✅ optional: ignore blackouts for now (per your message)
     blackout_dates = set()
@@ -505,13 +593,15 @@ def preview_slots(
         day_key = current.strftime("%A").upper()
         is_blackout = current in blackout_dates
         for row in weekly_by_day.get(day_key, []):
+            branch = branch_map.get(row.branch_id)
             slots.append(
                 {
                     "date": current.isoformat(),
                     "start_time": row.start_time,
                     "end_time": row.end_time,
                     "branch_id": row.branch_id,
-                    "branch_name": branch_map.get(row.branch_id) if row.branch_id else None,
+                    "branch_name": branch.name if branch else None,
+                    "location": row.location or _derive_location(branch, None),
                     "is_blackout": is_blackout,
                 }
             )

@@ -1,7 +1,5 @@
 # backend/app/modules/disputes/routes.py
 
-print("✅ LOADED disputes routes from:", __file__)
-
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status

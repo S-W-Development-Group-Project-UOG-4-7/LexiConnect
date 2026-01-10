@@ -2,6 +2,7 @@ from datetime import datetime, timedelta
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jose import JWTError, jwt
 from passlib.context import CryptContext
@@ -20,6 +21,7 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 SECRET_KEY = "CHANGE_ME_SECRET_KEY"
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60
+REFRESH_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7  # 7 days
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login", scheme_name="BearerAuth")
@@ -44,12 +46,42 @@ def authenticate_user(db: Session, email: str, password: str) -> Optional[User]:
     return user
 
 
-def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
+def _create_token(data: dict, expires_delta: Optional[timedelta], token_type: str) -> str:
     to_encode = data.copy()
-    expire = datetime.utcnow() + (expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
-    to_encode.update({"exp": expire})
+    expire = datetime.utcnow() + expires_delta
+    to_encode.update({"exp": expire, "type": token_type})
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
+
+
+def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
+    to_encode = data.copy()
+    expire = expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    return _create_token(to_encode, expire, "access")
+
+
+def create_refresh_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
+    to_encode = data.copy()
+    expire = expires_delta or timedelta(minutes=REFRESH_TOKEN_EXPIRE_MINUTES)
+    return _create_token(to_encode, expire, "refresh")
+
+
+def _decode_token(token: str, expected_type: str):
+    payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+    token_type = payload.get("type")
+    if token_type != expected_type:
+        raise JWTError(f"Invalid token type: expected {expected_type}, got {token_type}")
+    return payload
+
+
+def _get_user_from_payload(payload, db: Session):
+    user_id: str = payload.get("sub")
+    if user_id is None:
+        raise JWTError("Missing sub claim")
+    user = db.query(User).filter(User.id == int(user_id)).first()
+    if user is None:
+        raise JWTError("User not found")
+    return user
 
 
 async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)) -> User:
@@ -65,15 +97,10 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
         headers={"WWW-Authenticate": "Bearer"},
     )
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        user_id: str = payload.get("sub")
-        if user_id is None:
-            raise credentials_exception
-    except JWTError:
-        raise credentials_exception
-
-    user = db.query(User).filter(User.id == int(user_id)).first()
-    if user is None:
+        payload = _decode_token(token, "access")
+        user = _get_user_from_payload(payload, db)
+    except JWTError as exc:
+        print(f"[DEBUG get_current_user] JWT decode failed: {exc}")
         raise credentials_exception
     return user
 
@@ -137,11 +164,40 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password")
 
+    base_claims = {"sub": str(user.id), "role": user.role}
     access_token = create_access_token(
-        data={"sub": str(user.id), "role": user.role},
+        data=base_claims,
         expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES),
     )
-    return Token(access_token=access_token, token_type="bearer")
+    refresh_token = create_refresh_token(
+        data=base_claims,
+        expires_delta=timedelta(minutes=REFRESH_TOKEN_EXPIRE_MINUTES),
+    )
+    return Token(access_token=access_token, refresh_token=refresh_token, token_type="bearer")
+
+
+class RefreshRequest(BaseModel):
+    refresh_token: str
+
+
+@router.post("/refresh", response_model=Token)
+def refresh_token(payload: RefreshRequest, db: Session = Depends(get_db)):
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    try:
+        decoded = _decode_token(payload.refresh_token, "refresh")
+        user = _get_user_from_payload(decoded, db)
+    except JWTError as exc:
+        print(f"[DEBUG refresh_token] refresh decode failed: {exc}")
+        raise credentials_exception
+
+    base_claims = {"sub": str(user.id), "role": user.role}
+    new_access = create_access_token(base_claims)
+    new_refresh = create_refresh_token(base_claims)
+    return Token(access_token=new_access, refresh_token=new_refresh, token_type="bearer")
 
 
 # ============================================================================
