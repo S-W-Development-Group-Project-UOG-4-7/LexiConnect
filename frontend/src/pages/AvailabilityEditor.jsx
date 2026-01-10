@@ -30,6 +30,17 @@ const AvailabilityEditor = () => {
   const [saveMessage, setSaveMessage] = useState('');
   const [saving, setSaving] = useState(false);
   const [loadingBranches, setLoadingBranches] = useState(false);
+  const [availabilities, setAvailabilities] = useState([]);
+  const [loadingAvailabilities, setLoadingAvailabilities] = useState(false);
+  const defaultWizardData = {
+    days: [],
+    startTime: '',
+    endTime: '',
+    branchId: '',
+    weeks: 4,
+    repeatMode: 'weeks',
+  };
+  const [wizardDefaults] = useState(defaultWizardData);
 
   useEffect(() => {
     const fetchBranches = async () => {
@@ -53,7 +64,38 @@ const AvailabilityEditor = () => {
     
 
     fetchBranches();
+    loadAvailabilities();
   }, []);
+
+  const loadAvailabilities = async () => {
+    try {
+      setLoadingAvailabilities(true);
+      const { data } = await api.get('/api/lawyer-availability/weekly');
+      console.log('[availability] fetched list', data?.length, data);
+      const deduped = [];
+      const seen = new Set();
+      (data || []).forEach((row) => {
+        const key =
+          row.id ??
+          `${row.lawyer_id}|${row.branch_id}|${row.day_of_week}|${row.start_time}|${row.end_time}|${row.location ?? ''}`;
+        if (!seen.has(key)) {
+          seen.add(key);
+          deduped.push(row);
+        }
+      });
+      console.log('[availability] deduped list', deduped.length, deduped);
+      setAvailabilities(deduped);
+    } catch (err) {
+      const detail =
+        err?.response?.data?.detail ||
+        err?.response?.data?.message ||
+        err?.message ||
+        'Failed to load availability.';
+      setErrors((prev) => ({ ...prev, list: detail }));
+    } finally {
+      setLoadingAvailabilities(false);
+    }
+  };
 
   const toggleDay = (day) => {
     setWizardData((prev) => {
@@ -79,9 +121,10 @@ const AvailabilityEditor = () => {
   const prevStep = () => setWizardStep((s) => Math.max(1, s - 1));
 
   const cancelAndBack = () => {
-    if (window.history.length > 1) {
-      window.history.back();
-    }
+    setWizardStep(1);
+    setWizardData({ ...wizardDefaults });
+    // Snap to top to avoid any prior scroll positions
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
   };
 
   const formatTimeToSeconds = (timeStr) => {
@@ -114,11 +157,15 @@ const AvailabilityEditor = () => {
     try {
       setSaving(true);
       for (const body of payloads) {
-        await api.post('/api/lawyer-availability/weekly', body, {
+        const res = await api.post('/api/lawyer-availability/weekly', body, {
           headers: token ? { Authorization: `Bearer ${token}` } : {},
         });
+        console.log('[availability] save success', res.status, res.data);
       }
       setSaveMessage('Availability saved successfully.');
+      await loadAvailabilities();
+      setWizardStep(1);
+      setWizardData({ ...wizardDefaults });
     } catch (err) {
       const status = err?.response?.status;
       const errorDetail =
@@ -331,6 +378,38 @@ const AvailabilityEditor = () => {
         <button className="cancel-link" type="button" onClick={cancelAndBack}>
           Cancel and go back
         </button>
+      </div>
+
+      <div className="wizard-shell">
+        <div className="page-header">
+          <h1>Your Scheduled Availability</h1>
+          <p>Slots for your account are shown below.</p>
+        </div>
+        {saveMessage && <div className="inline-feedback success">{saveMessage}</div>}
+        {errors.list && <div className="inline-feedback error">{errors.list}</div>}
+        <div className="card-actions" style={{ justifyContent: 'flex-end' }}>
+          <button className="cta-btn" type="button" onClick={() => window.scrollTo({ top: 0, left: 0, behavior: 'auto' })}>
+            + Add availability
+          </button>
+        </div>
+        {loadingAvailabilities ? (
+          <div className="location-empty">Loading availability...</div>
+        ) : availabilities.length === 0 ? (
+          <div className="location-empty">No availability yet. Add a new slot.</div>
+        ) : (
+          <div className="location-row">
+            {availabilities.map((row) => (
+              <div key={row.id ?? `${row.lawyer_id}|${row.branch_id}|${row.day_of_week}|${row.start_time}|${row.end_time}|${row.location ?? ''}`} className="location-pill active" style={{ cursor: 'default' }}>
+                <div className="location-name">
+                  {row.day_of_week} · {row.start_time} – {row.end_time}
+                </div>
+                <div className="location-desc">
+                  Branch #{row.branch_id} · Max {row.max_bookings ?? 1} · {row.is_active ? 'Active' : 'Inactive'}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
