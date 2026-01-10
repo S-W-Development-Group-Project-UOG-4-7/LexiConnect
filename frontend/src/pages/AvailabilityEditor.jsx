@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import api from '../services/api';
 import './availability-ui.css';
+import WeeksStepper from '../components/WeeksStepper';
 
 const steps = ['Day', 'Time', 'Location', 'Repeat', 'Review'];
 const weekdayLabels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -14,6 +15,27 @@ const weekdayPayload = {
   Sun: 'sun',
 };
 
+const TimeField = ({ label, value, onChange, error }) => (
+  <div className="time-field modern">
+    <label className="time-label">{label}</label>
+    <div className={`time-input-shell ${error ? 'has-error' : ''}`}>
+      <svg
+        className="time-icon"
+        xmlns="http://www.w3.org/2000/svg"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+      >
+        <circle cx="12" cy="12" r="9" />
+        <path d="M12 7v5l3 2" />
+      </svg>
+      <input type="time" value={value} onChange={onChange} />
+    </div>
+    {error && <p className="field-error">{error}</p>}
+  </div>
+);
+
 const AvailabilityEditor = () => {
   const [wizardStep, setWizardStep] = useState(1);
   const [wizardData, setWizardData] = useState({
@@ -24,6 +46,27 @@ const AvailabilityEditor = () => {
     weeks: 4,
     repeatMode: 'weeks',
   });
+  const [untilDate, setUntilDate] = useState('');
+  const todayISO = useMemo(() => {
+    const now = new Date();
+    return new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate())).toISOString().slice(0, 10);
+  }, []);
+
+  const weeksLimitISO = useMemo(() => {
+    const weeksCount = Math.min(Math.max(parseInt(wizardData.weeks, 10) || 1, 1), 52);
+    const start = new Date();
+    const startUtc = new Date(Date.UTC(start.getFullYear(), start.getMonth(), start.getDate()));
+    const end = new Date(startUtc);
+    end.setUTCDate(end.getUTCDate() + weeksCount * 7 - 1);
+    return end.toISOString().slice(0, 10);
+  }, [wizardData.weeks]);
+
+  const openDatePicker = () => {
+    if (endDateRef.current) {
+      endDateRef.current.showPicker?.();
+      endDateRef.current.focus();
+    }
+  };
 
   const [branches, setBranches] = useState([]);
   const [errors, setErrors] = useState({});
@@ -32,6 +75,13 @@ const AvailabilityEditor = () => {
   const [loadingBranches, setLoadingBranches] = useState(false);
   const [availabilities, setAvailabilities] = useState([]);
   const [loadingAvailabilities, setLoadingAvailabilities] = useState(false);
+  const [selectedDate, setSelectedDate] = useState(null);
+  const [selectedSlot, setSelectedSlot] = useState(null);
+  const [viewDate, setViewDate] = useState(() => {
+    const now = new Date();
+    return new Date(Date.UTC(now.getFullYear(), now.getMonth(), 1));
+  });
+  const endDateRef = useRef(null);
   const defaultWizardData = {
     days: [],
     startTime: '',
@@ -109,7 +159,10 @@ const AvailabilityEditor = () => {
     if (wizardStep === 1) return wizardData.days.length > 0;
     if (wizardStep === 2) return wizardData.startTime && wizardData.endTime;
     if (wizardStep === 3) return wizardData.branchId !== '' && wizardData.branchId !== undefined && branches.length > 0;
-    if (wizardStep === 4) return wizardData.repeatMode === 'weeks' ? wizardData.weeks > 0 : true;
+    const needsEndDate = wizardData.repeatMode === 'until';
+    if (wizardStep === 4 || wizardStep === 5) {
+      return needsEndDate ? Boolean(untilDate) : wizardData.weeks > 0;
+    }
     return true;
   };
 
@@ -135,6 +188,11 @@ const AvailabilityEditor = () => {
   const saveAvailability = async () => {
     setSaveMessage('');
     setErrors((prev) => ({ ...prev, save: null }));
+
+    if (wizardData.repeatMode === 'until' && !untilDate) {
+      setErrors((prev) => ({ ...prev, save: 'Please select an end date' }));
+      return;
+    }
 
     const token = localStorage.getItem('access_token') || localStorage.getItem('token');
 
@@ -209,28 +267,29 @@ const AvailabilityEditor = () => {
 
     if (wizardStep === 2) {
       return (
-        <>
-          <h2 className="card-title">Set your time</h2>
-          <p className="card-subtitle">Select a start and end time.</p>
-          <div className="time-row">
-            <div className="time-field">
-              <label>Start time</label>
-              <input
-                type="time"
-                value={wizardData.startTime}
-                onChange={(e) => setWizardData((p) => ({ ...p, startTime: e.target.value }))}
-              />
-            </div>
-            <div className="time-field">
-              <label>End time</label>
-              <input
-                type="time"
-                value={wizardData.endTime}
-                onChange={(e) => setWizardData((p) => ({ ...p, endTime: e.target.value }))}
-              />
-            </div>
+        <div className="time-step">
+          <div className="time-step-head">
+            <h2 className="time-step-title">What time are you available?</h2>
+            <p className="time-step-subtitle">Clients will book appointments within this time range</p>
           </div>
-        </>
+          <div className="time-row modern-grid">
+            <TimeField
+              label="Start time"
+              value={wizardData.startTime}
+              onChange={(e) => setWizardData((p) => ({ ...p, startTime: e.target.value }))}
+            />
+            <TimeField
+              label="End time"
+              value={wizardData.endTime}
+              onChange={(e) => setWizardData((p) => ({ ...p, endTime: e.target.value }))}
+            />
+          </div>
+          {(errors.save || saveMessage) && (
+            <div className={`inline-feedback ${errors.save ? 'error' : 'success'}`}>
+              {errors.save || saveMessage}
+            </div>
+          )}
+        </div>
       );
     }
 
@@ -272,37 +331,105 @@ const AvailabilityEditor = () => {
 
     if (wizardStep === 4) {
       return (
-        <>
-          <h2 className="card-title">Repeat settings</h2>
-          <p className="card-subtitle">How often should this availability repeat?</p>
-          <div className="repeat-stack">
-            <label className={`repeat-pill ${wizardData.repeatMode === 'weeks' ? 'active' : ''}`}>
+        <div className="repeat-step">
+          <div className="repeat-step-head">
+            <h2 className="repeat-step-title">How often should this repeat?</h2>
+            <p className="repeat-step-subtitle">Choose how long this recurring availability should continue.</p>
+          </div>
+
+          <div className="repeat-options-stack">
+            <label className={`repeat-option-card ${wizardData.repeatMode === 'weeks' ? 'selected' : ''}`}>
               <input
                 type="radio"
                 name="repeat"
                 checked={wizardData.repeatMode === 'weeks'}
                 onChange={() => setWizardData((p) => ({ ...p, repeatMode: 'weeks' }))}
               />
-              <span>Repeat for</span>
-              <input
-                type="number"
-                min="1"
-                value={wizardData.weeks}
-                onChange={(e) => setWizardData((p) => ({ ...p, weeks: parseInt(e.target.value, 10) || 1 }))}
-              />
-              <span>weeks</span>
+              <div className="repeat-option-main">
+                <div className="repeat-radio" aria-hidden>
+                  <div className="radio-dot" />
+                </div>
+                <div className="repeat-option-copy">
+                  <div className="repeat-option-title">Repeat for a number of weeks</div>
+                  <div className="repeat-option-subtitle">Set a specific number of weeks for this availability.</div>
+                </div>
+              </div>
+              {wizardData.repeatMode === 'weeks' && (
+                <div className="repeat-option-extra">
+                  <WeeksStepper
+                    value={wizardData.weeks}
+                    min={1}
+                    max={52}
+                    onChange={(val) => setWizardData((p) => ({ ...p, weeks: val }))}
+                  />
+                </div>
+              )}
             </label>
-            <label className={`repeat-pill ${wizardData.repeatMode === 'until' ? 'active' : ''}`}>
+
+            <label className={`repeat-option-card ${wizardData.repeatMode === 'until' ? 'selected' : ''}`}>
               <input
                 type="radio"
                 name="repeat"
                 checked={wizardData.repeatMode === 'until'}
                 onChange={() => setWizardData((p) => ({ ...p, repeatMode: 'until' }))}
               />
-              <span>Repeat weekly until a specific date</span>
+              <div className="repeat-option-main">
+                <div className="repeat-radio" aria-hidden>
+                  <div className="radio-dot" />
+                </div>
+                <div className="repeat-option-copy">
+                  <div className="repeat-option-title">Every week until a specific date</div>
+                  <div className="repeat-option-subtitle">
+                    Set an end date for this recurring availability.
+                  </div>
+                </div>
+              </div>
+              {wizardData.repeatMode === 'until' && (
+                <div className="repeat-option-extra">
+                  <label className="inline-field">
+                    <span>End date</span>
+                    <div
+                      className="date-input-shell"
+                      onClick={openDatePicker}
+                    >
+                      <button
+                        type="button"
+                        className="date-icon-btn"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openDatePicker();
+                        }}
+                      >
+                        <svg
+                          className="date-icon"
+                          xmlns="http://www.w3.org/2000/svg"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="1.6"
+                        >
+                          <rect x="3" y="4" width="18" height="18" rx="3" ry="3" />
+                          <line x1="16" y1="2" x2="16" y2="6" />
+                          <line x1="8" y1="2" x2="8" y2="6" />
+                          <line x1="3" y1="10" x2="21" y2="10" />
+                        </svg>
+                      </button>
+                      <input
+                        ref={endDateRef}
+                        type="date"
+                        value={untilDate}
+                        min={todayISO}
+                        onFocus={openDatePicker}
+                        onChange={(e) => setUntilDate(e.target.value)}
+                      />
+                    </div>
+                  </label>
+                  {!untilDate && <p className="field-error" style={{ margin: '4px 0 0' }}>Please select an end date</p>}
+                </div>
+              )}
             </label>
           </div>
-        </>
+        </div>
       );
     }
 
@@ -328,6 +455,125 @@ const AvailabilityEditor = () => {
     );
   };
 
+  const dayToIndex = (day) => {
+    const map = {
+      monday: 0,
+      mon: 0,
+      tuesday: 1,
+      tue: 1,
+      wednesday: 2,
+      wed: 2,
+      thursday: 3,
+      thu: 3,
+      friday: 4,
+      fri: 4,
+      saturday: 5,
+      sat: 5,
+      sunday: 6,
+      sun: 6,
+    };
+    if (typeof day !== 'string') return null;
+    return map[day.toLowerCase()] ?? null;
+  };
+
+  const parseMinutes = (timeStr) => {
+    if (!timeStr) return 0;
+    const [h, m] = timeStr.split(':').map((v) => parseInt(v, 10));
+    if (Number.isNaN(h) || Number.isNaN(m)) return 0;
+    return h * 60 + m;
+  };
+
+  const daysInMonth = (dateObj) => {
+    const year = dateObj.getUTCFullYear();
+    const month = dateObj.getUTCMonth();
+    return new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+  };
+
+  const startDayOfMonth = (dateObj) => {
+    const year = dateObj.getUTCFullYear();
+    const month = dateObj.getUTCMonth();
+    return new Date(Date.UTC(year, month, 1)).getUTCDay(); // 0 = Sun
+  };
+
+  const monthLabel = (dateObj) =>
+    dateObj.toLocaleString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+
+  const monthlyOccurrences = useMemo(() => {
+    const totalDays = daysInMonth(viewDate);
+    const occurrences = {};
+    for (let d = 1; d <= totalDays; d += 1) {
+      const current = new Date(Date.UTC(viewDate.getUTCFullYear(), viewDate.getUTCMonth(), d));
+      const weekday = current.getUTCDay(); // 0 sun
+      const matches = (availabilities || []).filter((slot) => {
+        const idx = dayToIndex(slot.day_of_week || slot.day || '');
+        if (idx === null) return false;
+        // dayToIndex uses Mon=0; translate to Sunday=0 for getUTCDay
+        const sundayIdx = (idx + 1) % 7;
+        return sundayIdx === weekday;
+      });
+      if (matches.length) {
+        const dateKey = current.toISOString().slice(0, 10);
+        occurrences[dateKey] = matches.map((m) => ({
+          ...m,
+          date: dateKey,
+          startLabel: (m.start_time || '').slice(0, 5) || '--:--',
+          endLabel: (m.end_time || '').slice(0, 5) || '--:--',
+        }));
+      }
+    }
+    return occurrences;
+  }, [availabilities, viewDate]);
+
+  const filteredMonthlyOccurrences = useMemo(() => {
+    if (wizardData.repeatMode === 'until') {
+      if (!untilDate) return {};
+      return Object.fromEntries(
+        Object.entries(monthlyOccurrences).filter(([dateKey]) => dateKey <= untilDate)
+      );
+    }
+    // repeatMode weeks: filter to range based on selected weeks count
+    return Object.fromEntries(
+      Object.entries(monthlyOccurrences).filter(([dateKey]) => dateKey <= weeksLimitISO)
+    );
+  }, [monthlyOccurrences, wizardData.repeatMode, untilDate, weeksLimitISO]);
+
+  const calendarCells = () => {
+    const totalDays = daysInMonth(viewDate);
+    const startDay = startDayOfMonth(viewDate); // 0=Sun
+    const cells = [];
+    for (let i = 0; i < startDay; i += 1) {
+      cells.push({ empty: true, key: `empty-${i}` });
+    }
+    for (let d = 1; d <= totalDays; d += 1) {
+      const dateObj = new Date(Date.UTC(viewDate.getUTCFullYear(), viewDate.getUTCMonth(), d));
+      const iso = dateObj.toISOString().slice(0, 10);
+      cells.push({ empty: false, day: d, iso, slots: filteredMonthlyOccurrences[iso] || [] });
+    }
+    // pad to full weeks (35 or 42 cells)
+    while (cells.length % 7 !== 0) {
+      cells.push({ empty: true, key: `pad-${cells.length}` });
+    }
+    return cells;
+  };
+
+  const cells = calendarCells();
+
+  const isToday = (iso) => {
+    const now = new Date();
+    const todayIso = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()))
+      .toISOString()
+      .slice(0, 10);
+    return iso === todayIso;
+  };
+
+  const handleChipClick = (slot, iso) => {
+    setSelectedDate(iso);
+    setSelectedSlot(slot);
+    // If an edit flow exists, plug in here, otherwise fallback to detail popover
+  };
+
+  const isUntilModeMissingDate = wizardData.repeatMode === 'until' && !untilDate;
+
   return (
     <div className="availability-page availability-centered">
       <div className="wizard-shell">
@@ -352,7 +598,7 @@ const AvailabilityEditor = () => {
 
         <div className="wizard-card main-card">
           {renderStepContent()}
-          {(errors.save || saveMessage) && (
+          {wizardStep !== 2 && (errors.save || saveMessage) && (
             <div className={`inline-feedback ${errors.save ? 'error' : 'success'}`}>
               {errors.save || saveMessage}
             </div>
@@ -387,27 +633,115 @@ const AvailabilityEditor = () => {
         </div>
         {saveMessage && <div className="inline-feedback success">{saveMessage}</div>}
         {errors.list && <div className="inline-feedback error">{errors.list}</div>}
-        <div className="card-actions" style={{ justifyContent: 'flex-end' }}>
-          <button className="cta-btn" type="button" onClick={() => window.scrollTo({ top: 0, left: 0, behavior: 'auto' })}>
-            + Add availability
-          </button>
-        </div>
         {loadingAvailabilities ? (
           <div className="location-empty">Loading availability...</div>
         ) : availabilities.length === 0 ? (
           <div className="location-empty">No availability yet. Add a new slot.</div>
         ) : (
-          <div className="location-row">
-            {availabilities.map((row) => (
-              <div key={row.id ?? `${row.lawyer_id}|${row.branch_id}|${row.day_of_week}|${row.start_time}|${row.end_time}|${row.location ?? ''}`} className="location-pill active" style={{ cursor: 'default' }}>
-                <div className="location-name">
-                  {row.day_of_week} · {row.start_time} – {row.end_time}
+          <div className="month-shell">
+            <div className="month-card">
+              <div className="month-header">
+                <button
+                  className="ghost-btn small"
+                  type="button"
+                  onClick={() =>
+                    setViewDate(
+                      (prev) => new Date(Date.UTC(prev.getUTCFullYear(), prev.getUTCMonth() - 1, 1))
+                    )
+                  }
+                >
+                  ←
+                </button>
+                <div className="month-title">{monthLabel(viewDate)}</div>
+                <button
+                  className="ghost-btn small"
+                  type="button"
+                  onClick={() =>
+                    setViewDate(
+                      (prev) => new Date(Date.UTC(prev.getUTCFullYear(), prev.getUTCMonth() + 1, 1))
+                    )
+                  }
+                >
+                  →
+                </button>
+              </div>
+              {isUntilModeMissingDate && (
+                <div className="month-hint">Select an end date to preview schedule.</div>
+              )}
+              <div className="month-grid">
+                {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d) => (
+                  <div key={d} className="month-day-head">{d}</div>
+                ))}
+                {cells.map((cell, idx) => {
+                  if (cell.empty) {
+                    return <div key={cell.key || `empty-${idx}`} className="month-cell empty" />;
+                  }
+                  const isSelected = selectedDate === cell.iso;
+                  const slots = cell.slots || [];
+                  const chipLimit = 3;
+                  const extraCount = Math.max(slots.length - chipLimit, 0);
+                  return (
+                    <div
+                      key={cell.iso}
+                      className={`month-cell ${isToday(cell.iso) ? 'today' : ''} ${isSelected ? 'selected' : ''}`}
+                      onClick={() => {
+                        setSelectedDate(cell.iso);
+                        setSelectedSlot(null);
+                      }}
+                    >
+                      <div className="month-date">{cell.day}</div>
+                      <div className="month-chips">
+                        {slots.slice(0, chipLimit).map((s, i) => (
+                          <button
+                            key={`${cell.iso}-chip-${i}`}
+                            type="button"
+                            className={`month-chip ${s.is_active ? '' : 'muted'}`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleChipClick(s, cell.iso);
+                            }}
+                          >
+                            {s.startLabel}–{s.endLabel}{s.branch_id ? ` · B${s.branch_id}` : ''}
+                          </button>
+                        ))}
+                        {extraCount > 0 && <div className="month-chip more">+{extraCount} more</div>}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {selectedDate && filteredMonthlyOccurrences[selectedDate] && (
+              <div className="month-popover">
+                <div className="popover-head">
+                  <div className="popover-title">Availability on {selectedDate}</div>
+                  <button className="ghost-btn small" type="button" onClick={() => { setSelectedDate(null); setSelectedSlot(null); }}>
+                    Close
+                  </button>
                 </div>
-                <div className="location-desc">
-                  Branch #{row.branch_id} · Max {row.max_bookings ?? 1} · {row.is_active ? 'Active' : 'Inactive'}
+                <div className="popover-list">
+                  {filteredMonthlyOccurrences[selectedDate]?.map((slot, idx) => {
+                    const isSelectedSlot = selectedSlot && selectedSlot.id === slot.id && selectedSlot.date === slot.date;
+                    return (
+                      <div
+                        key={`${selectedDate}-slot-${idx}`}
+                        className={`popover-slot ${isSelectedSlot ? 'active' : ''}`}
+                        onClick={() => handleChipClick(slot, selectedDate)}
+                      >
+                        <div className="popover-slot-time">
+                          {slot.startLabel} – {slot.endLabel}
+                          {!slot.is_active && <span className="status-pill">Inactive</span>}
+                        </div>
+                        <div className="popover-slot-meta">
+                          Branch #{slot.branch_id ?? '—'} · Max {slot.max_bookings ?? 1}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
-            ))}
+            )}
           </div>
         )}
       </div>
