@@ -51,12 +51,24 @@ def seed_demo_users(db: Session):
             "role": UserRole.client,
             "full_name": "Client User",
         },
+        # ✅ NEW: Apprentice user
+        {
+            "email": os.getenv("APPRENTICE_EMAIL", "apprentice@lexiconnect.local"),
+            "password": os.getenv("APPRENTICE_PASSWORD", "Apprentice@123"),
+            "role": UserRole.apprentice,
+            "full_name": "Apprentice User",
+        },
     ]
 
     created = 0
     skipped = 0
 
     for u in users:
+        # Safety: skip if env accidentally missing
+        if not u["email"] or not u["password"]:
+            skipped += 1
+            continue
+
         if get_user_by_email(db, u["email"]):
             skipped += 1
             continue

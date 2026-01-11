@@ -30,11 +30,10 @@ def _is_lawyer(user) -> bool:
 
 def _is_apprentice(user) -> bool:
     """
-    Your DB currently has roles: admin/lawyer/client.
-    Since there's no 'apprentice' role yet, treat 'client' as apprentice for now.
+    Apprentice-only endpoints.
     """
     r = _role_str(user)
-    return r in ("client", "apprentice")
+    return r == "apprentice"
 
 
 def assign_apprentice(db: Session, current_user, case_id: int, apprentice_id: int):
