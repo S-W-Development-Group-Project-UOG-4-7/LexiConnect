@@ -2,14 +2,13 @@
 
 # Load environment variables first
 from dotenv import load_dotenv
-
 load_dotenv()
 
 # Third-party imports
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
-from fastapi.staticfiles import StaticFiles  # ✅ for serving uploads
+from fastapi.staticfiles import StaticFiles
 
 # ✅ Checklist Answers module router
 from app.modules.checklist_answers.router import router as checklist_answers_router
@@ -18,7 +17,6 @@ from app.modules.checklist_answers.router import router as checklist_answers_rou
 from .database import SessionLocal
 
 # Ensure models are loaded (so Alembic / SQLAlchemy sees them)
-# Add/remove here only if these models exist in backend/app/models
 from .models import (  # noqa
     branch,
     kyc_submission,
@@ -27,6 +25,7 @@ from .models import (  # noqa
     service_package,
     checklist_template,
 )
+
 from app.modules.cases import models as case_models  # noqa: F401
 from app.modules.intake.routes import router as intake_router
 
@@ -42,6 +41,8 @@ from app.modules.service_packages.router import router as service_packages_route
 from app.modules.checklist_templates.router import router as checklist_router
 from app.modules.availability.router import router as availability_router
 from app.modules.blackouts.router import router as blackouts_router
+from app.modules.apprenticeship.router import router as apprenticeship_router
+
 
 from app.modules.disputes.routes import (
     router as disputes_router,
@@ -50,7 +51,6 @@ from app.modules.disputes.routes import (
 )
 
 from app.modules.documents.routes import router as documents_router
-from app.modules.intake.routes import router as intake_router
 from app.modules.case_files.router import router as case_files_router
 from app.modules.lawyer_profiles.routes import router as lawyer_profiles_router
 from app.routers.lawyer_availability import router as lawyer_availability_router
@@ -63,15 +63,6 @@ from .api.v1 import admin as admin_v1, booking as booking_v1
 # Seed
 from app.seed import seed_all
 
-# Create all database tables (dev-friendly)
-#Base.metadata.create_all(bind=engine)
-
-# ✅ IMPORTANT:
-# Do NOT use Base.metadata.create_all() in a project that uses Alembic migrations.
-# It can cause duplicate index/table errors (like the ix_case_intakes_case_id crash).
-# Use: alembic upgrade head
-# (So we removed create_all completely.)
-
 
 # FastAPI app
 app = FastAPI(
@@ -81,10 +72,16 @@ app = FastAPI(
 )
 
 # ✅ Serve uploaded files so frontend can open PDFs/images in browser
-# Example URL: http://127.0.0.1:8000/uploads/<file>
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
-# ---- CORS for React (Vite) frontend ----
+
+# =============================================================================
+# ✅ CORS (DEV-SAFE) — Fixes "blocked by CORS policy" + frontend "Network Error"
+# =============================================================================
+# NOTE:
+# - If you use Authorization: Bearer <token>, you do NOT need cookies.
+# - So allow_credentials=False is best (and avoids wildcard/regex issues).
+# - Keep origins explicit to avoid surprise blocks.
 origins = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
@@ -95,11 +92,12 @@ origins = [
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
-    allow_origin_regex=r"^http:\/\/(localhost|127\.0\.0\.1):\d+$",
-    allow_credentials=True,
+    allow_credentials=False,   # ✅ IMPORTANT: keep false unless you use cookies
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
+
 
 # ---- Startup seed ----
 @app.on_event("startup")
@@ -121,12 +119,15 @@ def health_check():
 
 # Core auth/booking/lawyers
 app.include_router(auth.router)
+app.include_router(auth.router, prefix="/api")  # parity for /api/* clients
 app.include_router(lawyers.router)
 app.include_router(lawyers.router, prefix="/api")
 app.include_router(bookings.router)
 app.include_router(token_queue.router)
+app.include_router(apprenticeship_router, prefix="/api")
 
-# ✅ Checklist Answers router (your branch)
+
+# ✅ Checklist Answers router
 app.include_router(checklist_answers_router)
 
 # Feature modules
@@ -142,7 +143,7 @@ app.include_router(kyc_router)
 app.include_router(dev.router)  # DEV-ONLY endpoints
 app.include_router(admin_overview.router)
 
-# Modules (grouped to avoid duplicate includes and Swagger noise)
+# Modules (grouped)
 for module_router in (
     disputes_router,
     admin_disputes_router,
@@ -156,7 +157,7 @@ for module_router in (
 ):
     app.include_router(module_router)
 
-# Dedicated router include (keeps optional grouping clear)
+# Dedicated router include
 app.include_router(lawyer_availability_router, prefix="/api")
 app.include_router(cases_router, prefix="/api")
 

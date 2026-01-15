@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 
 from app.models.user import User, UserRole
 from app.models.lawyer import Lawyer
+from app.models.branch import Branch
 from app.routers.auth import get_password_hash, get_user_by_email
 
 # ✅ Correct imports based on your project structure
@@ -51,12 +52,24 @@ def seed_demo_users(db: Session):
             "role": UserRole.client,
             "full_name": "Client User",
         },
+        # ✅ NEW: Apprentice user
+        {
+            "email": os.getenv("APPRENTICE_EMAIL", "apprentice@lexiconnect.local"),
+            "password": os.getenv("APPRENTICE_PASSWORD", "Apprentice@123"),
+            "role": UserRole.apprentice,
+            "full_name": "Apprentice User",
+        },
     ]
 
     created = 0
     skipped = 0
 
     for u in users:
+        # Safety: skip if env accidentally missing
+        if not u["email"] or not u["password"]:
+            skipped += 1
+            continue
+
         if get_user_by_email(db, u["email"]):
             skipped += 1
             continue
@@ -78,7 +91,7 @@ def seed_demo_users(db: Session):
     # Create corresponding Lawyer records for lawyer users
     seed_lawyer_records(db)
 
-    print(f"[SEED] Users → created={created}, skipped={skipped}")
+    print(f"[SEED] Users -> created={created}, skipped={skipped}")
 
 
 def seed_lawyer_records(db: Session):
@@ -109,7 +122,82 @@ def seed_lawyer_records(db: Session):
     if created:
         db.commit()
 
-    print(f"[SEED] Lawyer records → created={created}, skipped={skipped}")
+    print(f"[SEED] Lawyer records -> created={created}, skipped={skipped}")
+
+
+def _pick_seed_lawyer(db: Session) -> Lawyer | None:
+    preferred_email = os.getenv("LAWYER_EMAIL", "lawyer@lexiconnect.local")
+    lawyer = db.query(Lawyer).filter(Lawyer.email == preferred_email).first()
+    if lawyer:
+        return lawyer
+    return db.query(Lawyer).order_by(Lawyer.id.asc()).first()
+
+
+def seed_demo_branches(db: Session):
+    """
+    Seed a few branches for the default lawyer so availability has real locations.
+    Runs when SEED_DEMO_BRANCHES=true or SEED_DEMO_USERS=true.
+    """
+    should_seed = _is_true("SEED_DEMO_BRANCHES") or _is_true("SEED_DEMO_USERS")
+    if not should_seed:
+        return
+
+    lawyer = _pick_seed_lawyer(db)
+    if not lawyer:
+        print("[SEED] Branches skipped — no lawyers found")
+        return
+
+    templates = [
+        {
+            "name": "Firm Office - Colombo",
+            "district": "Western",
+            "city": "Colombo",
+            "address": "Main office in the city center",
+        },
+        {
+            "name": "Home Office - Dehiwala",
+            "district": "Western",
+            "city": "Dehiwala",
+            "address": "Convenient suburban location",
+        },
+        {
+            "name": "Online Consultation",
+            "district": "Online",
+            "city": "Remote",
+            "address": "Zoom/Teams",
+        },
+    ]
+
+    created = 0
+    skipped = 0
+
+    for template in templates:
+        exists = (
+            db.query(Branch)
+            .filter(Branch.lawyer_id == lawyer.id, Branch.name == template["name"])
+            .first()
+        )
+        if exists:
+            skipped += 1
+            continue
+
+        db.add(
+            Branch(
+                lawyer_id=lawyer.id,
+                name=template["name"],
+                district=template["district"],
+                city=template["city"],
+                address=template["address"],
+            )
+        )
+        created += 1
+
+    if created:
+        db.commit()
+
+    print(
+        f"[SEED] Branches -> created={created}, skipped={skipped} for lawyer_id={lawyer.id}"
+    )
 
 
 # ======================================================
@@ -182,7 +270,7 @@ def seed_demo_disputes(db: Session):
     if created:
         db.commit()
 
-    print(f"[SEED] Disputes → created={created}, skipped={skipped}")
+    print(f"[SEED] Disputes -> created={created}, skipped={skipped}")
 
 
 # ======================================================
@@ -190,4 +278,5 @@ def seed_demo_disputes(db: Session):
 # ======================================================
 def seed_all(db: Session):
     seed_demo_users(db)
+    seed_demo_branches(db)
     seed_demo_disputes(db)

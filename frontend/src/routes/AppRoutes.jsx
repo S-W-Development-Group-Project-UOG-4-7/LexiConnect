@@ -37,7 +37,7 @@ import AdminDisputesListPage from "../features/disputes/AdminDisputesListPage";
 import AdminDisputeDetailPage from "../features/disputes/AdminDisputeDetailPage";
 
 // Lawyer pages
-import LawyerAvailabilityDashboard from "../components/LawyerAvailabilityDashboard";
+import AvailabilityEditor from "../pages/AvailabilityEditor";
 import TokenQueue from "../pages/TokenQueue";
 import BranchManagement from "../pages/BranchManagement";
 import ServicePackages from "../pages/ServicePackages";
@@ -57,17 +57,24 @@ import ClientCaseChecklistPage from "../features/checklist/pages/ClientCaseCheck
 import LawyerCaseDetailPage from "../features/cases/pages/LawyerCaseDetailPage";
 import ClientCaseDetailPage from "../features/cases/pages/ClientCaseDetailPage";
 
+// ✅ Apprenticeship pages
+import ApprenticeDashboard from "../features/apprenticeship/pages/ApprenticeDashboard";
+import ApprenticeCaseView from "../features/apprenticeship/pages/ApprenticeCaseView";
+import LawyerApprenticesPage from "../features/apprenticeship/pages/LawyerApprenticesPage";
+import ApprenticeLayout from "../layouts/ApprenticeLayout";
+import ApprenticeCases from "../features/apprenticeship/pages/ApprenticeCases";
 // Admin pages (real)
 import AdminDashboard from "../pages/admin/AdminDashboard";
 import KYCApproval from "../pages/admin/KYCApproval";
 import AuditLog from "../pages/admin/AuditLog";
 
 const DashboardRedirect = () => {
-  const role = getRole() || localStorage.getItem("role");
+  const role = (getRole() || localStorage.getItem("role") || "").toLowerCase();
 
   if (role === "client") return <Navigate to="/client/dashboard" replace />;
   if (role === "lawyer") return <Navigate to="/lawyer/dashboard" replace />;
   if (role === "admin") return <Navigate to="/admin/dashboard" replace />;
+  if (role === "apprentice") return <Navigate to="/apprentice/dashboard" replace />;
 
   return <Navigate to="/login" replace />;
 };
@@ -97,7 +104,6 @@ const LawyerDashboardHome = () => {
           <div className="text-slate-300 text-sm mt-1">Confirm or reject requests</div>
         </a>
 
-        {/* ✅ ADD: Case Feed button/card */}
         <a
           href="/lawyer/cases/feed"
           className="block bg-slate-800 border border-slate-700 rounded-lg p-5 hover:bg-slate-700"
@@ -129,6 +135,15 @@ const LawyerDashboardHome = () => {
           <div className="text-lg font-semibold text-white">KYC</div>
           <div className="text-slate-300 text-sm mt-1">Submit or view status</div>
         </a>
+
+        {/* Optional: Lawyer Apprenticeship page */}
+        <a
+          href="/lawyer/apprenticeship"
+          className="block bg-slate-800 border border-slate-700 rounded-lg p-5 hover:bg-slate-700"
+        >
+          <div className="text-lg font-semibold text-white">Apprenticeship</div>
+          <div className="text-slate-300 text-sm mt-1">Assign apprentices & view notes</div>
+        </a>
       </div>
     </div>
   );
@@ -145,24 +160,24 @@ const AppRoutes = () => {
       {/* Auth */}
       <Route element={<AuthLayout />}>
         <Route path="/login" element={<Login />} />
-    <Route path="/register" element={<Register />} />
-  </Route>
+        <Route path="/register" element={<Register />} />
+      </Route>
 
-  {/* Client area */}
-  <Route
-    element={
-      <RequireAuth>
-        <ProtectedRoute allowedRoles={["client"]}>
-          <ClientLayout />
-        </ProtectedRoute>
-      </RequireAuth>
-    }
-  >
+      {/* Client area */}
+      <Route
+        element={
+          <RequireAuth>
+            <ProtectedRoute allowedRoles={["client"]}>
+              <ClientLayout />
+            </ProtectedRoute>
+          </RequireAuth>
+        }
+      >
         <Route path="/client/dashboard" element={<Dashboard />} />
         <Route path="/client/search" element={<SearchLawyers />} />
         <Route path="/client/profile/:id" element={<LawyerPublicProfile />} />
 
-        {/* ✅ Cases */}
+        {/* Cases */}
         <Route path="/client/cases" element={<ClientCasesPage />} />
         <Route path="/client/cases/:caseId" element={<ClientCaseDetailPage />} />
         <Route path="/client/cases/:caseId/checklist" element={<ClientCaseChecklistPage />} />
@@ -188,18 +203,18 @@ const AppRoutes = () => {
         <Route path="/disputes/:id" element={<DisputeDetailPage />} />
       </Route>
 
-  {/* Lawyer area */}
-  <Route
-    element={
-      <RequireAuth>
-        <ProtectedRoute allowedRoles={["lawyer"]}>
-          <LawyerLayout />
-        </ProtectedRoute>
-      </RequireAuth>
-    }
-  >
+      {/* Lawyer area */}
+      <Route
+        element={
+          <RequireAuth>
+            <ProtectedRoute allowedRoles={["lawyer"]}>
+              <LawyerLayout />
+            </ProtectedRoute>
+          </RequireAuth>
+        }
+      >
         <Route path="/lawyer/dashboard" element={<LawyerDashboardHome />} />
-        <Route path="/lawyer/availability" element={<LawyerAvailabilityDashboard />} />
+        <Route path="/lawyer/availability" element={<AvailabilityEditor />} />
         <Route path="/lawyer/token-queue" element={<TokenQueue />} />
         <Route path="/lawyer/branches" element={<BranchManagement />} />
         <Route path="/lawyer/services" element={<ServicePackages />} />
@@ -210,13 +225,30 @@ const AppRoutes = () => {
         <Route path="/lawyer/bookings/:bookingId/documents" element={<LawyerDocumentsView />} />
         <Route path="/lawyer/bookings/:bookingId/intake" element={<LawyerIntakeViewPage />} />
 
-        {/* ✅ ADD: Lawyer Case Feed route (fixes your 404) */}
         <Route path="/lawyer/cases/feed" element={<LawyerCaseFeedPage />} />
         <Route path="/lawyer/cases/requests" element={<LawyerMyRequestsPage />} />
         <Route path="/lawyer/cases/:caseId" element={<LawyerCaseDetailPage />} />
+
+        {/* Optional: Apprenticeship page for lawyers */}
+        <Route path="/lawyer/apprenticeship" element={<LawyerApprenticesPage />} />
       </Route>
 
-      {/* Admin area */}
+      {/* Apprentice area */}
+      <Route
+        element={
+          <RequireAuth>
+            <ProtectedRoute allowedRoles={["apprentice"]}>
+            <ApprenticeLayout />
+            </ProtectedRoute>
+          </RequireAuth>
+        }
+      >
+        <Route path="/apprentice/dashboard" element={<ApprenticeDashboard />} />  
+        <Route path="/apprentice/cases" element={<ApprenticeCases />} />
+        <Route path="/apprentice/cases/:caseId" element={<ApprenticeCaseView />} />
+      </Route>
+
+      {/* Admin area */} 
       <Route
         element={
           <ProtectedRoute allowedRoles={["admin"]}>
@@ -228,12 +260,11 @@ const AppRoutes = () => {
         <Route path="/admin/kyc-approval" element={<KYCApproval />} />
         <Route path="/admin/audit-log" element={<AuditLog />} />
 
-        {/* Dispute management */}
         <Route path="/admin/disputes" element={<AdminDisputesListPage />} />
         <Route path="/admin/disputes/:id" element={<AdminDisputeDetailPage />} />
       </Route>
 
-      {/* Legacy paths redirect to new client routes */}
+      {/* Legacy redirects */}
       <Route path="/booking/:lawyerId" element={<Navigate to="/client/booking/:lawyerId" replace />} />
       <Route path="/booking" element={<Navigate to="/client/booking" replace />} />
       <Route path="/manage-bookings" element={<Navigate to="/client/manage-bookings" replace />} />
