@@ -1,6 +1,7 @@
 """add fk checklist_templates.service_package_id
 
-Revision ID: <YOUR_NEW_REVISION_ID>
+Revision ID: 79b6599a1b18
+
 Revises: 94a364d25227
 """
 
@@ -9,7 +10,8 @@ from alembic import op
 from sqlalchemy import inspect
 
 
-revision: str = "<YOUR_NEW_REVISION_ID>"
+revision: str = "79b6599a1b18"
+
 down_revision: Union[str, None] = "94a364d25227"
 branch_labels = None
 depends_on = None
