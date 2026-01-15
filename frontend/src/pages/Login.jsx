@@ -12,6 +12,7 @@ const Login = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (loading) return;
     setError("");
     setLoading(true);
 
@@ -25,18 +26,28 @@ const Login = () => {
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
       });
 
-      const token = data.access_token;
+      const { access_token, refresh_token, token_type } = data || {};
 
-      localStorage.setItem("access_token", token);
-      localStorage.setItem("token", token);
-      if (refresh) {
-        localStorage.setItem("refresh_token", refresh);
+      if (!access_token) {
+        throw new Error("Login failed. Please check your credentials.");
       }
+
+      localStorage.setItem("access_token", access_token);
+      if (refresh_token) {
+        localStorage.setItem("refresh_token", refresh_token);
+      }
+      localStorage.setItem("token_type", token_type || "bearer");
 
       // Decode role from JWT payload
       let role = "";
       try {
-        const payloadStr = atob(token.split(".")[1] || "");
+        let base64 = (access_token.split(".")[1] || "")
+          .replace(/-/g, "+")
+          .replace(/_/g, "/");
+        while (base64.length % 4) {
+          base64 += "=";
+        }
+        const payloadStr = atob(base64);
         const payload = JSON.parse(payloadStr);
         role = String(payload?.role || "").toLowerCase();
       } catch {
@@ -48,13 +59,13 @@ const Login = () => {
 
       // ✅ Redirect based on role
       let target = "/dashboard"; // uses DashboardRedirect as a safe default
-      if (role === "lawyer") target = "/lawyer/dashboard";
-      else if (role === "client") target = "/client/dashboard";
-      else if (role === "admin") target = "/admin/dashboard";
-      else if (role === "apprentice") target = "/apprentice/dashboard";
+      if (role === "lawyer") target = "/lawyer";
+      else if (role === "client") target = "/client";
+      else if (role === "admin") target = "/admin";
+      else if (role === "apprentice") target = "/apprentice";
 
       if (import.meta.env.DEV) {
-        console.log("[login] token saved to access_token + token");
+        console.log("[login] token saved to access_token");
         console.log("[login] detected role:", role || "unknown");
         console.log("[login] redirecting to:", target);
       }
