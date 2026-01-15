@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 from typing import List
 
@@ -16,6 +16,19 @@ from app.modules.branches import service
 
 
 router = APIRouter(prefix="/api/branches", tags=["Branches"])
+
+
+@router.get("", response_model=List[BranchResponse])
+def list_active_branches(
+    lawyer_id: int | None = Query(None, description="Optional filter by lawyer"),
+    db: Session = Depends(get_db),
+):
+    query = db.query(Branch).filter(Branch.is_active.is_(True))
+    if lawyer_id is not None:
+        query = query.filter(Branch.lawyer_id == lawyer_id)
+    rows = query.order_by(Branch.id.asc()).all()
+    print(f"[branches] GET /api/branches -> {len(rows)} rows")
+    return rows
 
 
 @router.post("", response_model=BranchResponse, status_code=status.HTTP_201_CREATED)

@@ -28,6 +28,7 @@ class WeeklyAvailability(Base):
     id = Column(Integer, primary_key=True, index=True)
     lawyer_id = Column(Integer, ForeignKey("lawyers.id"), nullable=False, index=True)
     branch_id = Column(Integer, ForeignKey("branches.id"), nullable=False, index=True)
+    location = Column(String(255), nullable=True)
     
     # Weekly schedule
     day_of_week = Column(Enum(WeekDay), nullable=False, index=True)
@@ -37,8 +38,8 @@ class WeeklyAvailability(Base):
     
     # Metadata
     is_active = Column(Boolean, default=True, nullable=False)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
 
 class BlackoutDate(Base):

@@ -3,12 +3,14 @@ from typing import Optional
 
 from pydantic import BaseModel, EmailStr
 
+from app.models.user import UserRole  # ✅ use the same enum as your SQLAlchemy model
+
 
 class UserBase(BaseModel):
     full_name: str
     email: EmailStr
     phone: Optional[str] = None
-    role: str = "client"
+    role: UserRole = UserRole.client  # ✅ validated enum (client/lawyer/admin/apprentice)
 
 
 class UserCreate(UserBase):
@@ -20,5 +22,4 @@ class UserOut(UserBase):
     created_at: datetime
 
     class Config:
-        orm_mode = True
-
+        from_attributes = True  # ✅ pydantic v2 (works better than orm_mode)

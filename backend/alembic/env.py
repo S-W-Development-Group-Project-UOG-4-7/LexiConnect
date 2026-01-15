@@ -2,21 +2,29 @@ from logging.config import fileConfig
 import os
 import sys
 
-from alembic import context
 from sqlalchemy import engine_from_config, pool
+from sqlalchemy.engine.url import make_url
 from dotenv import load_dotenv
 
 # -----------------------------------------------------------------------------
 # Path + env loading
 # -----------------------------------------------------------------------------
 # This file lives at: backend/alembic/env.py
+# Ensure we import the installed Alembic package, not this migrations folder.
+MIGRATIONS_DIR = os.path.abspath(os.path.dirname(__file__))
+if MIGRATIONS_DIR in sys.path:
+    sys.path.remove(MIGRATIONS_DIR)
+
 # We want backend/ as project root for imports and .env loading
-BACKEND_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-sys.path.insert(0, BACKEND_DIR)
+BACKEND_DIR = os.path.abspath(os.path.join(MIGRATIONS_DIR, ".."))
+if BACKEND_DIR not in sys.path:
+    sys.path.insert(0, BACKEND_DIR)
 
 # Load env variables from backend/.env explicitly
 ENV_PATH = os.path.join(BACKEND_DIR, ".env")
 load_dotenv(ENV_PATH)
+
+from alembic import context  # noqa: E402
 
 # -----------------------------------------------------------------------------
 # Alembic Config
@@ -35,8 +43,16 @@ if not DATABASE_URL:
         "and set DATABASE_URL=postgresql+psycopg2://lexiconnect:lexiconnect@127.0.0.1:5432/lexiconnect"
     )
 
+db_url = make_url(DATABASE_URL)
+if db_url.drivername == "postgresql":
+    db_url = db_url.set(drivername="postgresql+psycopg2")
+elif db_url.drivername != "postgresql+psycopg2":
+    raise RuntimeError(
+        f"DATABASE_URL must use PostgreSQL (postgresql+psycopg2); got '{db_url.drivername}'"
+    )
+
 # Override sqlalchemy.url in alembic.ini at runtime
-config.set_main_option("sqlalchemy.url", DATABASE_URL)
+config.set_main_option("sqlalchemy.url", db_url.render_as_string(hide_password=False))
 
 # -----------------------------------------------------------------------------
 # Import models for autogenerate
