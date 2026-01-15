@@ -1,44 +1,34 @@
 import os
-from dotenv import load_dotenv
+from pathlib import Path
 
+from dotenv import load_dotenv
 from sqlalchemy import create_engine
+from sqlalchemy.engine.url import make_url
 from sqlalchemy.orm import sessionmaker, declarative_base
 
-# Load environment variables (in case this module is imported before main.py loads dotenv)
-load_dotenv()
+BASE_DIR = Path(__file__).resolve().parent.parent
+ENV_PATH = BASE_DIR / ".env"
+load_dotenv(ENV_PATH)
 
-# Use DATABASE_URL from environment if provided.
-# Fallback to PostgreSQL URL matching .env.example for local development.
-# For production, always set DATABASE_URL in environment.
-DATABASE_URL = os.getenv(
-    "DATABASE_URL",
-    "postgresql+psycopg2://lexiconnect:lexiconnect@127.0.0.1:5432/lexiconnect",
-)
+DATABASE_URL = os.getenv("DATABASE_URL")
+if not DATABASE_URL:
+    raise RuntimeError(
+        "DATABASE_URL is required and must be set to a PostgreSQL DSN "
+        "(e.g. postgresql+psycopg2://lexiconnect:lexiconnect@127.0.0.1:5432/lexiconnect)"
+    )
 
-# If we are using SQLite, we need connect_args.
-# For Postgres or other DBs, connect_args can be empty.
-connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
+db_url = make_url(DATABASE_URL)
+if db_url.drivername == "postgresql":
+    db_url = db_url.set(drivername="postgresql+psycopg2")
+elif db_url.drivername != "postgresql+psycopg2":
+    raise RuntimeError(f"DATABASE_URL must use PostgreSQL driver; got '{db_url.drivername}'")
 
 engine = create_engine(
-    DATABASE_URL,
-    connect_args=connect_args,
+    db_url.render_as_string(hide_password=False),
+    pool_pre_ping=True,
 )
 
-# Mask password in DATABASE_URL for logging
-def mask_password(url_str: str) -> str:
-    """Mask password in database URL for safe logging."""
-    from urllib.parse import urlparse, urlunparse
-    parsed = urlparse(str(url_str))
-    if parsed.password:
-        # Replace password with ***
-        netloc = f"{parsed.username}:***@{parsed.hostname}"
-        if parsed.port:
-            netloc += f":{parsed.port}"
-        masked = urlunparse((parsed.scheme, netloc, parsed.path, parsed.params, parsed.query, parsed.fragment))
-        return masked
-    return str(url_str)
-
-print("✅ USING DATABASE:", mask_password(engine.url))
+print("USING DATABASE:", db_url.render_as_string(hide_password=True))
 
 SessionLocal = sessionmaker(
     autocommit=False,
