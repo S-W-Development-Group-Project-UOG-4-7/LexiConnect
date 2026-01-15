@@ -41,6 +41,8 @@ from app.modules.service_packages.router import router as service_packages_route
 from app.modules.checklist_templates.router import router as checklist_router
 from app.modules.availability.router import router as availability_router
 from app.modules.blackouts.router import router as blackouts_router
+from app.modules.apprenticeship.router import router as apprenticeship_router
+
 
 from app.modules.disputes.routes import (
     router as disputes_router,
@@ -122,6 +124,8 @@ app.include_router(lawyers.router)
 app.include_router(lawyers.router, prefix="/api")
 app.include_router(bookings.router)
 app.include_router(token_queue.router)
+app.include_router(apprenticeship_router, prefix="/api")
+
 
 # ✅ Checklist Answers router
 app.include_router(checklist_answers_router)

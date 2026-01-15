@@ -14,19 +14,19 @@ const Login = () => {
     e.preventDefault();
     setError("");
     setLoading(true);
+
     try {
       // OAuth2PasswordRequestForm expects form-urlencoded with username and password
       const formData = new URLSearchParams();
-      formData.append("username", email); // OAuth2 uses 'username' field for email
+      formData.append("username", email);
       formData.append("password", password);
-      
+
       const { data } = await api.post("/auth/login", formData, {
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded",
-        },
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
       });
+
       const token = data.access_token;
-      const refresh = data.refresh_token;
+
       localStorage.setItem("access_token", token);
       localStorage.setItem("token", token);
       if (refresh) {
@@ -34,24 +34,24 @@ const Login = () => {
       }
 
       // Decode role from JWT payload
-      let role = null;
+      let role = "";
       try {
         const payloadStr = atob(token.split(".")[1] || "");
         const payload = JSON.parse(payloadStr);
-        role = (payload?.role || "").toLowerCase();
+        role = String(payload?.role || "").toLowerCase();
       } catch {
         const payload = getUserFromToken();
-        role = (payload?.role || "").toLowerCase();
+        role = String(payload?.role || "").toLowerCase();
       }
 
-      if (role) {
-        localStorage.setItem("role", role);
-      }
+      if (role) localStorage.setItem("role", role);
 
-      let target = "/";
+      // ✅ Redirect based on role
+      let target = "/dashboard"; // uses DashboardRedirect as a safe default
       if (role === "lawyer") target = "/lawyer/dashboard";
       else if (role === "client") target = "/client/dashboard";
       else if (role === "admin") target = "/admin/dashboard";
+      else if (role === "apprentice") target = "/apprentice/dashboard";
 
       if (import.meta.env.DEV) {
         console.log("[login] token saved to access_token + token");
@@ -60,7 +60,6 @@ const Login = () => {
       }
 
       navigate(target, { replace: true });
-
     } catch (err) {
       const message =
         err?.response?.data?.detail ||
@@ -91,12 +90,16 @@ const Login = () => {
             <div className="text-3xl">⚖️</div>
             <div className="text-center">
               <div className="text-xl font-bold text-white">LexiConnect</div>
-              <div className="text-xs text-slate-400 mt-0.5">Legal Excellence Platform</div>
+              <div className="text-xs text-slate-400 mt-0.5">
+                Legal Excellence Platform
+              </div>
             </div>
           </div>
 
           {/* Welcome Message */}
-          <h2 className="text-center text-2xl font-bold text-white mb-1">Welcome Back</h2>
+          <h2 className="text-center text-2xl font-bold text-white mb-1">
+            Welcome Back
+          </h2>
           <p className="text-center text-sm text-slate-300 mb-6">
             Access your legal services portal
           </p>
@@ -107,7 +110,9 @@ const Login = () => {
             <label className="block text-sm text-white">
               Email Address
               <div className="mt-2 relative">
-                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-white text-base">✉</span>
+                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-white text-base">
+                  ✉
+                </span>
                 <input
                   className="w-full rounded-lg bg-slate-900/70 border border-slate-700/70 pl-10 pr-4 py-3 text-sm text-white placeholder:text-slate-500 outline-none focus:border-amber-400/70 focus:ring-2 focus:ring-amber-400/30 transition-colors"
                   type="email"
@@ -123,7 +128,9 @@ const Login = () => {
             <label className="block text-sm text-white">
               Password
               <div className="mt-2 relative">
-                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-white text-base">🔒</span>
+                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-white text-base">
+                  🔒
+                </span>
                 <input
                   className="w-full rounded-lg bg-slate-900/70 border border-slate-700/70 pl-10 pr-4 py-3 text-sm text-white placeholder:text-slate-500 outline-none focus:border-amber-400/70 focus:ring-2 focus:ring-amber-400/30 transition-colors"
                   type="password"
@@ -162,13 +169,9 @@ const Login = () => {
               Register Now
             </Link>
           </div>
-
-
-
-          </div>
         </div>
       </div>
-    
+    </div>
   );
 };
 
