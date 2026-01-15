@@ -1,27 +1,23 @@
 """add location to weekly availability
 
 Revision ID: 5cf1d2701c3d
-Revises: 199b62f9c364
+Revises: 3fc0dde5f26a
 Create Date: 2026-02-04 00:00:00.000000
-
 """
 from typing import Sequence, Union
 
 from alembic import op
 import sqlalchemy as sa
 
-
-# revision identifiers, used by Alembic.
-revision: str = '5cf1d2701c3d'
-down_revision: Union[str, None] = '199b62f9c364'
+revision: str = "5cf1d2701c3d"
+down_revision: Union[str, None] = "3fc0dde5f26a"  # ✅ ONLY the revision id
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.add_column('weekly_availability', sa.Column('location', sa.String(length=255), nullable=True))
+    op.add_column("weekly_availability", sa.Column("location", sa.String(length=255), nullable=True))
 
-    # Backfill location data for existing rows using branch info when present
     conn = op.get_bind()
     conn.execute(
         sa.text(
@@ -45,4 +41,4 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_column('weekly_availability', 'location')
+    op.drop_column("weekly_availability", "location")
