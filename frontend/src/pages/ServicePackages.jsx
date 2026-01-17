@@ -112,7 +112,7 @@ function ServicePackages() {
   const handleCancel = () => resetForm();
 
   return (
-    <div className="lc-page">
+    <div className="">
       <div className="lc-card">
         <div className="lc-header">
           <div className="lc-icon">📦</div>

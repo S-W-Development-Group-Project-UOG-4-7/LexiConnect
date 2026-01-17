@@ -63,7 +63,7 @@ function LawyerKYC() {
   const handleResubmit = () => setKycStatus("not_submitted");
 
   return (
-    <div className="lc-page">
+    <div className="">
       <div className="lc-card">
 
         <div className="lc-header">
