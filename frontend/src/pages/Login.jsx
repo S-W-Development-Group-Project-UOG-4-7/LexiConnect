@@ -24,15 +24,21 @@ export default function Login() {
       const { data } = await authApi.post("/login", formData);
 
       const token = data?.access_token;
+      const refresh = data?.refresh_token;
+
       if (!token) throw new Error("No access_token returned from server");
 
       localStorage.setItem("access_token", token);
       localStorage.setItem("token", token);
+
       if (refresh) {
         localStorage.setItem("refresh_token", refresh);
+      } else {
+        // optional: clear old refresh token if one exists
+        localStorage.removeItem("refresh_token");
       }
 
-      // role from JWT
+      // Decode role from JWT payload
       let role = "";
       try {
         const payloadStr = atob(token.split(".")[1] || "");
@@ -45,6 +51,7 @@ export default function Login() {
 
       if (role) localStorage.setItem("role", role);
 
+      // Redirect based on role
       let target = "/dashboard";
       if (role === "lawyer") target = "/lawyer/dashboard";
       else if (role === "client") target = "/client/dashboard";

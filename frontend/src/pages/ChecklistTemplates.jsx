@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import "./availability-ui.css";
+import "./lawyer-ui.css";
 import { checklistTemplatesApi } from "../services/checklistTemplates";
 
 function ChecklistTemplates() {

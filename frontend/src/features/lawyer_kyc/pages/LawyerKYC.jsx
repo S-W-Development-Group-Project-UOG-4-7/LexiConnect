@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { submitKyc, getMyKyc } from "../services/lawyerKyc.service";
-import "../../../pages/availability-ui.css";
+import "../../../pages/lawyer-ui.css";
 
 function LawyerKYC() {
   const [kycStatus, setKycStatus] = useState("not_submitted");
