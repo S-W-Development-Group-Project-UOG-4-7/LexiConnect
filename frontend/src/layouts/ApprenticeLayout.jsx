@@ -6,7 +6,8 @@ export default function ApprenticeLayout() {
 
   const navLinks = [
     { to: "/apprentice/dashboard", label: "Dashboard" },
-    { to: "/apprentice/cases", label: "My Assigned Cases" },
+    { to: "/apprentice/cases", label: "My Cases" },
+    { to: "/apprentice/profile", label: "Profile" },
   ];
 
   const handleLogout = () => {
@@ -25,7 +26,7 @@ export default function ApprenticeLayout() {
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white">
       <TopNavbar
         brandTitle="LexiConnect"
-        brandSubtitle="Apprentice Portal"
+        brandSubtitle="Apprentice Workspace"
         navLinks={navLinks}
         roleLabel="Apprentice"
         logoutAction={handleLogout}

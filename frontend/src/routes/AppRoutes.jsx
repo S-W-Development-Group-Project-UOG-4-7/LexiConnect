@@ -63,6 +63,7 @@ import ApprenticeCaseView from "../features/apprenticeship/pages/ApprenticeCaseV
 import LawyerApprenticesPage from "../features/apprenticeship/pages/LawyerApprenticesPage";
 import ApprenticeLayout from "../layouts/ApprenticeLayout";
 import ApprenticeCases from "../features/apprenticeship/pages/ApprenticeCases";
+import ApprenticeProfile from "../features/apprenticeship/pages/ApprenticeProfile";
 // Admin pages (real)
 import AdminDashboard from "../pages/admin/AdminDashboard";
 import KYCApproval from "../pages/admin/KYCApproval";
@@ -246,6 +247,7 @@ const AppRoutes = () => {
         <Route path="/apprentice/dashboard" element={<ApprenticeDashboard />} />  
         <Route path="/apprentice/cases" element={<ApprenticeCases />} />
         <Route path="/apprentice/cases/:caseId" element={<ApprenticeCaseView />} />
+        <Route path="/apprentice/profile" element={<ApprenticeProfile />} />
       </Route>
 
       {/* Admin area */} 
