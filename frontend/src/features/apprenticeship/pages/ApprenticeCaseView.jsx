@@ -7,7 +7,7 @@ import {
 } from "../api/apprenticeshipApi";
 
 const normalizeCase = (c) => {
-  const caseId = c.case_id ?? c.id ?? c.caseId;
+  const caseId = c.case_id ?? c.caseId ?? c.id;
   return {
     caseId,
     title: c.title ?? c.subject ?? c.case_title ?? `Case #${caseId}`,
@@ -22,7 +22,7 @@ const normalizeCase = (c) => {
 const normalizeNote = (n) => {
   return {
     id: n.id ?? `${n.created_at}-${Math.random()}`,
-    text: n.text ?? n.note ?? "",
+    text: n.note ?? n.text ?? "",
     createdAt: n.created_at ?? n.createdAt ?? "",
     author: n.author_name ?? n.author ?? "You",
   };
@@ -70,9 +70,10 @@ export default function ApprenticeCaseView() {
       try {
         const data = await fetchMyApprenticeCases();
         const allCases = Array.isArray(data) ? data : [];
-        const found = allCases.find(
-          (c) => (c.case_id ?? c.id ?? c.caseId) === caseId
-        );
+        const found = allCases.find((c) => {
+          const id = c.case_id ?? c.caseId ?? c.id;
+          return String(id) === String(caseId);
+        });
         if (found) {
           setCaseData(normalizeCase(found));
         }
@@ -111,19 +112,39 @@ export default function ApprenticeCaseView() {
 
   const handleSave = async () => {
     if (!noteText.trim()) return;
+  
+    const newNoteText = noteText.trim();
+  
     setSaving(true);
     setSaveError("");
+  
     try {
-      await addApprenticeCaseNote(caseId, noteText.trim());
+      // ✅ 1) Save note to backend
+      await addApprenticeCaseNote(caseId, newNoteText);
+  
+      // ✅ 2) Clear textarea
       setNoteText("");
-
-      // Try refresh notes if allowed
+  
+      // ✅ 3) Remove the restriction error message (better UX)
+      setNotesError("");
+  
+      // ✅ 4) INSTANTLY show the note in UI even if GET is forbidden
+      setNotes((prev) => [
+        {
+          id: "temp-" + Date.now(),
+          text: newNoteText,
+          createdAt: new Date().toISOString(),
+          author: "You",
+        },
+        ...prev,
+      ]);
+  
+      // ✅ 5) Try refresh notes (works only if backend allows GET)
       try {
         const data = await fetchApprenticeCaseNotes(caseId);
         setNotes((Array.isArray(data) ? data : []).map(normalizeNote));
-        setNotesError("");
       } catch {
-        // ignore if forbidden
+        // ignore forbidden (403) or other errors
       }
     } catch (e) {
       setSaveError(e?.response?.data?.detail || "Failed to save note.");
@@ -131,6 +152,7 @@ export default function ApprenticeCaseView() {
       setSaving(false);
     }
   };
+  
 
   if (loadingCase) {
     return (

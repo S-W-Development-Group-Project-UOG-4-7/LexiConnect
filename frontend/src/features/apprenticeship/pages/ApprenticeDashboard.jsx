@@ -3,7 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { fetchMyApprenticeCases, fetchApprenticeCaseNotes } from "../api/apprenticeshipApi";
 
 const normalizeCase = (c) => {
-  const caseId = c.case_id ?? c.id ?? c.caseId;
+  const caseId = c.case_id ?? c.caseId ?? c.case?.id ?? c.id;
   return {
     caseId,
     title: c.title ?? c.subject ?? c.case_title ?? `Case #${caseId}`,

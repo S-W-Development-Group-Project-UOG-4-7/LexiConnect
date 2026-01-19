@@ -60,7 +60,7 @@ export default function ApprenticeCases() {
       filtered = filtered.filter(
         (c) =>
           c.title.toLowerCase().includes(query) ||
-          c.caseId.toLowerCase().includes(query) ||
+        String(c.caseId).toLowerCase().includes(query) ||
           c.supervisingLawyer.toLowerCase().includes(query) ||
           c.category.toLowerCase().includes(query)
       );
