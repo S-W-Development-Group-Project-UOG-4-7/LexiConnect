@@ -12,6 +12,7 @@ export default function Login() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (loading) return;
     setError("");
     setLoading(true);
 
@@ -38,10 +39,22 @@ export default function Login() {
         localStorage.removeItem("refresh_token");
       }
 
+      localStorage.setItem("access_token", access_token);
+      if (refresh_token) {
+        localStorage.setItem("refresh_token", refresh_token);
+      }
+      localStorage.setItem("token_type", token_type || "bearer");
+
       // Decode role from JWT payload
       let role = "";
       try {
-        const payloadStr = atob(token.split(".")[1] || "");
+        let base64 = (access_token.split(".")[1] || "")
+          .replace(/-/g, "+")
+          .replace(/_/g, "/");
+        while (base64.length % 4) {
+          base64 += "=";
+        }
+        const payloadStr = atob(base64);
         const payload = JSON.parse(payloadStr);
         role = String(payload?.role || "").toLowerCase();
       } catch {

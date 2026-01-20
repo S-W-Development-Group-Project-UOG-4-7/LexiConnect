@@ -1,22 +1,56 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import api from "../services/api";
 import PageShell from "../components/ui/PageShell";
 import EmptyState from "../components/ui/EmptyState";
 import useRequireAuth from "../hooks/useRequireAuth";
 import LoginRequiredModal from "../components/ui/LoginRequiredModal";
 
+const DISTRICTS = ["Colombo", "Gampaha", "Kandy", "Galle", "Jaffna", "Kurunegala"];
+const SPECIALIZATIONS = [
+  "Family Law",
+  "Corporate",
+  "Criminal Defense",
+  "Property",
+  "Immigration",
+  "Labor",
+];
+const LANGUAGES = ["Sinhala", "Tamil", "English"];
+const MIN_RATING_OPTIONS = [
+  { label: "Any rating", value: "" },
+  { label: "3+", value: "3" },
+  { label: "4+", value: "4" },
+  { label: "4.5+", value: "4.5" },
+];
+const SORT_OPTIONS = [
+  { label: "Newest", value: "newest" },
+  { label: "Top Rated", value: "rating_desc" },
+  { label: "Most Experienced", value: "experience_desc" },
+  { label: "Price (Low to High)", value: "price_asc" },
+  { label: "Price (High to Low)", value: "price_desc" },
+];
+
 export default function SearchLawyers() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { requireAuth, modalOpen, closeModal } = useRequireAuth();
-  const [filters, setFilters] = useState({
-    district: "",
-    city: "",
-    specialization: "",
-    language: "",
-    q: "",
+  const [filters, setFilters] = useState(() => ({
+    q: searchParams.get("q") || "",
+    district: searchParams.get("district") || "",
+    city: searchParams.get("city") || "",
+    specialization: searchParams.get("specialization") || "",
+    language: searchParams.get("language") || "",
+    verified: searchParams.get("verified") === "true",
+    min_rating: searchParams.get("min_rating") || "",
+    sort: searchParams.get("sort") || "newest",
+  }));
+  const [page, setPage] = useState(() => {
+    const raw = Number(searchParams.get("page") || 1);
+    return Number.isNaN(raw) || raw < 1 ? 1 : raw;
   });
+  const limit = 12;
   const [lawyers, setLawyers] = useState([]);
+  const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -26,14 +60,20 @@ export default function SearchLawyers() {
       setError("");
       try {
         const params = {};
+        if (filters.q) params.q = filters.q;
         if (filters.district) params.district = filters.district;
         if (filters.city) params.city = filters.city;
         if (filters.specialization) params.specialization = filters.specialization;
         if (filters.language) params.language = filters.language;
-        if (filters.q) params.q = filters.q;
+        if (filters.verified) params.verified = true;
+        if (filters.min_rating) params.min_rating = filters.min_rating;
+        if (filters.sort) params.sort = filters.sort;
+        params.page = page;
+        params.limit = limit;
 
-        const res = await api.get("/lawyers", { params });
-        setLawyers(res.data || []);
+        const res = await api.get("/lawyers/search", { params });
+        setLawyers(res.data?.items || []);
+        setTotal(res.data?.total || 0);
       } catch (err) {
         const msg =
           err?.response?.data?.detail ||
@@ -41,22 +81,76 @@ export default function SearchLawyers() {
           "Failed to load lawyers.";
         setError(msg);
         setLawyers([]);
+        setTotal(0);
       } finally {
         setLoading(false);
       }
     };
 
     fetchLawyers();
-  }, [filters.district, filters.city, filters.specialization, filters.language, filters.q]);
+  }, [
+    filters.q,
+    filters.district,
+    filters.city,
+    filters.specialization,
+    filters.language,
+    filters.verified,
+    filters.min_rating,
+    filters.sort,
+    page,
+  ]);
+
+  useEffect(() => {
+    const next = new URLSearchParams();
+    if (filters.q) next.set("q", filters.q);
+    if (filters.district) next.set("district", filters.district);
+    if (filters.city) next.set("city", filters.city);
+    if (filters.specialization) next.set("specialization", filters.specialization);
+    if (filters.language) next.set("language", filters.language);
+    if (filters.verified) next.set("verified", "true");
+    if (filters.min_rating) next.set("min_rating", filters.min_rating);
+    if (filters.sort) next.set("sort", filters.sort);
+    next.set("page", String(page));
+    next.set("limit", String(limit));
+    setSearchParams(next, { replace: true });
+  }, [filters, page, limit, setSearchParams]);
 
   const resultsLabel = useMemo(() => {
     if (loading) return "Loading...";
     if (error) return "Unable to load results";
-    return `Showing ${lawyers.length} result${lawyers.length === 1 ? "" : "s"}`;
-  }, [loading, error, lawyers.length]);
+    return `Showing ${lawyers.length} of ${total} result${total === 1 ? "" : "s"}`;
+  }, [loading, error, lawyers.length, total]);
 
   const handleChange = (field, value) => {
+    setPage(1);
     setFilters((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const clearFilters = () => {
+    setFilters({
+      q: "",
+      district: "",
+      city: "",
+      specialization: "",
+      language: "",
+      verified: false,
+      min_rating: "",
+      sort: "newest",
+    });
+    setPage(1);
+  };
+
+  const totalPages = Math.max(1, Math.ceil(total / limit));
+
+  const getInitials = (name) => {
+    if (!name) return "LC";
+    return name
+      .split(" ")
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part[0])
+      .join("")
+      .toUpperCase();
   };
 
   return (
@@ -66,44 +160,122 @@ export default function SearchLawyers() {
       maxWidth="max-w-6xl"
       contentClassName="space-y-6"
     >
-      <div className="bg-slate-800 border border-slate-700 rounded-lg p-5 space-y-4">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+      <div className="bg-slate-900/70 border border-slate-800 rounded-2xl p-5 space-y-4 shadow-[0_20px_40px_rgba(0,0,0,0.3)]">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="text-sm text-slate-400">Refine your search</div>
+          <button
+            onClick={clearFilters}
+            className="px-3 py-1.5 rounded-lg border border-slate-700 bg-slate-800 text-xs text-slate-200 hover:bg-slate-700"
+          >
+            Clear filters
+          </button>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
           <input
             className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
             placeholder="Search by name"
             value={filters.q}
             onChange={(e) => handleChange("q", e.target.value)}
           />
-          <input
+          <select
             className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
-            placeholder="District"
             value={filters.district}
             onChange={(e) => handleChange("district", e.target.value)}
-          />
+          >
+            <option value="">All districts</option>
+            {DISTRICTS.map((district) => (
+              <option key={district} value={district}>
+                {district}
+              </option>
+            ))}
+          </select>
           <input
             className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
             placeholder="City"
             value={filters.city}
             onChange={(e) => handleChange("city", e.target.value)}
           />
-          <input
+          <select
             className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
-            placeholder="Specialization"
             value={filters.specialization}
             onChange={(e) => handleChange("specialization", e.target.value)}
-          />
-          <input
+          >
+            <option value="">All specializations</option>
+            {SPECIALIZATIONS.map((specialization) => (
+              <option key={specialization} value={specialization}>
+                {specialization}
+              </option>
+            ))}
+          </select>
+          <select
             className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
-            placeholder="Language"
             value={filters.language}
             onChange={(e) => handleChange("language", e.target.value)}
-          />
+          >
+            <option value="">All languages</option>
+            {LANGUAGES.map((language) => (
+              <option key={language} value={language}>
+                {language}
+              </option>
+            ))}
+          </select>
+          <select
+            className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
+            value={filters.min_rating}
+            onChange={(e) => handleChange("min_rating", e.target.value)}
+          >
+            {MIN_RATING_OPTIONS.map((option) => (
+              <option key={option.value || "any"} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+          <select
+            className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
+            value={filters.sort}
+            onChange={(e) => handleChange("sort", e.target.value)}
+          >
+            {SORT_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+          <label className="flex items-center gap-2 text-sm text-slate-200">
+            <input
+              type="checkbox"
+              checked={filters.verified}
+              onChange={(e) => handleChange("verified", e.target.checked)}
+              className="h-4 w-4 rounded border-slate-600 bg-slate-900 text-amber-500 focus:ring-amber-500"
+            />
+            Verified only
+          </label>
         </div>
         <div className="text-sm text-slate-400">{resultsLabel}</div>
       </div>
 
-      <div className="bg-slate-800 border border-slate-700 rounded-lg p-5">
-        {loading && <div className="text-slate-300">Loading lawyers...</div>}
+      <div className="bg-slate-900/70 border border-slate-800 rounded-2xl p-5 space-y-5 shadow-[0_20px_40px_rgba(0,0,0,0.3)]">
+        {loading && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {Array.from({ length: 6 }).map((_, idx) => (
+              <div
+                key={`skeleton-${idx}`}
+                className="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3 animate-pulse"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="h-12 w-12 rounded-full bg-slate-800" />
+                  <div className="flex-1 space-y-2">
+                    <div className="h-4 bg-slate-800 rounded w-2/3" />
+                    <div className="h-3 bg-slate-800 rounded w-1/2" />
+                  </div>
+                </div>
+                <div className="h-3 bg-slate-800 rounded w-3/4" />
+                <div className="h-3 bg-slate-800 rounded w-1/2" />
+                <div className="h-8 bg-slate-800 rounded w-32" />
+              </div>
+            ))}
+          </div>
+        )}
 
         {!loading && error && (
           <EmptyState
@@ -117,7 +289,7 @@ export default function SearchLawyers() {
         {!loading && !error && lawyers.length === 0 && (
           <EmptyState
             title="No lawyers found"
-            description="Try adjusting your filters."
+            description="No lawyers found. Try clearing filters."
             buttonLabel="Clear filters"
             buttonLink="/client/search"
           />
@@ -128,39 +300,99 @@ export default function SearchLawyers() {
             {lawyers.map((lawyer) => (
               <div
                 key={lawyer.id}
-                className="bg-slate-900 border border-slate-700 rounded-lg p-4 flex flex-col gap-2"
+                className="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex flex-col gap-3 shadow-[0_12px_25px_rgba(0,0,0,0.25)]"
               >
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="text-lg font-semibold text-white">
-                      {lawyer.full_name || "Unnamed"}
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className="h-12 w-12 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-sm font-semibold text-amber-200 overflow-hidden">
+                      {lawyer.profile_photo_url ? (
+                        <img
+                          src={lawyer.profile_photo_url}
+                          alt={lawyer.name}
+                          className="h-full w-full rounded-full object-cover"
+                        />
+                      ) : (
+                        getInitials(lawyer.name)
+                      )}
                     </div>
-                    <div className="text-sm text-slate-400">
-                      {lawyer.specialization || "General"}
+                    <div>
+                      <div className="text-lg font-semibold text-white flex items-center gap-2">
+                        {lawyer.name || "Unnamed"}
+                        {lawyer.verified && (
+                          <span className="text-[10px] uppercase tracking-wide text-amber-200 bg-amber-500/10 border border-amber-500/30 px-2 py-0.5 rounded-full">
+                            Verified
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-sm text-slate-400">
+                        {lawyer.specialization || "General"}
+                      </div>
                     </div>
                   </div>
                   <div className="text-sm text-amber-300 font-semibold">
-                    {lawyer.rating ?? "—"}
+                    {lawyer.rating?.toFixed ? lawyer.rating.toFixed(1) : lawyer.rating || "0.0"}
                   </div>
                 </div>
                 <div className="text-sm text-slate-400">
-                  {[lawyer.city, lawyer.district].filter(Boolean).join(", ") || "—"}
+                  {[lawyer.city, lawyer.district].filter(Boolean).join(", ") || "Location not set"}
                 </div>
-                <div className="text-xs text-slate-300">
-                  {Array.isArray(lawyer.languages) && lawyer.languages.length
-                    ? lawyer.languages.join(", ")
-                    : "Languages not set"}
+                <div className="flex flex-wrap gap-2 text-xs text-slate-300">
+                  {(lawyer.languages || []).length ? (
+                    lawyer.languages.map((lang) => (
+                      <span
+                        key={`${lawyer.id}-${lang}`}
+                        className="px-2 py-1 rounded-full bg-slate-800 border border-slate-700"
+                      >
+                        {lang}
+                      </span>
+                    ))
+                  ) : (
+                    <span className="text-slate-500">Languages not set</span>
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-4 text-xs text-slate-400">
+                  <span>
+                    Rating: {lawyer.rating ?? 0} · {lawyer.review_count || 0} reviews
+                  </span>
+                  {lawyer.cases_handled != null && (
+                    <span>Cases handled: {lawyer.cases_handled}</span>
+                  )}
+                  {lawyer.starting_price != null && (
+                    <span>Starting at: LKR {Number(lawyer.starting_price).toFixed(0)}</span>
+                  )}
                 </div>
                 <div className="flex justify-end">
                   <button
                     onClick={() => requireAuth(() => navigate(`/client/profile/${lawyer.id}`))}
-                    className="px-3 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-sm font-medium text-white transition-colors"
+                    className="px-4 py-2 rounded-lg bg-gradient-to-r from-amber-500 to-amber-600 text-sm font-semibold text-slate-900 hover:from-amber-400 hover:to-amber-500 transition-colors"
                   >
                     View Profile
                   </button>
                 </div>
               </div>
             ))}
+          </div>
+        )}
+
+        {!loading && !error && lawyers.length > 0 && (
+          <div className="flex items-center justify-between border border-slate-800 rounded-xl px-4 py-3 bg-slate-900/60">
+            <button
+              onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+              disabled={page <= 1}
+              className="px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-sm text-slate-200 disabled:opacity-50"
+            >
+              Prev
+            </button>
+            <div className="text-sm text-slate-400">
+              Page {page} of {totalPages}
+            </div>
+            <button
+              onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
+              disabled={page >= totalPages}
+              className="px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-sm text-slate-200 disabled:opacity-50"
+            >
+              Next
+            </button>
           </div>
         )}
       </div>

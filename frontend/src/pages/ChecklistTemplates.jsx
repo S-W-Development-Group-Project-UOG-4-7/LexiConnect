@@ -100,7 +100,7 @@ function ChecklistTemplates() {
     <div className="">
       <div className="lc-card">
         <div className="lc-header">
-          <div className="lc-icon">✓</div>
+          <div className="lc-icon">CT</div>
           <div>
             <h1 className="lc-title">Checklist Templates</h1>
             <p className="lc-subtitle">Manage your legal checklist templates</p>
@@ -151,13 +151,9 @@ function ChecklistTemplates() {
                 Required
               </label>
               <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", paddingTop: "0.5rem" }}>
-                <input
-                  type="checkbox"
-                  id="required"
-                  name="required"
-                  checked={form.required}
-                  onChange={handleChange}
-                  style={{ width: "18px", height: "18px", cursor: "pointer" }}
+                <div
+                  className={`lc-toggle ${form.required ? "active" : ""}`}
+                  onClick={() => setForm((prev) => ({ ...prev, required: !prev.required }))}
                 />
                 <span style={{ fontSize: "0.9rem", color: "rgba(226, 232, 240, 0.78)" }}>
                   Required field
@@ -188,16 +184,20 @@ function ChecklistTemplates() {
 
         {loading ? (
           <div className="empty-state">
-            <p>Loading...</p>
+            <p>Loading checklist templates...</p>
           </div>
         ) : checklists.length === 0 ? (
           <div className="empty-state">
-            <p>You haven't created any checklist templates yet.</p>
+            <p>No checklist templates yet</p>
+            <p className="empty-sub">Add your first checklist item to get started.</p>
             <button
               type="button"
               className="lc-primary-btn"
               style={{ marginTop: "1rem" }}
-              onClick={() => {}}
+              onClick={() => {
+                const el = document.getElementById("question");
+                if (el) el.focus();
+              }}
             >
               <span>+</span>
               Add First Checklist Item
@@ -214,11 +214,9 @@ function ChecklistTemplates() {
                       <span className="lc-badge amber">Required</span>
                     )}
                   </div>
-                  {item.helperText && (
-                    <div className="lc-list-card-meta">
-                      {item.helperText}
-                    </div>
-                  )}
+                  <div className="lc-list-card-meta">
+                    {item.helperText || "No helper text provided."}
+                  </div>
                 </div>
                 <div style={{ display: "flex", gap: "0.5rem" }}>
                   <button
@@ -227,7 +225,7 @@ function ChecklistTemplates() {
                     onClick={() => handleEdit(item)}
                     title="Edit"
                   >
-                    ✏️
+                    Edit
                   </button>
                   <button
                     type="button"
@@ -235,7 +233,7 @@ function ChecklistTemplates() {
                     onClick={() => handleDelete(item.id)}
                     title="Delete"
                   >
-                    🗑️
+                    Delete
                   </button>
                 </div>
               </div>
