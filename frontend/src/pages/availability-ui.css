@@ -1237,15 +1237,17 @@ body {
 
 /* Lawyer console layout */
 .lc-page {
-  min-height: 100vh;
-  padding: 64px 18px 96px;
-  display: flex;
-  justify-content: center;
-  background: radial-gradient(circle at 15% 20%, #0f172a 0%, #0b1220 45%, #060a14 100%);
+  width: 100%;
+  margin: 0 auto;
+  padding: 0;
+  display: block;
+  min-height: auto;
+  background: transparent;
 }
 
 .lc-card {
   width: min(1100px, 100%);
+  margin: 0 auto;
   background: rgba(15, 23, 42, 0.9);
   border: 1px solid rgba(148, 163, 184, 0.2);
   border-radius: 20px;

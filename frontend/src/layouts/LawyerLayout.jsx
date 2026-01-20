@@ -1,3 +1,4 @@
+// src/layouts/LawyerLayout.jsx
 import { Outlet, useNavigate } from "react-router-dom";
 import TopNavbar from "../components/TopNavbar";
 
@@ -16,28 +17,37 @@ const LawyerLayout = () => {
     { to: "/lawyer/kyc", label: "KYC Status" },
   ];
 
+  const user = {
+    name: localStorage.getItem("email") || "Lawyer",
+    avatar: localStorage.getItem("avatar") || "",
+  };
+
   const handleLogout = () => {
     localStorage.removeItem("access_token");
     localStorage.removeItem("token");
     localStorage.removeItem("role");
     localStorage.removeItem("email");
     localStorage.removeItem("user");
+
     if (window.axios) {
       delete window.axios.defaults.headers.common["Authorization"];
     }
+
     navigate("/", { replace: true });
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white">
+    <div className="min-h-screen text-white bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
       <TopNavbar
         brandTitle="LexiConnect"
         brandSubtitle="Lawyer Dashboard"
         navLinks={navLinks}
         roleLabel="Lawyer"
+        user={user}
         logoutAction={handleLogout}
       />
-      <main className="mx-auto max-w-6xl px-6 py-8">
+
+      <main className="min-h-[calc(100vh-76px)] mx-auto w-full max-w-6xl px-6 py-8">
         <Outlet />
       </main>
     </div>
@@ -45,4 +55,3 @@ const LawyerLayout = () => {
 };
 
 export default LawyerLayout;
-

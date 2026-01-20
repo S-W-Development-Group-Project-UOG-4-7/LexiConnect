@@ -49,6 +49,9 @@ import LawyerDocumentsView from "../features/documents/pages/LawyerDocumentsView
 import LawyerIntakeViewPage from "../features/intake/pages/LawyerIntakeViewPage";
 import LawyerPublicProfile from "../pages/LawyerPublicProfile";
 import LawyerMyRequestsPage from "../features/cases/pages/LawyerMyRequestsPage";
+import LawyerEditProfilePage from "../features/lawyer_profile/pages/LawyerEditProfilePage";
+import LawyerPublicProfilePage from "../features/lawyer_profile/pages/LawyerPublicProfilePage";
+import LawyerSettingsPage from "../features/lawyer_profile/pages/LawyerSettingsPage";
 
 // ✅ Cases
 import ClientCasesPage from "../features/cases/pages/ClientCasesPage";
@@ -64,6 +67,7 @@ import LawyerApprenticesPage from "../features/apprenticeship/pages/LawyerAppren
 import ApprenticeLayout from "../layouts/ApprenticeLayout";
 import ApprenticeCases from "../features/apprenticeship/pages/ApprenticeCases";
 import ApprenticeProfile from "../features/apprenticeship/pages/ApprenticeProfile";
+import ApprenticeAssignedCases from "../features/apprenticeship/pages/ApprenticeAssignedCases";
 // Admin pages (real)
 import AdminDashboard from "../pages/admin/AdminDashboard";
 import KYCApproval from "../pages/admin/KYCApproval";
@@ -229,6 +233,9 @@ const AppRoutes = () => {
         <Route path="/lawyer/cases/feed" element={<LawyerCaseFeedPage />} />
         <Route path="/lawyer/cases/requests" element={<LawyerMyRequestsPage />} />
         <Route path="/lawyer/cases/:caseId" element={<LawyerCaseDetailPage />} />
+        <Route path="/lawyer/profile/edit" element={<LawyerEditProfilePage />} />
+        <Route path="/lawyer/public-profile" element={<LawyerPublicProfilePage />} />
+        <Route path="/lawyer/settings" element={<LawyerSettingsPage />} />
 
         {/* Optional: Apprenticeship page for lawyers */}
         <Route path="/lawyer/apprenticeship" element={<LawyerApprenticesPage />} />
