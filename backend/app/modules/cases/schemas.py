@@ -40,3 +40,15 @@ class CaseRequestOut(BaseModel):
     message: Optional[str] = None
     status: str
     created_at: datetime
+
+
+class LawyerCaseRequestOut(BaseModel):
+    id: int
+    case_id: int
+    status: str
+    created_at: datetime
+    lawyer_id: Optional[int] = None
+    message: Optional[str] = None
+    case_title: Optional[str] = None
+    district: Optional[str] = None
+    category: Optional[str] = None

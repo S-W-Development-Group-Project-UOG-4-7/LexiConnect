@@ -1,15 +1,24 @@
-import { useEffect, useState } from "react";
-import { getCaseFeed, requestAccess } from "../services/cases.service";
+import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
+import {
+  getCaseFeed,
+  getMyCaseRequests,
+  requestAccess,
+} from "../services/cases.service";
 
 export default function LawyerCaseFeedPage() {
   const [cases, setCases] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [requestsLoading, setRequestsLoading] = useState(true);
   const [error, setError] = useState("");
+  const [requestErrorById, setRequestErrorById] = useState({});
 
   const [filters, setFilters] = useState({ district: "", category: "" });
   const [requestingId, setRequestingId] = useState(null);
   const [requestMessage, setRequestMessage] = useState("");
-  const [successById, setSuccessById] = useState({});
+  const [requestsByCaseId, setRequestsByCaseId] = useState({});
+
+  const normalizeStatus = (value) => String(value || "").toUpperCase();
 
   const loadCases = async () => {
     setLoading(true);
@@ -32,8 +41,27 @@ export default function LawyerCaseFeedPage() {
     }
   };
 
+  const loadMyRequests = async () => {
+    setRequestsLoading(true);
+    try {
+      const data = await getMyCaseRequests();
+      const next = {};
+      (data || []).forEach((req) => {
+        if (req?.case_id != null) {
+          next[req.case_id] = req;
+        }
+      });
+      setRequestsByCaseId(next);
+    } catch (err) {
+      setRequestsByCaseId({});
+    } finally {
+      setRequestsLoading(false);
+    }
+  };
+
   useEffect(() => {
     loadCases();
+    loadMyRequests();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -42,13 +70,10 @@ export default function LawyerCaseFeedPage() {
   };
 
   const startRequest = (caseId) => {
+    if (requestsByCaseId[caseId]) return;
     setRequestingId(caseId);
     setRequestMessage("");
-    setSuccessById((prev) => {
-      const next = { ...prev };
-      delete next[caseId];
-      return next;
-    });
+    setRequestErrorById((prev) => ({ ...prev, [caseId]: "" }));
   };
 
   const cancelRequest = () => {
@@ -58,18 +83,34 @@ export default function LawyerCaseFeedPage() {
 
   const submitRequest = async (caseId) => {
     try {
-      await requestAccess(caseId, requestMessage);
-      setSuccessById((prev) => ({ ...prev, [caseId]: "Request sent" }));
+      const created = await requestAccess(caseId, requestMessage);
+      const fallback = {
+        id: created?.id,
+        case_id: caseId,
+        status: created?.status || "pending",
+        created_at: created?.created_at || new Date().toISOString(),
+      };
+      const resolved = created?.case_id ? created : fallback;
+      setRequestsByCaseId((prev) => ({ ...prev, [caseId]: resolved }));
       setRequestingId(null);
       setRequestMessage("");
+      setRequestErrorById((prev) => ({ ...prev, [caseId]: "" }));
     } catch (err) {
       const message =
         err?.response?.data?.detail ||
         err?.response?.data?.message ||
         "Failed to submit request.";
-      setSuccessById((prev) => ({ ...prev, [caseId]: message }));
+      setRequestErrorById((prev) => ({ ...prev, [caseId]: message }));
     }
   };
+
+  const caseRequestStatus = useMemo(() => {
+    const result = {};
+    Object.entries(requestsByCaseId).forEach(([caseId, req]) => {
+      result[caseId] = normalizeStatus(req?.status);
+    });
+    return result;
+  }, [requestsByCaseId]);
 
   return (
     <div className="min-h-screen bg-slate-950 text-white p-6">
@@ -134,9 +175,9 @@ export default function LawyerCaseFeedPage() {
                   Created: {c.created_at ? new Date(c.created_at).toLocaleString() : "—"}
                 </div>
 
-                {successById[c.id] && (
-                  <div className="text-sm text-emerald-300 border border-emerald-700/60 bg-emerald-900/30 rounded-lg p-2">
-                    {successById[c.id]}
+                {requestErrorById[c.id] && (
+                  <div className="text-sm text-red-300 border border-red-700/60 bg-red-900/30 rounded-lg p-2">
+                    {requestErrorById[c.id]}
                   </div>
                 )}
 
@@ -163,9 +204,39 @@ export default function LawyerCaseFeedPage() {
                       </button>
                     </div>
                   </div>
+                ) : caseRequestStatus[c.id] === "PENDING" ? (
+                  <button
+                    className="px-4 py-2 rounded-lg bg-slate-800 border border-slate-700 text-sm font-semibold opacity-70 cursor-not-allowed"
+                    disabled
+                  >
+                    Requested
+                  </button>
+                ) : caseRequestStatus[c.id] === "APPROVED" ? (
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      className="px-4 py-2 rounded-lg bg-emerald-900/40 border border-emerald-600/40 text-sm font-semibold text-emerald-200 opacity-80 cursor-not-allowed"
+                      disabled
+                    >
+                      Approved
+                    </button>
+                    <Link
+                      to={`/lawyer/cases/${c.id}`}
+                      className="px-4 py-2 rounded-lg bg-slate-800 border border-slate-700 hover:bg-slate-700 text-sm font-semibold"
+                    >
+                      View Case
+                    </Link>
+                  </div>
+                ) : caseRequestStatus[c.id] === "REJECTED" ? (
+                  <button
+                    className="px-4 py-2 rounded-lg bg-rose-900/40 border border-rose-700/50 text-sm font-semibold text-rose-200 opacity-80 cursor-not-allowed"
+                    disabled
+                  >
+                    Rejected
+                  </button>
                 ) : (
                   <button
                     onClick={() => startRequest(c.id)}
+                    disabled={requestsLoading}
                     className="px-4 py-2 rounded-lg bg-slate-800 border border-slate-700 hover:bg-slate-700 text-sm font-semibold"
                   >
                     Request Access

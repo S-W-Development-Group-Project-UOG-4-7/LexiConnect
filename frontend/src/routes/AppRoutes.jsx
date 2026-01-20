@@ -62,7 +62,7 @@ import ApprenticeDashboard from "../features/apprenticeship/pages/ApprenticeDash
 import ApprenticeCaseView from "../features/apprenticeship/pages/ApprenticeCaseView";
 import LawyerApprenticesPage from "../features/apprenticeship/pages/LawyerApprenticesPage";
 import ApprenticeLayout from "../layouts/ApprenticeLayout";
-import ApprenticeCases from "../features/apprenticeship/pages/ApprenticeCases";
+import ApprenticeAssignedCases from "../features/apprenticeship/pages/ApprenticeAssignedCases";
 // Admin pages (real)
 import AdminDashboard from "../pages/admin/AdminDashboard";
 import KYCApproval from "../pages/admin/KYCApproval";
@@ -81,7 +81,7 @@ const DashboardRedirect = () => {
 
 const RequireAuth = ({ children }) => {
   const token = localStorage.getItem("access_token");
-  return token ? children : <Navigate to="/" replace />;
+  return token ? children : <Navigate to="/login" replace />;
 };
 
 // ✅ Minimal Lawyer dashboard (with Case Feed link)
@@ -237,14 +237,15 @@ const AppRoutes = () => {
       <Route
         element={
           <RequireAuth>
-            <ProtectedRoute allowedRoles={["apprentice"]}>
-            <ApprenticeLayout />
+            <ProtectedRoute allowedRoles={["apprentice"]} redirectTo="/dashboard">
+              <ApprenticeLayout />
             </ProtectedRoute>
           </RequireAuth>
         }
       >
+        <Route path="/apprentice" element={<Navigate to="/apprentice/dashboard" replace />} />
         <Route path="/apprentice/dashboard" element={<ApprenticeDashboard />} />  
-        <Route path="/apprentice/cases" element={<ApprenticeCases />} />
+        <Route path="/apprentice/cases" element={<ApprenticeAssignedCases />} />
         <Route path="/apprentice/cases/:caseId" element={<ApprenticeCaseView />} />
       </Route>
 
