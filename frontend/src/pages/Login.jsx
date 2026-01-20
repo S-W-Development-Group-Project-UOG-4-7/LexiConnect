@@ -59,10 +59,10 @@ const Login = () => {
 
       // ✅ Redirect based on role
       let target = "/dashboard"; // uses DashboardRedirect as a safe default
-      if (role === "lawyer") target = "/lawyer";
-      else if (role === "client") target = "/client";
-      else if (role === "admin") target = "/admin";
-      else if (role === "apprentice") target = "/apprentice";
+      if (role === "lawyer") target = "/lawyer/dashboard";
+      else if (role === "client") target = "/client/dashboard";
+      else if (role === "admin") target = "/admin/dashboard";
+      else if (role === "apprentice") target = "/apprentice/dashboard";
 
       if (import.meta.env.DEV) {
         console.log("[login] token saved to access_token");

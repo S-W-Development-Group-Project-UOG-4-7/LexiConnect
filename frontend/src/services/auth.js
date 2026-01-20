@@ -1,6 +1,9 @@
 // Basic JWT helpers for frontend-only role checks (no signature verification)
 
-export const getToken = () => localStorage.getItem("token");
+export const getToken = () =>
+  localStorage.getItem("access_token") ||
+  localStorage.getItem("token") ||
+  localStorage.getItem("authToken");
 
 export const logout = () => {
   localStorage.removeItem("token");
