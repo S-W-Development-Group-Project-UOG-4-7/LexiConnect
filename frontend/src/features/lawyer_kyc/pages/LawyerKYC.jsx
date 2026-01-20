@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { submitKyc, getMyKyc } from "../services/lawyerKyc.service";
-import "../../../pages/availability-ui.css";
+import "../../../pages/lawyer-ui.css";
 
 function LawyerKYC() {
   const [kycStatus, setKycStatus] = useState("not_submitted");
@@ -69,7 +69,7 @@ function LawyerKYC() {
   const handleResubmit = () => setKycStatus("not_submitted");
 
   return (
-    <div className="lc-page">
+    <div className="">
       <div className="lc-card">
         <div className="lc-header">
           <div className="lc-icon">KYC</div>

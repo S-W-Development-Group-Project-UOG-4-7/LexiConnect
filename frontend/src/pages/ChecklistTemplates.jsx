@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import "./availability-ui.css";
+import "./lawyer-ui.css";
 import { checklistTemplatesApi } from "../services/checklistTemplates";
 
 function ChecklistTemplates() {
@@ -97,7 +97,7 @@ function ChecklistTemplates() {
   };
 
   return (
-    <div className="lc-page">
+    <div className="">
       <div className="lc-card">
         <div className="lc-header">
           <div className="lc-icon">CT</div>
