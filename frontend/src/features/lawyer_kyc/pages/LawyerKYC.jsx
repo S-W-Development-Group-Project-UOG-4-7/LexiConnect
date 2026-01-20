@@ -4,6 +4,8 @@ import "../../../pages/availability-ui.css";
 
 function LawyerKYC() {
   const [kycStatus, setKycStatus] = useState("not_submitted");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
 
   const [form, setForm] = useState({
     full_name: "",
@@ -51,12 +53,16 @@ function LawyerKYC() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setError("");
+    setSubmitting(true);
     try {
       await submitKyc(form);
       setKycStatus("pending");
     } catch (err) {
-      alert("Failed to submit KYC");
       console.error(err);
+      setError("Failed to submit KYC. Please try again.");
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -65,9 +71,8 @@ function LawyerKYC() {
   return (
     <div className="lc-page">
       <div className="lc-card">
-
         <div className="lc-header">
-          <div className="lc-icon">🛡️</div>
+          <div className="lc-icon">KYC</div>
           <div>
             <h1 className="lc-title">KYC Status</h1>
             <p className="lc-subtitle">Your verification status</p>
@@ -76,10 +81,10 @@ function LawyerKYC() {
 
         <div className={`lc-status-banner ${kycStatus}`}>
           <div className="lc-status-icon">
-            {kycStatus === "pending" && "⚠️"}
-            {kycStatus === "approved" && "✓"}
-            {kycStatus === "rejected" && "✕"}
-            {kycStatus === "not_submitted" && "ℹ️"}
+            {kycStatus === "pending" && "P"}
+            {kycStatus === "approved" && "OK"}
+            {kycStatus === "rejected" && "X"}
+            {kycStatus === "not_submitted" && "!"}
           </div>
           <div className="lc-status-text">
             <div className="lc-status-title">{statusText}</div>
@@ -99,6 +104,11 @@ function LawyerKYC() {
             </h2>
 
             <form onSubmit={handleSubmit} className="availability-form">
+              {error && (
+                <div className="alert alert-error" style={{ marginBottom: "1.5rem" }}>
+                  {error}
+                </div>
+              )}
               {isRejected && (
                 <div className="alert alert-error" style={{ marginBottom: "1.5rem" }}>
                   Your KYC was rejected. Please review and resubmit your details.
@@ -116,7 +126,7 @@ function LawyerKYC() {
                     name="full_name"
                     value={form.full_name}
                     onChange={handleChange}
-                    disabled={isPending}
+                    disabled={isPending || submitting}
                     placeholder="As per Bar Council registration"
                     className="lc-input"
                     required
@@ -133,7 +143,7 @@ function LawyerKYC() {
                     name="nic_number"
                     value={form.nic_number}
                     onChange={handleChange}
-                    disabled={isPending}
+                    disabled={isPending || submitting}
                     placeholder="e.g., 199012345678"
                     className="lc-input"
                     required
@@ -150,7 +160,7 @@ function LawyerKYC() {
                     name="bar_council_id"
                     value={form.bar_council_id}
                     onChange={handleChange}
-                    disabled={isPending}
+                    disabled={isPending || submitting}
                     placeholder="Your Bar Council registration number"
                     className="lc-input"
                     required
@@ -167,7 +177,7 @@ function LawyerKYC() {
                     name="contact_number"
                     value={form.contact_number}
                     onChange={handleChange}
-                    disabled={isPending}
+                    disabled={isPending || submitting}
                     placeholder="e.g., +94 77 123 4567"
                     className="lc-input"
                     required
@@ -183,7 +193,7 @@ function LawyerKYC() {
                     name="address"
                     value={form.address}
                     onChange={handleChange}
-                    disabled={isPending}
+                    disabled={isPending || submitting}
                     placeholder="Your registered address"
                     className="lc-textarea"
                     required
@@ -199,24 +209,24 @@ function LawyerKYC() {
                       type="text"
                       id="bar_certificate_url"
                       name="bar_certificate_url"
-                      value={form.bar_certificate_url}
-                      onChange={handleChange}
-                      disabled={isPending}
-                      placeholder="Upload your certificate and paste the URL here"
-                      className="lc-input"
-                      style={{ flex: 1 }}
-                      required
-                    />
-                    <button
-                      type="button"
-                      className="lc-primary-btn"
-                      style={{ width: "auto", minWidth: "120px" }}
-                      disabled={isPending}
-                      onClick={() => {}}
-                    >
-                      📤 Upload
-                    </button>
-                  </div>
+                    value={form.bar_certificate_url}
+                    onChange={handleChange}
+                    disabled={isPending || submitting}
+                    placeholder="Upload your certificate and paste the URL here"
+                    className="lc-input"
+                    style={{ flex: 1 }}
+                    required
+                  />
+                  <button
+                    type="button"
+                    className="lc-primary-btn"
+                    style={{ width: "auto", minWidth: "120px" }}
+                    disabled={isPending || submitting}
+                    onClick={() => {}}
+                  >
+                    Upload
+                  </button>
+                </div>
                   <div className="field-hint" style={{ marginTop: "0.5rem" }}>
                     Please ensure the certificate is clear and all text is readable
                   </div>
@@ -236,9 +246,9 @@ function LawyerKYC() {
                 <button
                   type="submit"
                   className="lc-primary-btn"
-                  disabled={isPending}
+                  disabled={isPending || submitting}
                 >
-                  🛡️ Submit for Verification
+                  {submitting ? "Submitting..." : "Submit for Verification"}
                 </button>
               </div>
             </form>
@@ -248,7 +258,7 @@ function LawyerKYC() {
         {isApproved && (
           <div className="alert alert-success" style={{ marginTop: "1.5rem" }}>
             <div style={{ fontSize: "1.1rem", fontWeight: 650, marginBottom: "0.5rem" }}>
-              ✓ KYC Approved
+              KYC Approved
             </div>
             <p>Your KYC has been approved. No further action is required.</p>
           </div>
