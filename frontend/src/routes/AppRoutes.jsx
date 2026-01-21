@@ -52,6 +52,7 @@ import LawyerMyRequestsPage from "../features/cases/pages/LawyerMyRequestsPage";
 import LawyerEditProfilePage from "../features/lawyer_profile/pages/LawyerEditProfilePage";
 import LawyerPublicProfilePage from "../features/lawyer_profile/pages/LawyerPublicProfilePage";
 import LawyerSettingsPage from "../features/lawyer_profile/pages/LawyerSettingsPage";
+import LawyerDashboard from "../pages/LawyerDashboard";
 
 // ✅ Cases
 import ClientCasesPage from "../features/cases/pages/ClientCasesPage";
@@ -218,7 +219,7 @@ const AppRoutes = () => {
           </RequireAuth>
         }
       >
-        <Route path="/lawyer/dashboard" element={<LawyerDashboardHome />} />
+        <Route path="/lawyer/dashboard" element={<LawyerDashboard />} />
         <Route path="/lawyer/availability" element={<AvailabilityEditor />} />
         <Route path="/lawyer/token-queue" element={<TokenQueue />} />
         <Route path="/lawyer/branches" element={<BranchManagement />} />
