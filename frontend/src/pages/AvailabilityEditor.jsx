@@ -74,9 +74,13 @@ const AvailabilityEditor = () => {
   const [saving, setSaving] = useState(false);
   const [loadingBranches, setLoadingBranches] = useState(false);
   const [availabilities, setAvailabilities] = useState([]);
+  const [blackouts, setBlackouts] = useState([]);
   const [loadingAvailabilities, setLoadingAvailabilities] = useState(false);
   const [selectedDate, setSelectedDate] = useState(null);
   const [selectedSlot, setSelectedSlot] = useState(null);
+  const [canceling, setCanceling] = useState(false);
+  const [cancelMessage, setCancelMessage] = useState('');
+  const [cancelError, setCancelError] = useState('');
   const [viewDate, setViewDate] = useState(() => {
     const now = new Date();
     return new Date(Date.UTC(now.getFullYear(), now.getMonth(), 1));
@@ -114,7 +118,7 @@ const AvailabilityEditor = () => {
     
 
     fetchBranches();
-    loadAvailabilities();
+    loadAvailabilityData();
   }, []);
 
   const loadAvailabilities = async () => {
@@ -145,6 +149,25 @@ const AvailabilityEditor = () => {
     } finally {
       setLoadingAvailabilities(false);
     }
+  };
+
+  const loadBlackouts = async () => {
+    try {
+      const { data } = await api.get('/api/lawyer-availability/blackouts');
+      setBlackouts(data || []);
+    } catch (err) {
+      const detail =
+        err?.response?.data?.detail ||
+        err?.response?.data?.message ||
+        err?.message ||
+        'Failed to load blackout days.';
+      setErrors((prev) => ({ ...prev, list: detail }));
+      setBlackouts([]);
+    }
+  };
+
+  const loadAvailabilityData = async () => {
+    await Promise.all([loadAvailabilities(), loadBlackouts()]);
   };
 
   const toggleDay = (day) => {
@@ -221,7 +244,7 @@ const AvailabilityEditor = () => {
         console.log('[availability] save success', res.status, res.data);
       }
       setSaveMessage('Availability saved successfully.');
-      await loadAvailabilities();
+      await loadAvailabilityData();
       setWizardStep(1);
       setWizardData({ ...wizardDefaults });
     } catch (err) {
@@ -240,6 +263,41 @@ const AvailabilityEditor = () => {
       setErrors((prev) => ({ ...prev, save: status ? `${status}: ${errorDetail}` : errorDetail }));
     } finally {
       setSaving(false);
+    }
+  };
+
+  const cancelSelectedSlot = async () => {
+    if (!selectedDate) {
+      setCancelError('Select a date to cancel.');
+      return;
+    }
+    setCancelMessage('');
+    setCancelError('');
+    const token = localStorage.getItem('access_token') || localStorage.getItem('token');
+    try {
+      setCanceling(true);
+      await api.post(
+        '/api/lawyer-availability/blackouts',
+        { date: selectedDate, reason: 'Cancelled via dashboard' },
+        { headers: token ? { Authorization: `Bearer ${token}` } : {} }
+      );
+      setCancelMessage(`Availability on ${selectedDate} cancelled.`);
+      await loadAvailabilityData();
+      setSelectedSlot(null);
+      setSelectedDate(null);
+    } catch (err) {
+      if (err?.response?.status === 400) {
+        setCancelMessage('This date is already cancelled.');
+        return;
+      }
+      const detail =
+        err?.response?.data?.detail ||
+        err?.response?.data?.message ||
+        err?.message ||
+        'Failed to cancel availability.';
+      setCancelError(detail);
+    } finally {
+      setCanceling(false);
     }
   };
 
@@ -498,12 +556,16 @@ const AvailabilityEditor = () => {
   const monthLabel = (dateObj) =>
     dateObj.toLocaleString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' });
 
+  const blackoutDates = useMemo(() => new Set((blackouts || []).map((b) => b.date)), [blackouts]);
+
   const monthlyOccurrences = useMemo(() => {
     const totalDays = daysInMonth(viewDate);
     const occurrences = {};
     for (let d = 1; d <= totalDays; d += 1) {
       const current = new Date(Date.UTC(viewDate.getUTCFullYear(), viewDate.getUTCMonth(), d));
       const weekday = current.getUTCDay(); // 0 sun
+      const dateKey = current.toISOString().slice(0, 10);
+      if (blackoutDates.has(dateKey)) continue;
       const matches = (availabilities || []).filter((slot) => {
         const idx = dayToIndex(slot.day_of_week || slot.day || '');
         if (idx === null) return false;
@@ -512,7 +574,6 @@ const AvailabilityEditor = () => {
         return sundayIdx === weekday;
       });
       if (matches.length) {
-        const dateKey = current.toISOString().slice(0, 10);
         occurrences[dateKey] = matches.map((m) => ({
           ...m,
           date: dateKey,
@@ -522,7 +583,7 @@ const AvailabilityEditor = () => {
       }
     }
     return occurrences;
-  }, [availabilities, viewDate]);
+  }, [availabilities, viewDate, blackoutDates]);
 
   const filteredMonthlyOccurrences = useMemo(() => {
     if (wizardData.repeatMode === 'until') {
@@ -536,6 +597,21 @@ const AvailabilityEditor = () => {
       Object.entries(monthlyOccurrences).filter(([dateKey]) => dateKey <= weeksLimitISO)
     );
   }, [monthlyOccurrences, wizardData.repeatMode, untilDate, weeksLimitISO]);
+
+  const getSlotsForDate = (date) => (date ? filteredMonthlyOccurrences[date] || [] : []);
+
+  useEffect(() => {
+    if (!selectedDate) return;
+    const slots = getSlotsForDate(selectedDate);
+    if (!slots.length) {
+      setSelectedSlot(null);
+      return;
+    }
+    const stillExists = selectedSlot && slots.some((s) => s.id === selectedSlot.id);
+    if (!stillExists) {
+      setSelectedSlot(slots[0]);
+    }
+  }, [selectedDate, filteredMonthlyOccurrences, selectedSlot]);
 
   const calendarCells = () => {
     const totalDays = daysInMonth(viewDate);
@@ -569,7 +645,16 @@ const AvailabilityEditor = () => {
   const handleChipClick = (slot, iso) => {
     setSelectedDate(iso);
     setSelectedSlot(slot);
-    // If an edit flow exists, plug in here, otherwise fallback to detail popover
+  };
+
+  const handleDateClick = (iso) => {
+    if (selectedDate === iso) {
+      setSelectedDate(null);
+      setSelectedSlot(null);
+      return;
+    }
+    setSelectedDate(iso);
+    setSelectedSlot(null);
   };
 
   const isUntilModeMissingDate = wizardData.repeatMode === 'until' && !untilDate;
@@ -684,10 +769,7 @@ const AvailabilityEditor = () => {
                     <div
                       key={cell.iso}
                       className={`month-cell ${isToday(cell.iso) ? 'today' : ''} ${isSelected ? 'selected' : ''}`}
-                      onClick={() => {
-                        setSelectedDate(cell.iso);
-                        setSelectedSlot(null);
-                      }}
+                      onClick={() => handleDateClick(cell.iso)}
                     >
                       <div className="month-date">{cell.day}</div>
                       <div className="month-chips">
@@ -712,16 +794,31 @@ const AvailabilityEditor = () => {
               </div>
             </div>
 
-            {selectedDate && filteredMonthlyOccurrences[selectedDate] && (
+            {selectedDate && getSlotsForDate(selectedDate).length > 0 && (
               <div className="month-popover">
                 <div className="popover-head">
                   <div className="popover-title">Availability on {selectedDate}</div>
-                  <button className="ghost-btn small" type="button" onClick={() => { setSelectedDate(null); setSelectedSlot(null); }}>
-                    Close
-                  </button>
+                  <div className="popover-actions">
+                    <button
+                      className="ghost-btn small danger"
+                      type="button"
+                      disabled={!selectedDate || canceling}
+                      onClick={cancelSelectedSlot}
+                    >
+                      {canceling ? 'Cancelling...' : 'Cancel slot'}
+                    </button>
+                    <button className="ghost-btn small" type="button" onClick={() => { setSelectedDate(null); setSelectedSlot(null); }}>
+                      Clear selection
+                    </button>
+                  </div>
                 </div>
+                {(cancelError || cancelMessage) && (
+                  <div className={`inline-feedback ${cancelError ? 'error' : 'success'}`}>
+                    {cancelError || cancelMessage}
+                  </div>
+                )}
                 <div className="popover-list">
-                  {filteredMonthlyOccurrences[selectedDate]?.map((slot, idx) => {
+                  {getSlotsForDate(selectedDate).map((slot, idx) => {
                     const isSelectedSlot = selectedSlot && selectedSlot.id === slot.id && selectedSlot.date === slot.date;
                     return (
                       <div

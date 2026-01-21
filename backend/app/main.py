@@ -11,6 +11,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import RedirectResponse, Response
 from sqlalchemy import text
 from sqlalchemy.exc import OperationalError
 
@@ -210,3 +211,16 @@ def custom_openapi():
 
 
 app.openapi = custom_openapi
+
+
+# ---- Root + favicon helpers ----
+@app.get("/", include_in_schema=False)
+def root():
+    # Send browser users to Swagger UI instead of 404
+    return RedirectResponse(url="/docs")
+
+
+@app.get("/favicon.ico", include_in_schema=False)
+def favicon():
+    # Lightweight empty icon to avoid 404 noise in logs
+    return Response(status_code=204, media_type="image/x-icon")
