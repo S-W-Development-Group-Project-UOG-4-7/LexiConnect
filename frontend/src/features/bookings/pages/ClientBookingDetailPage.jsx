@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { getBookingById } from "../../../services/bookings";
+import { getBookingById, getLawyerIdByUser, getLawyerServicePackages } from "../../../services/bookings";
 import { listDocuments } from "../../documents/services/documents.service";
 import { getIntakeByBooking, getIntakeByCase } from "../../intake/services/intake.service";
 import api from "../../../services/api";
@@ -39,6 +39,11 @@ export default function ClientBookingDetailPage() {
   const [booking, setBooking] = useState(null);
   const [bookingError, setBookingError] = useState("");
   const [bookingLoading, setBookingLoading] = useState(true);
+  const [metaLoading, setMetaLoading] = useState(false);
+  const [lawyerInfo, setLawyerInfo] = useState(null);
+  const [branchInfo, setBranchInfo] = useState(null);
+  const [serviceInfo, setServiceInfo] = useState(null);
+  const [caseInfo, setCaseInfo] = useState(null);
 
   const [docs, setDocs] = useState([]);
   const [docError, setDocError] = useState("");
@@ -71,6 +76,47 @@ export default function ClientBookingDetailPage() {
 
   useEffect(() => {
     if (!booking) return;
+    const loadMeta = async () => {
+      setMetaLoading(true);
+      try {
+        const [lawyerRes, caseRes, serviceList, branchesRes] = await Promise.all([
+          booking.lawyer_id ? api.get(`/api/lawyers/${booking.lawyer_id}`) : Promise.resolve(null),
+          booking.case_id ? api.get(`/api/cases/${booking.case_id}`) : Promise.resolve(null),
+          booking.service_package_id
+            ? getLawyerServicePackages(booking.lawyer_id)
+            : Promise.resolve([]),
+          booking.branch_id
+            ? getLawyerIdByUser(booking.lawyer_id)
+                .then((lawyerId) =>
+                  lawyerId ? api.get(`/api/branches?lawyer_id=${lawyerId}`) : null
+                )
+                .catch(() => null)
+            : Promise.resolve(null),
+        ]);
+
+        const servicesList = serviceList || [];
+        const branchesList = branchesRes?.data || [];
+        setLawyerInfo(lawyerRes?.data || null);
+        setCaseInfo(caseRes?.data || null);
+        setServiceInfo(
+          booking.service_package_id
+            ? servicesList.find((svc) => svc.id === booking.service_package_id) || null
+            : null
+        );
+        setBranchInfo(
+          booking.branch_id
+            ? branchesList.find((branch) => branch.id === booking.branch_id) || null
+            : null
+        );
+      } catch {
+        setLawyerInfo(null);
+        setCaseInfo(null);
+        setServiceInfo(null);
+        setBranchInfo(null);
+      } finally {
+        setMetaLoading(false);
+      }
+    };
 
     const loadDocs = async () => {
       setDocError("");
@@ -127,6 +173,7 @@ export default function ClientBookingDetailPage() {
       }
     };
 
+    loadMeta();
     loadDocs();
     loadIntake();
   }, [bookingId, booking?.id, booking?.case_id, booking]);
@@ -160,7 +207,12 @@ export default function ClientBookingDetailPage() {
               Lawyer
             </div>
             <div className="text-white font-medium">
-              ID {booking?.lawyer_id ?? "-"}
+              {lawyerInfo?.full_name || "Lawyer"}
+            </div>
+            <div className="text-xs text-slate-400 mt-1">
+              {[lawyerInfo?.specialization, [lawyerInfo?.city, lawyerInfo?.district].filter(Boolean).join(", ")]
+                .filter(Boolean)
+                .join(" - ") || "Profile not available"}
             </div>
           </div>
 
@@ -169,7 +221,10 @@ export default function ClientBookingDetailPage() {
               Branch
             </div>
             <div className="text-white font-medium">
-              ID {booking?.branch_id ?? "-"}
+              {branchInfo?.name || "Branch not assigned"}
+            </div>
+            <div className="text-xs text-slate-400 mt-1">
+              {branchInfo?.city || "-"}
             </div>
           </div>
 
@@ -188,6 +243,24 @@ export default function ClientBookingDetailPage() {
             </div>
             <div className="text-white font-medium">
               {formatDateTime(booking?.created_at)}
+            </div>
+          </div>
+
+          <div className="bg-slate-950/40 border border-slate-700/60 rounded-lg p-3">
+            <div className="text-slate-400 text-xs uppercase tracking-wide mb-1">
+              Service
+            </div>
+            <div className="text-white font-medium">
+              {serviceInfo?.name || "Service not available"}
+            </div>
+          </div>
+
+          <div className="bg-slate-950/40 border border-slate-700/60 rounded-lg p-3">
+            <div className="text-slate-400 text-xs uppercase tracking-wide mb-1">
+              Case
+            </div>
+            <div className="text-white font-medium">
+              {caseInfo?.title || "Case not available"}
             </div>
           </div>
         </div>
@@ -219,7 +292,7 @@ export default function ClientBookingDetailPage() {
         </Link>
       </div>
 
-      {docLoading && <div className="text-slate-400">Loading documents…</div>}
+      {docLoading && <div className="text-slate-400">Loading documents...</div>}
 
       {docError && (
         <div className="p-3 rounded-lg border border-red-700/60 bg-red-900/30 text-red-200 text-sm">
@@ -258,7 +331,7 @@ export default function ClientBookingDetailPage() {
                   {doc.title || "Untitled"}
                 </div>
                 <div className="text-xs text-slate-400 truncate">
-                  {fileName} • #{doc.id}
+                  {fileName} - #{doc.id}
                 </div>
               </div>
 
@@ -300,7 +373,7 @@ export default function ClientBookingDetailPage() {
         </Link>
       </div>
 
-      {intakeLoading && <div className="text-slate-400">Checking intake status…</div>}
+      {intakeLoading && <div className="text-slate-400">Checking intake status...</div>}
 
       {intakeError && (
         <div className="p-3 rounded-lg border border-red-700/60 bg-red-900/30 text-red-200 text-sm">
@@ -398,7 +471,7 @@ export default function ClientBookingDetailPage() {
             You will soon be able to rate and review your experience with the lawyer.
           </div>
         </div>
-        <div className="text-3xl">⭐</div>
+        <div className="text-sm text-slate-400">N/A</div>
       </div>
 
       <div className="mt-4 text-sm text-slate-400">
@@ -422,9 +495,9 @@ export default function ClientBookingDetailPage() {
     }
   };
 
-  // ✅ Let layout handle full page background; keep content clean inside Outlet
+  // Note: layout handles full page background; keep content clean inside Outlet
   if (bookingLoading) {
-    return <div className="text-slate-300">Loading booking…</div>;
+    return <div className="text-slate-300">Loading booking...</div>;
   }
 
   if (bookingError || !booking) {

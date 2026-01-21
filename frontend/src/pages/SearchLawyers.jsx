@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import api from "../services/api";
-import PageShell from "../components/ui/PageShell";
 import EmptyState from "../components/ui/EmptyState";
 import useRequireAuth from "../hooks/useRequireAuth";
 import LoginRequiredModal from "../components/ui/LoginRequiredModal";
@@ -34,6 +33,7 @@ export default function SearchLawyers() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { requireAuth, modalOpen, closeModal } = useRequireAuth();
+  const [searchInput, setSearchInput] = useState(() => searchParams.get("q") || "");
   const [filters, setFilters] = useState(() => ({
     q: searchParams.get("q") || "",
     district: searchParams.get("district") || "",
@@ -101,6 +101,14 @@ export default function SearchLawyers() {
   ]);
 
   useEffect(() => {
+    const handle = setTimeout(() => {
+      setPage(1);
+      setFilters((prev) => ({ ...prev, q: searchInput }));
+    }, 300);
+    return () => clearTimeout(handle);
+  }, [searchInput]);
+
+  useEffect(() => {
     const next = new URLSearchParams();
     if (filters.q) next.set("q", filters.q);
     if (filters.district) next.set("district", filters.district);
@@ -127,6 +135,7 @@ export default function SearchLawyers() {
   };
 
   const clearFilters = () => {
+    setSearchInput("");
     setFilters({
       q: "",
       district: "",
@@ -154,94 +163,120 @@ export default function SearchLawyers() {
   };
 
   return (
-    <PageShell
-      title="Search Lawyers"
-      subtitle="Find a verified legal professional tailored to your needs"
-      maxWidth="max-w-6xl"
-      contentClassName="space-y-6"
-    >
-      <div className="bg-slate-900/70 border border-slate-800 rounded-2xl p-5 space-y-4 shadow-[0_20px_40px_rgba(0,0,0,0.3)]">
+    <div className="min-h-screen w-full px-6 py-8 text-white">
+      <div className="space-y-2">
+        <h1 className="text-3xl font-bold">Search Lawyers</h1>
+        <p className="text-slate-400">
+          Find a verified legal professional tailored to your needs
+        </p>
+      </div>
+
+      <section className="mt-8 bg-slate-900/70 border border-slate-800 rounded-2xl p-5 space-y-4 shadow-[0_20px_40px_rgba(0,0,0,0.3)] lg:sticky lg:top-24 lg:z-10">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="text-sm text-slate-400">Refine your search</div>
+          <div>
+            <div className="text-sm font-semibold text-slate-200">Filters</div>
+            <div className="text-xs text-slate-400">Refine your search</div>
+          </div>
           <button
             onClick={clearFilters}
-            className="px-3 py-1.5 rounded-lg border border-slate-700 bg-slate-800 text-xs text-slate-200 hover:bg-slate-700"
+            className="px-3 py-1.5 rounded-lg border border-slate-700 bg-slate-800 text-xs text-slate-200 hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-0"
           >
             Clear filters
           </button>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-          <input
-            className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
-            placeholder="Search by name"
-            value={filters.q}
-            onChange={(e) => handleChange("q", e.target.value)}
-          />
-          <select
-            className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
-            value={filters.district}
-            onChange={(e) => handleChange("district", e.target.value)}
-          >
-            <option value="">All districts</option>
-            {DISTRICTS.map((district) => (
-              <option key={district} value={district}>
-                {district}
-              </option>
-            ))}
-          </select>
-          <input
-            className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
-            placeholder="City"
-            value={filters.city}
-            onChange={(e) => handleChange("city", e.target.value)}
-          />
-          <select
-            className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
-            value={filters.specialization}
-            onChange={(e) => handleChange("specialization", e.target.value)}
-          >
-            <option value="">All specializations</option>
-            {SPECIALIZATIONS.map((specialization) => (
-              <option key={specialization} value={specialization}>
-                {specialization}
-              </option>
-            ))}
-          </select>
-          <select
-            className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
-            value={filters.language}
-            onChange={(e) => handleChange("language", e.target.value)}
-          >
-            <option value="">All languages</option>
-            {LANGUAGES.map((language) => (
-              <option key={language} value={language}>
-                {language}
-              </option>
-            ))}
-          </select>
-          <select
-            className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
-            value={filters.min_rating}
-            onChange={(e) => handleChange("min_rating", e.target.value)}
-          >
-            {MIN_RATING_OPTIONS.map((option) => (
-              <option key={option.value || "any"} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-          <select
-            className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
-            value={filters.sort}
-            onChange={(e) => handleChange("sort", e.target.value)}
-          >
-            {SORT_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-          <label className="flex items-center gap-2 text-sm text-slate-200">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+          <label className="text-xs text-slate-400">
+            Name
+            <input
+              className="mt-1 w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
+              placeholder="Search by name"
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+            />
+          </label>
+          <label className="text-xs text-slate-400">
+            District
+            <select
+              className="mt-1 w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
+              value={filters.district}
+              onChange={(e) => handleChange("district", e.target.value)}
+            >
+              <option value="">All districts</option>
+              {DISTRICTS.map((district) => (
+                <option key={district} value={district}>
+                  {district}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="text-xs text-slate-400">
+            City
+            <input
+              className="mt-1 w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
+              placeholder="City"
+              value={filters.city}
+              onChange={(e) => handleChange("city", e.target.value)}
+            />
+          </label>
+          <label className="text-xs text-slate-400">
+            Specialization
+            <select
+              className="mt-1 w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
+              value={filters.specialization}
+              onChange={(e) => handleChange("specialization", e.target.value)}
+            >
+              <option value="">All specializations</option>
+              {SPECIALIZATIONS.map((specialization) => (
+                <option key={specialization} value={specialization}>
+                  {specialization}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="text-xs text-slate-400">
+            Language
+            <select
+              className="mt-1 w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
+              value={filters.language}
+              onChange={(e) => handleChange("language", e.target.value)}
+            >
+              <option value="">All languages</option>
+              {LANGUAGES.map((language) => (
+                <option key={language} value={language}>
+                  {language}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="text-xs text-slate-400">
+            Minimum rating
+            <select
+              className="mt-1 w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
+              value={filters.min_rating}
+              onChange={(e) => handleChange("min_rating", e.target.value)}
+            >
+              {MIN_RATING_OPTIONS.map((option) => (
+                <option key={option.value || "any"} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="text-xs text-slate-400">
+            Sort by
+            <select
+              className="mt-1 w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
+              value={filters.sort}
+              onChange={(e) => handleChange("sort", e.target.value)}
+            >
+              {SORT_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="mt-6 flex items-center gap-2 text-sm text-slate-200">
             <input
               type="checkbox"
               checked={filters.verified}
@@ -251,12 +286,14 @@ export default function SearchLawyers() {
             Verified only
           </label>
         </div>
-        <div className="text-sm text-slate-400">{resultsLabel}</div>
-      </div>
+        <div className="text-sm text-slate-400" aria-live="polite">
+          {resultsLabel}
+        </div>
+      </section>
 
-      <div className="bg-slate-900/70 border border-slate-800 rounded-2xl p-5 space-y-5 shadow-[0_20px_40px_rgba(0,0,0,0.3)]">
+      <section className="mt-6 bg-slate-900/70 border border-slate-800 rounded-2xl p-5 space-y-5 shadow-[0_20px_40px_rgba(0,0,0,0.3)]">
         {loading && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
             {Array.from({ length: 6 }).map((_, idx) => (
               <div
                 key={`skeleton-${idx}`}
@@ -271,7 +308,7 @@ export default function SearchLawyers() {
                 </div>
                 <div className="h-3 bg-slate-800 rounded w-3/4" />
                 <div className="h-3 bg-slate-800 rounded w-1/2" />
-                <div className="h-8 bg-slate-800 rounded w-32" />
+                <div className="h-9 bg-slate-800 rounded w-32" />
               </div>
             ))}
           </div>
@@ -289,20 +326,20 @@ export default function SearchLawyers() {
         {!loading && !error && lawyers.length === 0 && (
           <EmptyState
             title="No lawyers found"
-            description="No lawyers found. Try clearing filters."
-            buttonLabel="Clear filters"
+            description="Try adjusting filters or searching by district, specialization, or language."
+            buttonLabel="Reset filters"
             buttonLink="/client/search"
           />
         )}
 
         {!loading && !error && lawyers.length > 0 && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
             {lawyers.map((lawyer) => (
               <div
                 key={lawyer.id}
-                className="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex flex-col gap-3 shadow-[0_12px_25px_rgba(0,0,0,0.25)]"
+                className="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex flex-col gap-4 shadow-[0_12px_25px_rgba(0,0,0,0.25)] transition hover:border-slate-700 hover:shadow-[0_16px_32px_rgba(0,0,0,0.35)]"
               >
-                <div className="flex items-start justify-between gap-3">
+                <div className="flex items-start justify-between gap-4">
                   <div className="flex items-center gap-3">
                     <div className="h-12 w-12 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-sm font-semibold text-amber-200 overflow-hidden">
                       {lawyer.profile_photo_url ? (
@@ -315,7 +352,7 @@ export default function SearchLawyers() {
                         getInitials(lawyer.name)
                       )}
                     </div>
-                    <div>
+                    <div className="space-y-1">
                       <div className="text-lg font-semibold text-white flex items-center gap-2">
                         {lawyer.name || "Unnamed"}
                         {lawyer.verified && (
@@ -329,8 +366,9 @@ export default function SearchLawyers() {
                       </div>
                     </div>
                   </div>
-                  <div className="text-sm text-amber-300 font-semibold">
-                    {lawyer.rating?.toFixed ? lawyer.rating.toFixed(1) : lawyer.rating || "0.0"}
+                  <div className="text-xs font-semibold text-amber-200 bg-amber-500/10 border border-amber-500/30 px-2 py-1 rounded-full">
+                    {lawyer.rating?.toFixed ? lawyer.rating.toFixed(1) : lawyer.rating || "0.0"}{" "}
+                    rating
                   </div>
                 </div>
                 <div className="text-sm text-slate-400">
@@ -352,7 +390,7 @@ export default function SearchLawyers() {
                 </div>
                 <div className="flex flex-wrap gap-4 text-xs text-slate-400">
                   <span>
-                    Rating: {lawyer.rating ?? 0} · {lawyer.review_count || 0} reviews
+                    Rating: {lawyer.rating ?? 0} | {lawyer.review_count || 0} reviews
                   </span>
                   {lawyer.cases_handled != null && (
                     <span>Cases handled: {lawyer.cases_handled}</span>
@@ -364,7 +402,7 @@ export default function SearchLawyers() {
                 <div className="flex justify-end">
                   <button
                     onClick={() => requireAuth(() => navigate(`/client/profile/${lawyer.id}`))}
-                    className="px-4 py-2 rounded-lg bg-gradient-to-r from-amber-500 to-amber-600 text-sm font-semibold text-slate-900 hover:from-amber-400 hover:to-amber-500 transition-colors"
+                    className="px-4 py-2 rounded-lg bg-gradient-to-r from-amber-500 to-amber-600 text-sm font-semibold text-slate-900 hover:from-amber-400 hover:to-amber-500 transition-colors focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-0"
                   >
                     View Profile
                   </button>
@@ -379,7 +417,7 @@ export default function SearchLawyers() {
             <button
               onClick={() => setPage((prev) => Math.max(1, prev - 1))}
               disabled={page <= 1}
-              className="px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-sm text-slate-200 disabled:opacity-50"
+              className="px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-sm text-slate-200 disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-0"
             >
               Prev
             </button>
@@ -389,19 +427,19 @@ export default function SearchLawyers() {
             <button
               onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
               disabled={page >= totalPages}
-              className="px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-sm text-slate-200 disabled:opacity-50"
+              className="px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-sm text-slate-200 disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-0"
             >
               Next
             </button>
           </div>
         )}
-      </div>
+      </section>
       <LoginRequiredModal
         open={modalOpen}
         onClose={closeModal}
         title="Login to view full profile"
         description="Sign in or create an account to see lawyer details."
       />
-    </PageShell>
+    </div>
   );
 }

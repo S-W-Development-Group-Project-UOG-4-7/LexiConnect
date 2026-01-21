@@ -161,7 +161,11 @@ export default function ClientIntakeSubmitPage() {
         setMode("view");
         setSuccess("Intake submitted successfully.");
       } else if (mode === "edit") {
-        const res = await updateIntake(bookingIdNum, payload);
+        if (!existingIntake?.id) {
+          setErr("Missing intake id for update.");
+          return;
+        }
+        const res = await updateIntake(existingIntake.id, payload);
         setExistingIntake(res?.data || null);
         setMode("view");
         setSuccess("Intake updated successfully.");
@@ -235,7 +239,7 @@ export default function ClientIntakeSubmitPage() {
               <span className="font-semibold">
                 #{hasValidBookingId ? bookingIdNum : bookingId ?? "N/A"}
               </span>{" "}
-              — help your lawyer understand your case quickly.
+              - help your lawyer understand your case quickly.
             </div>
 
             {existingIntake && (
@@ -384,7 +388,7 @@ export default function ClientIntakeSubmitPage() {
               <div>
                 <div className="font-semibold">Additional Answers (Optional)</div>
                 <div className="text-xs opacity-70">
-                  Add any structured info (e.g., “Employer Name”, “NIC”, “Police Station”).
+                  Add any structured info (e.g., "Employer Name", "NIC", "Police Station").
                 </div>
               </div>
 
@@ -427,7 +431,7 @@ export default function ClientIntakeSubmitPage() {
                         className="px-3 py-2 rounded bg-red-600 hover:bg-red-700"
                         title="Remove"
                       >
-                        ✕
+                        x
                       </button>
                     )}
                   </div>

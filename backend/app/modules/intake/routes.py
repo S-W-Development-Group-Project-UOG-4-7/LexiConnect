@@ -1,7 +1,6 @@
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -12,8 +11,6 @@ from app.modules.cases.models import Case
 
 from app.modules.intake.models import IntakeForm
 from app.modules.intake.schemas import IntakeCreate, IntakeUpdate, IntakeOut
-
-from app.modules.intake.schemas import IntakeOut, IntakeCreate, IntakeUpdate
 
 router = APIRouter(prefix="/api/intake", tags=["Intake"])
 
@@ -97,8 +94,8 @@ def create_intake_form(
     booking_client_id = _booking_client_id(booking)
     if booking_client_id is None:
         raise HTTPException(
-            status_code=500,
-            detail="Booking model missing client identifier (client_id/user_id).",
+            status_code=400,
+            detail="Booking is missing a client identifier.",
         )
 
     if booking_client_id != current_user.id:
@@ -116,7 +113,7 @@ def create_intake_form(
         subject=payload.subject,
         details=payload.details,
         urgency=payload.urgency,
-        answers_json=payload.answers_json or {},
+        answers_json=payload.extra_answers or {},
     )
 
     db.add(intake)
@@ -126,13 +123,12 @@ def create_intake_form(
 
 
 # -------------------------
-# READ latest by booking_id
 # READ (by booking)
 # -------------------------
 
-@router.get("", response_model=IntakeOut)
-def get_latest_intake(
-    booking_id: int = Query(..., gt=0),
+@router.get("/by-booking/{booking_id}", response_model=IntakeOut)
+def get_intake_by_booking(
+    booking_id: int,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
@@ -151,23 +147,36 @@ def get_latest_intake(
     return intake
 
 
-# -------------------------
-# UPDATE (PATCH) by booking_id
-# -------------------------
-
-@router.patch("", response_model=IntakeOut)
-def update_intake_form(
-    payload: IntakeUpdate,
+@router.get("", response_model=IntakeOut, include_in_schema=False)
+def get_intake_by_booking_query(
     booking_id: int = Query(..., gt=0),
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    booking = _get_booking_or_404(db, booking_id)
-    _ensure_can_edit_intake(current_user, booking)
+    return get_intake_by_booking(
+        booking_id=booking_id,
+        db=db,
+        current_user=current_user,
+    )
 
-    intake = db.query(IntakeForm).filter(IntakeForm.booking_id == booking_id).first()
+
+# -------------------------
+# UPDATE by intake_id
+# -------------------------
+
+@router.put("/{intake_id}", response_model=IntakeOut)
+def update_intake_form(
+    intake_id: int,
+    payload: IntakeUpdate,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    intake = db.query(IntakeForm).filter(IntakeForm.id == intake_id).first()
     if not intake:
         raise HTTPException(status_code=404, detail="Intake not found")
+
+    booking = _get_booking_or_404(db, intake.booking_id)
+    _ensure_can_edit_intake(current_user, booking)
 
     if payload.case_type is not None:
         intake.case_type = payload.case_type

@@ -45,3 +45,15 @@ class AvailabilityTemplateOut(BaseModel):
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class BookableSlot(BaseModel):
+    start: str
+    end: str
+    branch_id: int | None = None
+    branch_name: str | None = None
+
+
+class BookableSlotsByDate(BaseModel):
+    date: str
+    slots: list[BookableSlot]

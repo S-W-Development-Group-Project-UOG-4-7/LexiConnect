@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import PageShell from "../components/ui/PageShell";
 import StatGrid from "../components/ui/StatGrid";
 import EmptyState from "../components/ui/EmptyState";
 import StatusPill from "../components/ui/StatusPill";
@@ -57,11 +56,17 @@ export default function Dashboard() {
   const recentBookings = bookings.slice(0, 5);
 
   return (
-    <PageShell
-      title="Dashboard"
-      subtitle="Overview of your legal activity"
-      contentClassName="space-y-8"
-    >
+    <div className="min-h-screen w-full px-6 py-8 text-white">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-3xl font-bold">Dashboard</h1>
+          <p className="text-slate-400 text-sm mt-1">
+            Overview of your legal activity
+          </p>
+        </div>
+      </div>
+
+      <div className="space-y-8 mt-6">
       <section className="rounded-2xl border border-slate-700 bg-gradient-to-br from-slate-900/80 via-slate-900 to-slate-950 p-6 md:p-8 shadow-lg shadow-slate-900/30">
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
           <div className="space-y-2">
@@ -202,6 +207,7 @@ export default function Dashboard() {
           </div>
         )}
       </section>
-    </PageShell>
+      </div>
+    </div>
   );
 }

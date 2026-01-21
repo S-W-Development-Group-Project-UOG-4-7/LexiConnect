@@ -11,16 +11,12 @@ export const submitIntake = (bookingId, payload) => {
 
 // READ
 export const getIntakeByBooking = (bookingId) => {
-  return api.get("/api/intake", {
-    params: { booking_id: Number(bookingId) },
-  });
+  return api.get(`/api/intake/by-booking/${Number(bookingId)}`);
 };
 
-// UPDATE (PATCH)
-export const updateIntake = (bookingId, payload) => {
-  return api.patch("/api/intake", payload, {
-    params: { booking_id: Number(bookingId) },
-  });
+// UPDATE (PUT)
+export const updateIntake = (intakeId, payload) => {
+  return api.put(`/api/intake/${Number(intakeId)}`, payload);
 };
 
 // DELETE

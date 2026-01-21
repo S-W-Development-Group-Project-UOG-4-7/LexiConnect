@@ -1,22 +1,22 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { listMyBookings, cancelBooking } from "../services/bookings";
+import { listMyBookingSummaries, cancelBooking } from "../services/bookings";
 
 const ManageBookings = () => {
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [actionId, setActionId] = useState(null);
-   const [search, setSearch] = useState("");
-   const [statusFilter, setStatusFilter] = useState("All");
-   const [sortOrder, setSortOrder] = useState("Newest");
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("All");
+  const [sortOrder, setSortOrder] = useState("Newest");
   const navigate = useNavigate();
 
   const fetchBookings = async () => {
     setError("");
     setLoading(true);
     try {
-      const data = await listMyBookings();
+      const data = await listMyBookingSummaries();
       setBookings(data || []);
     } catch (err) {
       const message =
@@ -93,9 +93,10 @@ const ManageBookings = () => {
       const q = search.trim().toLowerCase();
       const matchesSearch =
         !q ||
-        `${b.id}`.includes(q) ||
         (b.lawyer_name || "").toLowerCase().includes(q) ||
-        (b.branch || "").toLowerCase().includes(q);
+        (b.service_name || "").toLowerCase().includes(q) ||
+        (b.case_title || "").toLowerCase().includes(q) ||
+        (b.case_summary || "").toLowerCase().includes(q);
       const matchesStatus =
         statusFilter === "All" || (b.status || "").toLowerCase() === statusFilter.toLowerCase();
       return matchesSearch && matchesStatus;
@@ -134,7 +135,7 @@ const ManageBookings = () => {
               <input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search by booking ID, lawyer, or branch"
+                placeholder="Search by lawyer, service, or case"
                 className="flex-1 min-w-[220px] px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-sm placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500"
               />
               <select
@@ -205,7 +206,9 @@ const ManageBookings = () => {
                 >
                   <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
                     <div className="flex items-center gap-3">
-                      <span className="text-white font-semibold text-lg">Booking #{booking.id}</span>
+                      <span className="text-white font-semibold text-lg">
+                        {booking.lawyer_name || "Lawyer"}
+                      </span>
                       <span className={`px-3 py-1 rounded-full text-xs font-semibold uppercase ${statusStyles}`}>
                         {booking.status || "Unknown"}
                       </span>
@@ -216,22 +219,29 @@ const ManageBookings = () => {
                   </div>
 
                   <div className="text-sm text-slate-400 flex flex-wrap gap-3">
-                    {booking.lawyer_name && (
+                    {booking.service_name && (
                       <span className="inline-flex items-center gap-1">
-                        <span className="text-slate-300 font-medium">Lawyer:</span> {booking.lawyer_name}
+                        <span className="text-slate-300 font-medium">Service:</span> {booking.service_name}
                       </span>
                     )}
-                    {booking.branch && (
+                    {booking.case_title && (
                       <span className="inline-flex items-center gap-1">
-                        <span className="text-slate-300 font-medium">Branch:</span> {booking.branch}
+                        <span className="text-slate-300 font-medium">Case:</span> {booking.case_title}
                       </span>
                     )}
-                    {booking.branch_id && !booking.branch && (
+                    {(booking.branch_name || booking.branch_city) && (
                       <span className="inline-flex items-center gap-1">
-                        <span className="text-slate-300 font-medium">Branch ID:</span> {booking.branch_id}
+                        <span className="text-slate-300 font-medium">Branch:</span>{" "}
+                        {[booking.branch_name, booking.branch_city].filter(Boolean).join(" - ")}
                       </span>
                     )}
                   </div>
+
+                  {booking.case_summary && (
+                    <div className="text-sm text-slate-400">
+                      {booking.case_summary}
+                    </div>
+                  )}
 
                   <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
                     <button

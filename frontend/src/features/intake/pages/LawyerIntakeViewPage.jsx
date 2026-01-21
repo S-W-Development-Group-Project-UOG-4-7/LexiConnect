@@ -135,7 +135,7 @@ export default function LawyerIntakeViewPage() {
               <div className="text-sm opacity-80">
                 <div>
                   <span className="opacity-70">Client ID:</span>{" "}
-                  <span className="font-semibold">{data.client_id ?? "—"}</span>
+                  <span className="font-semibold">{data.client_id ?? "-"}</span>
                 </div>
                 <div className="mt-1">
                   <span className="opacity-70">Created:</span>{" "}
@@ -197,7 +197,7 @@ function Field({ label, value, readOnly, placeholder }) {
   return (
     <div className="rounded border border-slate-700 bg-slate-950/30 p-4">
       <div className="text-xs opacity-70">{label}</div>
-      <div className="mt-1 font-semibold break-words">{value || "—"}</div>
+      <div className="mt-1 font-semibold break-words">{value || "-"}</div>
     </div>
   );
 }
@@ -207,14 +207,14 @@ function TextArea({ label, value, readOnly, placeholder }) {
     <div className="rounded border border-slate-700 bg-slate-950/30 p-4">
       <div className="text-xs opacity-70">{label}</div>
       <div className="mt-2 whitespace-pre-wrap leading-relaxed">
-        {value || "—"}
+        {value || "-"}
       </div>
     </div>
   );
 }
 
 function formatDate(value) {
-  if (!value) return "—";
+  if (!value) return "-";
   try {
     const d = new Date(value);
     return d.toLocaleString();

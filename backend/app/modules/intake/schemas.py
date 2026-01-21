@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Optional, Dict, Any
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 # -------------------------
@@ -14,15 +14,7 @@ class IntakeCreate(BaseModel):
     subject: str
     details: str
     urgency: str
-    answers_json: Dict[str, Any] = {}
-
-
-class IntakeUpdate(BaseModel):
-    case_type: Optional[str] = None
-    subject: Optional[str] = None
-    details: Optional[str] = None
-    urgency: Optional[str] = None
-    answers_json: Optional[Dict[str, Any]] = None
+    extra_answers: Optional[Dict[str, Any]] = None
 
 
 # -------------------------
@@ -56,5 +48,5 @@ class IntakeOut(BaseModel):
     created_at: datetime
     updated_at: Optional[datetime] = None
 
-    # ✅ Pydantic v2 replacement for orm_mode = True
+    # OK Pydantic v2 replacement for orm_mode = True
     model_config = ConfigDict(from_attributes=True)
