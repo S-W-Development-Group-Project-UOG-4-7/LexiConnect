@@ -26,6 +26,7 @@ export default function Login() {
 
       const token = data?.access_token;
       const refresh = data?.refresh_token;
+      const tokenType = data?.token_type || "bearer";
 
       if (!token) throw new Error("No access_token returned from server");
 
@@ -39,16 +40,12 @@ export default function Login() {
         localStorage.removeItem("refresh_token");
       }
 
-      localStorage.setItem("access_token", access_token);
-      if (refresh_token) {
-        localStorage.setItem("refresh_token", refresh_token);
-      }
-      localStorage.setItem("token_type", token_type || "bearer");
+      localStorage.setItem("token_type", tokenType);
 
       // Decode role from JWT payload
       let role = "";
       try {
-        let base64 = (access_token.split(".")[1] || "")
+        let base64 = (token.split(".")[1] || "")
           .replace(/-/g, "+")
           .replace(/_/g, "/");
         while (base64.length % 4) {

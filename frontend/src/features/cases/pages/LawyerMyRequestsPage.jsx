@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import PageShell from "../../../components/ui/PageShell";
 import { getMyCaseRequests } from "../services/cases.service";
+import "../../../pages/lawyer-ui.css";
 
 export default function LawyerMyRequestsPage() {
   const navigate = useNavigate();
@@ -15,9 +15,12 @@ export default function LawyerMyRequestsPage() {
       setError("");
       try {
         const data = await getMyCaseRequests();
-        setRequests(data || []);
+        setRequests(Array.isArray(data) ? data : []);
       } catch (e) {
-        const msg = e?.response?.data?.detail || e?.response?.data?.message || "Failed to load requests.";
+        const msg =
+          e?.response?.data?.detail ||
+          e?.response?.data?.message ||
+          "Failed to load requests.";
         setError(msg);
       } finally {
         setLoading(false);
@@ -26,79 +29,110 @@ export default function LawyerMyRequestsPage() {
     load();
   }, []);
 
+  const formatStatus = (status) => {
+    const normalized = (status || "pending").toString().toLowerCase();
+    const badgeClass =
+      {
+        approved: "green",
+        pending: "amber",
+        rejected: "red",
+      }[normalized] || "amber";
+
+    const chipClass =
+      {
+        approved: "approved",
+        pending: "pending",
+        rejected: "rejected",
+      }[normalized] || "pending";
+
+    const label = normalized.charAt(0).toUpperCase() + normalized.slice(1);
+    return { normalized, badgeClass, chipClass, label };
+  };
+
+  const formatDate = (value) =>
+    value ? new Date(value).toLocaleString() : "Not available";
+
   return (
-    <PageShell
-      title="My Case Requests"
-      subtitle="Track your access requests to client cases"
-      maxWidth="max-w-5xl"
-      contentClassName="space-y-4"
-    >
-      {loading && <div className="text-slate-300 text-sm">Loading requests…</div>}
+    <div className="lc-card">
+      <div className="lc-header">
+        <div className="lc-icon">CR</div>
+        <div>
+          <h1 className="lc-title">My Case Requests</h1>
+          <p className="lc-subtitle">
+            Track your access requests to client cases
+          </p>
+        </div>
+      </div>
+
+      {loading && (
+        <div className="empty-state">
+          <p>Loading requests...</p>
+        </div>
+      )}
 
       {error && !loading && (
-        <div className="text-sm text-red-200 border border-red-700 bg-red-900/30 rounded-lg p-3">
+        <div className="alert alert-error" style={{ marginBottom: "1.5rem" }}>
           {error}
         </div>
       )}
 
       {!loading && !error && requests.length === 0 && (
-        <div className="text-sm text-slate-300 border border-slate-800 bg-slate-900/60 rounded-lg p-4">
-          No requests yet.
+        <div className="empty-state">
+          <p>No requests yet</p>
+          <p className="empty-sub">Your case access requests will appear here.</p>
         </div>
       )}
 
       {!loading && !error && requests.length > 0 && (
-        <div className="overflow-x-auto rounded-lg border border-slate-800 bg-slate-900/60">
-          <table className="min-w-full text-sm text-slate-200">
-            <thead className="bg-slate-800 text-slate-300">
-              <tr>
-                <th className="px-4 py-2 text-left">Case</th>
-                <th className="px-4 py-2 text-left">District</th>
-                <th className="px-4 py-2 text-left">Status</th>
-                <th className="px-4 py-2 text-left">Message</th>
-                <th className="px-4 py-2 text-left">Requested</th>
-                <th className="px-4 py-2 text-left">Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {requests.map((r) => (
-                <tr key={r.id} className="border-t border-slate-800">
-                  <td className="px-4 py-3">
-                    <div className="font-semibold text-white">{r.case_title || `Case #${r.case_id}`}</div>
-                    <div className="text-xs text-slate-400">ID: {r.case_id}</div>
-                  </td>
-                  <td className="px-4 py-3 text-slate-300">{r.district || "—"}</td>
-                  <td className="px-4 py-3">
-                    <span className="px-3 py-1 rounded-full text-xs bg-slate-800 border border-slate-700 text-slate-200">
-                      {r.status}
+        <div className="lc-list">
+          {requests.map((r) => {
+            const status = formatStatus(r.status);
+            const isApproved = status.normalized === "approved";
+            const caseId = r.case_id || "";
+
+            return (
+              <div key={r.id} className="lc-list-card">
+                <div className="lc-list-card-content">
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
+                    <div className="lc-list-card-title">
+                      {r.case_title || `Case #${caseId || "Unknown"}`}
+                    </div>
+                    <span className={`lc-badge ${status.badgeClass}`}>
+                      {status.label}
                     </span>
-                  </td>
-                  <td className="px-4 py-3 text-slate-200">
-                    {r.message ? <span className="text-slate-200">“{r.message}”</span> : <span className="text-slate-500">—</span>}
-                  </td>
-                  <td className="px-4 py-3 text-slate-300">
-                    {r.created_at ? new Date(r.created_at).toLocaleString() : "—"}
-                  </td>
-                  <td className="px-4 py-3">
-                    {r.status === "approved" ? (
-                      <button
-                        type="button"
-                        onClick={() => navigate(`/lawyer/cases/${r.case_id || ""}`)}
-                        className="px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-sm font-semibold text-white disabled:opacity-60"
-                        disabled={!r.case_id}
-                      >
-                        {r.case_id ? "Open Case" : "Case ID missing"}
-                      </button>
-                    ) : (
-                      <span className="text-xs text-slate-400">—</span>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                  </div>
+                  <div className="lc-list-card-meta">Case ID: {caseId || "Not available"}</div>
+                  <div className="lc-list-card-meta">District: {r.district || "Not provided"}</div>
+                  <div className="lc-list-card-meta">
+                    Message: {r.message || "No message provided."}
+                  </div>
+                  <div className="lc-list-card-meta">
+                    Requested: {formatDate(r.created_at)}
+                  </div>
+                </div>
+
+                <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", alignItems: "flex-end" }}>
+                  {isApproved ? (
+                    <button
+                      type="button"
+                      onClick={() => navigate(`/lawyer/cases/${caseId}`)}
+                      className="lc-primary-btn"
+                      style={{ height: "36px", fontSize: "0.85rem", padding: "0 1rem" }}
+                      disabled={!caseId}
+                    >
+                      {caseId ? "Open Case" : "Case ID missing"}
+                    </button>
+                  ) : (
+                    <span className={`lc-chip ${status.chipClass}`}>
+                      {status.normalized === "rejected" ? "Rejected" : "Pending"}
+                    </span>
+                  )}
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
-    </PageShell>
+    </div>
   );
 }

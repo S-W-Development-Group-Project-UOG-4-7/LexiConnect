@@ -42,7 +42,7 @@ from app.modules.checklist_templates.router import router as checklist_router
 from app.modules.availability.router import router as availability_router
 from app.modules.blackouts.router import router as blackouts_router
 from app.modules.apprenticeship.router import router as apprenticeship_router
-
+from app.modules.lawyer_dashboard.routes import router as lawyer_dashboard_router
 
 from app.modules.disputes.routes import (
     router as disputes_router,
@@ -142,7 +142,7 @@ app.include_router(blackouts_router)
 app.include_router(kyc_router)
 app.include_router(dev.router)  # DEV-ONLY endpoints
 app.include_router(admin_overview.router)
-
+app.include_router(lawyer_dashboard_router, prefix="/api")
 # Modules (grouped)
 for module_router in (
     disputes_router,
