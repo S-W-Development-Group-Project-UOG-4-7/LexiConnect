@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import "./availability-ui.css";
+import "./lawyer-ui.css";
 
 import {
   createServicePackage,
@@ -17,7 +17,6 @@ function ServicePackages() {
   const [form, setForm] = useState({
     name: "",
     description: "",
-    price: "",
     duration: "",
     active: true,
   });
@@ -53,7 +52,6 @@ function ServicePackages() {
     setForm({
       name: "",
       description: "",
-      price: "",
       duration: "",
       active: true,
     });
@@ -66,7 +64,6 @@ function ServicePackages() {
     const payload = {
       name: form.name,
       description: form.description,
-      price: Number(form.price),
       duration: Number(form.duration),
       active: Boolean(form.active),
     };
@@ -93,7 +90,6 @@ function ServicePackages() {
     setForm({
       name: pkg.name || "",
       description: pkg.description || "",
-      price: pkg.price?.toString?.() ?? "",
       duration: pkg.duration?.toString?.() ?? "",
       active: !!pkg.active,
     });
@@ -116,7 +112,7 @@ function ServicePackages() {
   const handleCancel = () => resetForm();
 
   return (
-    <div className="lc-page">
+    <div className="">
       <div className="lc-card">
         <div className="lc-header">
           <div className="lc-icon">SP</div>
@@ -162,24 +158,6 @@ function ServicePackages() {
                 onChange={handleChange}
                 placeholder="Brief description of the service"
                 className="lc-input"
-                required
-              />
-            </div>
-
-            <div className="form-group">
-              <label htmlFor="price" className="form-label">
-                Price (LKR) <span className="required-star">*</span>
-              </label>
-              <input
-                type="number"
-                id="price"
-                name="price"
-                value={form.price}
-                onChange={handleChange}
-                placeholder="e.g., 5000"
-                className="lc-input"
-                min="0"
-                step="0.01"
                 required
               />
             </div>
@@ -270,12 +248,12 @@ function ServicePackages() {
                   {pkg.description || "No description provided."}
                 </div>
                 <div style={{ marginBottom: "1rem" }}>
-                  <div style={{ fontSize: "1.5rem", fontWeight: 700, color: "rgba(242, 184, 75, 0.95)", marginBottom: "0.25rem" }}>
-                    LKR {Number(pkg.price).toLocaleString()}
-                  </div>
                   <div className="lc-list-card-meta">
                     {pkg.duration} minutes
                   </div>
+                </div>
+                <div className="lc-list-card-meta" style={{ marginBottom: "1rem" }}>
+                  Pricing will be discussed directly with the client.
                 </div>
                 <div style={{ display: "flex", gap: "0.5rem" }}>
                   <button

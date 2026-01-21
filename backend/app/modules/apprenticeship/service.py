@@ -143,27 +143,57 @@ def add_note(db: Session, current_user, case_id: int, note: str):
 
 
 def get_case_notes_for_lawyer(db: Session, current_user, case_id: int):
-    if not _is_lawyer(current_user):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only lawyers can view apprentice notes",
+    role = _role_str(current_user)
+
+    # ✅ Apprentices: can view notes only for cases assigned to them
+    if role == "apprentice":
+        allowed = (
+            db.query(CaseApprentice)
+            .filter(
+                CaseApprentice.case_id == case_id,
+                CaseApprentice.apprentice_id == current_user.id,
+            )
+            .first()
+        )
+        if not allowed:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not allowed to view notes for this case",
+            )
+
+        return (
+            db.query(ApprenticeCaseNote)
+            .filter(ApprenticeCaseNote.case_id == case_id)
+            .order_by(desc(ApprenticeCaseNote.created_at))
+            .all()
         )
 
-    # Lawyer can view notes only if THEY assigned an apprentice to this case
-    allowed = (
-        db.query(CaseApprentice)
-        .filter(
-            CaseApprentice.case_id == case_id,
-            CaseApprentice.lawyer_id == current_user.id,
+    # ✅ Lawyers/Admin: can view notes only if THEY assigned an apprentice to this case
+    if _is_lawyer(current_user):
+        allowed = (
+            db.query(CaseApprentice)
+            .filter(
+                CaseApprentice.case_id == case_id,
+                CaseApprentice.lawyer_id == current_user.id,
+            )
+            .first()
         )
-        .first()
-    )
-    if not allowed:
-        raise HTTPException(status_code=403, detail="Not allowed to view notes for this case")
+        if not allowed:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not allowed to view notes for this case",
+            )
 
-    return (
-        db.query(ApprenticeCaseNote)
-        .filter(ApprenticeCaseNote.case_id == case_id)
-        .order_by(desc(ApprenticeCaseNote.created_at))
-        .all()
+        return (
+            db.query(ApprenticeCaseNote)
+            .filter(ApprenticeCaseNote.case_id == case_id)
+            .order_by(desc(ApprenticeCaseNote.created_at))
+            .all()
+        )
+
+    # everyone else (client etc.)
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="Not allowed to view notes for this case",
     )
+

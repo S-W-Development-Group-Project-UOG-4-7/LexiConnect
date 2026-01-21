@@ -1,8 +1,11 @@
-import { Outlet } from "react-router-dom";
-import TopNav from "../components/AppNavbar";
+// src/layouts/LawyerLayout.jsx
+import { Outlet, useNavigate } from "react-router-dom";
+import TopNavbar from "../components/TopNavbar";
 
 const LawyerLayout = () => {
-  const navItems = [
+  const navigate = useNavigate();
+
+  const navLinks = [
     { to: "/lawyer/dashboard", label: "Dashboard" },
     { to: "/lawyer/availability", label: "Availability" },
     { to: "/lawyer/token-queue", label: "Token Queue" },
@@ -14,15 +17,41 @@ const LawyerLayout = () => {
     { to: "/lawyer/kyc", label: "KYC Status" },
   ];
 
+  const user = {
+    name: localStorage.getItem("email") || "Lawyer",
+    avatar: localStorage.getItem("avatar") || "",
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem("access_token");
+    localStorage.removeItem("token");
+    localStorage.removeItem("role");
+    localStorage.removeItem("email");
+    localStorage.removeItem("user");
+
+    if (window.axios) {
+      delete window.axios.defaults.headers.common["Authorization"];
+    }
+
+    navigate("/", { replace: true });
+  };
+
   return (
-    <>
-      <TopNav links={navItems} brand="LexiConnect Lawyer Dashboard" />
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+    <div className="min-h-screen text-white bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
+      <TopNavbar
+        brandTitle="LexiConnect"
+        brandSubtitle="Lawyer Dashboard"
+        navLinks={navLinks}
+        roleLabel="Lawyer"
+        user={user}
+        logoutAction={handleLogout}
+      />
+
+      <main className="min-h-[calc(100vh-76px)] mx-auto w-full max-w-6xl px-6 py-8">
         <Outlet />
       </main>
-    </>
+    </div>
   );
 };
 
 export default LawyerLayout;
-

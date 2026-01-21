@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import "./availability-ui.css";
+import "./lawyer-ui.css";
 import api from "../services/api"; // ✅ uses env base URL + attaches token
 
 function BranchManagement() {
@@ -118,7 +118,7 @@ function BranchManagement() {
   };
 
   return (
-    <div className="lc-page">
+    <div className="">
       <div className="lc-card">
         <div className="lc-header">
           <div className="lc-icon">📍</div>

@@ -1,12 +1,12 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import api from "../services/api";
+import authApi from "../services/authApi";
 import { getUserFromToken } from "../services/auth";
 
-const Login = () => {
+export default function Login() {
   const navigate = useNavigate();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [email, setEmail] = useState("lawyer@lexiconnect.local");
+  const [password, setPassword] = useState("password");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -17,31 +17,35 @@ const Login = () => {
     setLoading(true);
 
     try {
-      // OAuth2PasswordRequestForm expects form-urlencoded with username and password
       const formData = new URLSearchParams();
       formData.append("username", email);
       formData.append("password", password);
 
-      const { data } = await api.post("/auth/login", formData, {
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      });
+      // ✅ Swagger: POST /auth/login
+      const { data } = await authApi.post("/login", formData);
 
-      const { access_token, refresh_token, token_type } = data || {};
+      const token = data?.access_token;
+      const refresh = data?.refresh_token;
+      const tokenType = data?.token_type || "bearer";
 
-      if (!access_token) {
-        throw new Error("Login failed. Please check your credentials.");
+      if (!token) throw new Error("No access_token returned from server");
+
+      localStorage.setItem("access_token", token);
+      localStorage.setItem("token", token);
+
+      if (refresh) {
+        localStorage.setItem("refresh_token", refresh);
+      } else {
+        // optional: clear old refresh token if one exists
+        localStorage.removeItem("refresh_token");
       }
 
-      localStorage.setItem("access_token", access_token);
-      if (refresh_token) {
-        localStorage.setItem("refresh_token", refresh_token);
-      }
-      localStorage.setItem("token_type", token_type || "bearer");
+      localStorage.setItem("token_type", tokenType);
 
       // Decode role from JWT payload
       let role = "";
       try {
-        let base64 = (access_token.split(".")[1] || "")
+        let base64 = (token.split(".")[1] || "")
           .replace(/-/g, "+")
           .replace(/_/g, "/");
         while (base64.length % 4) {
@@ -51,30 +55,25 @@ const Login = () => {
         const payload = JSON.parse(payloadStr);
         role = String(payload?.role || "").toLowerCase();
       } catch {
-        const payload = getUserFromToken();
+        const payload = getUserFromToken?.();
         role = String(payload?.role || "").toLowerCase();
       }
 
       if (role) localStorage.setItem("role", role);
 
-      // ✅ Redirect based on role
-      let target = "/dashboard"; // uses DashboardRedirect as a safe default
+      // Redirect based on role
+      let target = "/dashboard";
       if (role === "lawyer") target = "/lawyer/dashboard";
       else if (role === "client") target = "/client/dashboard";
       else if (role === "admin") target = "/admin/dashboard";
       else if (role === "apprentice") target = "/apprentice/dashboard";
-
-      if (import.meta.env.DEV) {
-        console.log("[login] token saved to access_token");
-        console.log("[login] detected role:", role || "unknown");
-        console.log("[login] redirecting to:", target);
-      }
 
       navigate(target, { replace: true });
     } catch (err) {
       const message =
         err?.response?.data?.detail ||
         err?.response?.data?.message ||
+        err?.message ||
         "Login failed. Please check your credentials.";
       setError(message);
     } finally {
@@ -96,7 +95,6 @@ const Login = () => {
         </div>
 
         <div className="w-full rounded-2xl border border-amber-500/20 bg-white/5 backdrop-blur-md shadow-[0_20px_60px_rgba(0,0,0,0.55)] p-8 text-white">
-          {/* Logo Section */}
           <div className="flex items-center justify-center gap-3 mb-4">
             <div className="text-3xl">⚖️</div>
             <div className="text-center">
@@ -107,7 +105,6 @@ const Login = () => {
             </div>
           </div>
 
-          {/* Welcome Message */}
           <h2 className="text-center text-2xl font-bold text-white mb-1">
             Welcome Back
           </h2>
@@ -115,9 +112,7 @@ const Login = () => {
             Access your legal services portal
           </p>
 
-          {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-4">
-            {/* Email Input */}
             <label className="block text-sm text-white">
               Email Address
               <div className="mt-2 relative">
@@ -129,13 +124,12 @@ const Login = () => {
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="your.email@example.com"
+                  placeholder="lawyer@lexiconnect.local"
                   required
                 />
               </div>
             </label>
 
-            {/* Password Input */}
             <label className="block text-sm text-white">
               Password
               <div className="mt-2 relative">
@@ -147,20 +141,18 @@ const Login = () => {
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••"
+                  placeholder="password"
                   required
                 />
               </div>
             </label>
 
-            {/* Error Message */}
             {error && (
               <div className="rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-200">
                 {error}
               </div>
             )}
 
-            {/* Submit Button */}
             <button
               type="submit"
               disabled={loading}
@@ -170,7 +162,6 @@ const Login = () => {
             </button>
           </form>
 
-          {/* Registration Link */}
           <div className="mt-5 text-center text-sm text-white">
             Don't have an account?{" "}
             <Link
@@ -184,6 +175,4 @@ const Login = () => {
       </div>
     </div>
   );
-};
-
-export default Login;
+}
