@@ -575,7 +575,7 @@ const AvailabilityEditor = () => {
   const isUntilModeMissingDate = wizardData.repeatMode === 'until' && !untilDate;
 
   return (
-    <div className="availability-page availability-centered">
+    <div className="availability-page availability-centered availability-dark">
       <div className="wizard-shell">
         <div className="page-header">
           <h1>Set Your Availability</h1>
