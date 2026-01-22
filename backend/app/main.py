@@ -32,8 +32,8 @@ from .models import (  # noqa
 from app.modules.cases import models as case_models  # noqa: F401
 from app.modules.intake.routes import router as intake_router
 
-# Routers (existing app routers)
-from .routers import admin, auth, bookings, dev, lawyers, token_queue  # noqa: F401
+# Routers (existing app routers) ✅ include users here
+from .routers import admin, auth, bookings, dev, lawyers, token_queue, users  # noqa: F401
 from .routers import admin_overview  # noqa: F401
 
 # Module routers (new modular structure)
@@ -81,10 +81,6 @@ app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 # =============================================================================
 # OK CORS (DEV-SAFE) - Fixes "blocked by CORS policy" + frontend "Network Error"
 # =============================================================================
-# NOTE:
-# - If you use Authorization: Bearer <token>, you do NOT need cookies.
-# - So allow_credentials=False is best (and avoids wildcard/regex issues).
-# - Keep origins explicit to avoid surprise blocks.
 origins = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
@@ -98,7 +94,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
     allow_origin_regex=r"http://(localhost|127\.0\.0\.1):\d+",
-    allow_credentials=False,   # OK IMPORTANT: keep false unless you use cookies
+    allow_credentials=False,  # OK IMPORTANT: keep false unless you use cookies
     allow_methods=["*"],
     allow_headers=["*"],
     expose_headers=["*"],
@@ -123,34 +119,48 @@ def health_check():
 
 # ---- Routers ----
 
-# Core auth/booking/lawyers
+# ✅ Auth (also /api parity)
 app.include_router(auth.router)
-app.include_router(auth.router, prefix="/api")  # parity for /api/* clients
+app.include_router(auth.router, prefix="/api")
+
+# ✅ Users (also /api parity)  <-- THIS FIXES /api/users/me
+app.include_router(users.router)
+app.include_router(users.router, prefix="/api")
+
+# ✅ Lawyers (also /api parity)
 app.include_router(lawyers.router)
 app.include_router(lawyers.router, prefix="/api")
+
+# ✅ Bookings
 app.include_router(bookings.router)
+
+# ✅ Token queue
 app.include_router(token_queue.router)
+
+# ✅ Apprenticeship (already has /api prefix in main include)
 app.include_router(apprenticeship_router, prefix="/api")
 
+# ✅ Lawyer Dashboard (explicit /api)
+app.include_router(lawyer_dashboard_router, prefix="/api")
 
 # OK Checklist Answers router
 app.include_router(checklist_answers_router)
 app.include_router(booking_checklist_router)
 
-# Feature modules
+# ✅ Feature modules
 app.include_router(service_packages_router)
 app.include_router(checklist_router)
 
-# Admin / Dev / Branches / KYC
+# ✅ Admin / Dev / Branches / KYC
 app.include_router(admin.router)
 app.include_router(branches_router)
 app.include_router(availability_router)
 app.include_router(blackouts_router)
 app.include_router(kyc_router)
-app.include_router(dev.router)  # DEV-ONLY endpoints
+app.include_router(dev.router)
 app.include_router(admin_overview.router)
-app.include_router(lawyer_dashboard_router, prefix="/api")
-# Modules (grouped)
+
+# ✅ Modules (grouped)
 for module_router in (
     disputes_router,
     admin_disputes_router,
@@ -164,11 +174,11 @@ for module_router in (
 ):
     app.include_router(module_router)
 
-# Dedicated router include
+# ✅ Dedicated router include
 app.include_router(lawyer_availability_router, prefix="/api")
 app.include_router(cases_router, prefix="/api")
 
-# API v1 routers
+# ✅ API v1 routers
 app.include_router(admin_v1.router)
 app.include_router(booking_v1.router)
 
