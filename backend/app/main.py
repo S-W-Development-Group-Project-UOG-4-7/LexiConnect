@@ -5,10 +5,15 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Third-party imports
+import time
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import RedirectResponse, Response
+from sqlalchemy import text
+from sqlalchemy.exc import OperationalError
 
 # OK Checklist Answers module router
 from app.modules.checklist_answers.router import (
@@ -17,7 +22,7 @@ from app.modules.checklist_answers.router import (
 )
 
 # Core DB
-from .database import SessionLocal
+from .database import SessionLocal, engine
 
 # Ensure models are loaded (so Alembic / SQLAlchemy sees them)
 from .models import (  # noqa
@@ -101,9 +106,23 @@ app.add_middleware(
 )
 
 
+def wait_for_db(max_attempts: int = 10, delay_seconds: float = 1.0) -> None:
+    """Keep trying until the database accepts connections before seeding."""
+    for attempt in range(1, max_attempts + 1):
+        try:
+            with engine.connect() as conn:
+                conn.execute(text("SELECT 1"))
+            return
+        except OperationalError:
+            if attempt == max_attempts:
+                raise
+            time.sleep(delay_seconds)
+
+
 # ---- Startup seed ----
 @app.on_event("startup")
 def startup():
+    wait_for_db()
     db = SessionLocal()
     try:
         seed_all(db)
@@ -209,3 +228,16 @@ def custom_openapi():
 
 
 app.openapi = custom_openapi
+
+
+# ---- Root + favicon helpers ----
+@app.get("/", include_in_schema=False)
+def root():
+    # Send browser users to Swagger UI instead of 404
+    return RedirectResponse(url="/docs")
+
+
+@app.get("/favicon.ico", include_in_schema=False)
+def favicon():
+    # Lightweight empty icon to avoid 404 noise in logs
+    return Response(status_code=204, media_type="image/x-icon")
