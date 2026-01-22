@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Optional
 from pydantic import BaseModel, ConfigDict
 
 
@@ -15,6 +16,21 @@ class CaseApprenticeOut(BaseModel):
     lawyer_id: int
     apprentice_id: int
     created_at: datetime
+
+    # lawyer info
+    lawyer_full_name: Optional[str] = None
+    lawyer_email: Optional[str] = None
+
+    # case info
+    case_title: Optional[str] = None
+    case_category: Optional[str] = None
+    case_status: Optional[str] = None
+    district: Optional[str] = None
+
+    # ✅ IMPORTANT: matches your frontend normalizeCase()
+    supervising_lawyer: Optional[str] = None
+    lawyer_name: Optional[str] = None
+    lawyer: Optional[str] = None
 
 
 class ApprenticeNoteCreate(BaseModel):

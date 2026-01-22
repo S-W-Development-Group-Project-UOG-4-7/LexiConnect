@@ -16,7 +16,7 @@ export default function ApprenticeAssignedCases() {
           to="/apprentice/cases/1"
           className="inline-flex items-center px-4 py-2 rounded-lg bg-amber-500/90 hover:bg-amber-500 text-slate-950 font-semibold"
         >
-          Open Case #1 ->
+          Open Case #1 -&gt;
         </Link>
       </div>
     </div>
