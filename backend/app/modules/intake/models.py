@@ -1,7 +1,3 @@
-from sqlalchemy import Column, Integer, Text, DateTime, ForeignKey, String
-from sqlalchemy.dialects.postgresql import JSON
-# backend/app/modules/intake/models.py
-
 from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.sql import func
@@ -40,9 +36,14 @@ class IntakeForm(Base):
     details = Column(Text, nullable=False)
     urgency = Column(String(50), nullable=False)
 
-    answers_json = Column(JSON, nullable=False, default=dict)
     # JSON answers (Postgres)
     answers_json = Column(JSONB, nullable=False, default=dict)
 
+    # ✅ FIX: updated_at must NOT be nullable + should have default
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now(), nullable=True)
+    updated_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),   # ✅ ensures insert gets a value
+        onupdate=func.now(),         # ✅ ensures update changes it
+        nullable=False
+    )

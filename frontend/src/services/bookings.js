@@ -26,6 +26,15 @@ export const listMyBookings = async () => {
 };
 
 /**
+ * List booking summaries for the current user (with related info).
+ * @returns {Promise<Array>} Array of booking summary objects
+ */
+export const listMyBookingSummaries = async () => {
+  const { data } = await api.get("/api/bookings/my/summary");
+  return data;
+};
+
+/**
  * Get a specific booking by ID
  * Only accessible by the booking's client or lawyer
  * @param {number} id - Booking ID

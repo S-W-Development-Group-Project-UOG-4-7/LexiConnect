@@ -54,14 +54,14 @@ import LawyerPublicProfilePage from "../features/lawyer_profile/pages/LawyerPubl
 import LawyerSettingsPage from "../features/lawyer_profile/pages/LawyerSettingsPage";
 import LawyerDashboard from "../pages/LawyerDashboard";
 
-// ✅ Cases
+// OK Cases
 import ClientCasesPage from "../features/cases/pages/ClientCasesPage";
 import LawyerCaseFeedPage from "../features/cases/pages/LawyerCaseFeedPage";
 import ClientCaseChecklistPage from "../features/checklist/pages/ClientCaseChecklistPage";
 import LawyerCaseDetailPage from "../features/cases/pages/LawyerCaseDetailPage";
 import ClientCaseDetailPage from "../features/cases/pages/ClientCaseDetailPage";
 
-// ✅ Apprenticeship pages
+// OK Apprenticeship pages
 import ApprenticeDashboard from "../features/apprenticeship/pages/ApprenticeDashboard";
 import ApprenticeCaseView from "../features/apprenticeship/pages/ApprenticeCaseView";
 import LawyerApprenticesPage from "../features/apprenticeship/pages/LawyerApprenticesPage";
@@ -90,7 +90,7 @@ const RequireAuth = ({ children }) => {
   return token ? children : <Navigate to="/login" replace />;
 };
 
-// ✅ Minimal Lawyer dashboard (with Case Feed link)
+// OK Minimal Lawyer dashboard (with Case Feed link)
 const LawyerDashboardHome = () => {
   return (
     <div className="space-y-4">
@@ -131,7 +131,7 @@ const LawyerDashboardHome = () => {
           className="block bg-slate-800 border border-slate-700 rounded-lg p-5 hover:bg-slate-700"
         >
           <div className="text-lg font-semibold text-white">Token Queue</div>
-          <div className="text-slate-300 text-sm mt-1">Today’s consultation queue</div>
+          <div className="text-slate-300 text-sm mt-1">Today's consultation queue</div>
         </a>
 
         <a
@@ -229,6 +229,7 @@ const AppRoutes = () => {
         <Route path="/lawyer/bookings/incoming" element={<LawyerIncomingBookingsPage />} />
         <Route path="/lawyer/bookings/:bookingId" element={<LawyerBookingDetailPage />} />
         <Route path="/lawyer/bookings/:bookingId/documents" element={<LawyerDocumentsView />} />
+        <Route path="/lawyer/bookings/:bookingId/documents/upload" element={<DocumentUpload />} />
         <Route path="/lawyer/bookings/:bookingId/intake" element={<LawyerIntakeViewPage />} />
 
         <Route path="/lawyer/cases/feed" element={<LawyerCaseFeedPage />} />

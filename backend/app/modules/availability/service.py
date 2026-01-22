@@ -1,5 +1,7 @@
+from datetime import date, datetime, time, timedelta
+
 from fastapi import HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.orm import Session
 
 from app.modules.availability.models import AvailabilityTemplate
@@ -7,6 +9,10 @@ from app.modules.availability.schemas import (
     AvailabilityTemplateCreate,
     AvailabilityTemplateUpdate,
 )
+from app.models.booking import Booking
+from app.models.branch import Branch
+from app.models.lawyer_availability import WeeklyAvailability
+from app.models.service_package import ServicePackage
 
 
 def _validate_time_range(start_time, end_time) -> None:
@@ -147,3 +153,138 @@ def delete_availability_template(db: Session, *, lawyer_id: int, template_id) ->
 
     db.delete(template)
     db.commit()
+
+
+def _time_to_minutes(value: time) -> int:
+    return value.hour * 60 + value.minute
+
+
+def _minutes_to_time_str(value: int) -> str:
+    hours = (value // 60) % 24
+    minutes = value % 60
+    return f"{hours:02d}:{minutes:02d}"
+
+
+def _build_busy_map(
+    db: Session,
+    *,
+    lawyer_id: int,
+    start_date: date,
+    end_date: date,
+    fallback_duration: int,
+) -> dict[str, list[tuple[int, int]]]:
+    start_dt = datetime.combine(start_date, time.min)
+    end_dt = datetime.combine(end_date, time.max)
+
+    rows = (
+        db.query(Booking, ServicePackage.duration)
+        .outerjoin(ServicePackage, Booking.service_package_id == ServicePackage.id)
+        .filter(
+            Booking.lawyer_id == lawyer_id,
+            Booking.scheduled_at.isnot(None),
+            Booking.scheduled_at >= start_dt,
+            Booking.scheduled_at <= end_dt,
+            func.lower(Booking.status).in_(["confirmed", "completed"]),
+        )
+        .all()
+    )
+
+    busy_by_date: dict[str, list[tuple[int, int]]] = {}
+    for booking, duration in rows:
+        scheduled = booking.scheduled_at
+        if scheduled is None:
+            continue
+        minutes = int(duration) if duration is not None else fallback_duration
+        if minutes <= 0:
+            minutes = fallback_duration
+
+        start_min = scheduled.hour * 60 + scheduled.minute
+        end_min = start_min + minutes
+        key = scheduled.date().isoformat()
+        busy_by_date.setdefault(key, []).append((start_min, end_min))
+
+    return busy_by_date
+
+
+def get_bookable_slots(
+    db: Session,
+    *,
+    lawyer_id: int,
+    date_from: date,
+    days: int,
+    duration_minutes: int,
+    step_minutes: int,
+) -> list[dict]:
+    if days < 1 or days > 31:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="days must be 1-31")
+    if duration_minutes < 5 or duration_minutes > 240:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="duration_minutes must be between 5 and 240",
+        )
+    if step_minutes < 5 or step_minutes > 120:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="step_minutes must be between 5 and 120",
+        )
+
+    end_date = date_from + timedelta(days=days - 1)
+
+    weekly_rows = (
+        db.query(WeeklyAvailability)
+        .filter(WeeklyAvailability.lawyer_id == lawyer_id, WeeklyAvailability.is_active.is_(True))
+        .all()
+    )
+    weekly_by_day: dict[str, list[WeeklyAvailability]] = {}
+    for row in weekly_rows:
+        key = row.day_of_week.name.upper()
+        weekly_by_day.setdefault(key, []).append(row)
+
+    branch_map = {
+        b.id: b for b in db.query(Branch).filter(Branch.lawyer_id == lawyer_id).all()
+    }
+
+    busy_by_date = _build_busy_map(
+        db,
+        lawyer_id=lawyer_id,
+        start_date=date_from,
+        end_date=end_date,
+        fallback_duration=duration_minutes,
+    )
+
+    results: list[dict] = []
+    current = date_from
+    while current <= end_date:
+        day_key = current.strftime("%A").upper()
+        slots = []
+        for row in weekly_by_day.get(day_key, []):
+            start_min = _time_to_minutes(row.start_time)
+            end_min = _time_to_minutes(row.end_time)
+            if end_min <= start_min:
+                continue
+
+            t = start_min
+            busy_list = busy_by_date.get(current.isoformat(), [])
+            while t + duration_minutes <= end_min:
+                slot_start = t
+                slot_end = t + duration_minutes
+                overlaps = any(
+                    slot_start < busy_end and slot_end > busy_start for busy_start, busy_end in busy_list
+                )
+                if not overlaps:
+                    branch = branch_map.get(row.branch_id)
+                    slots.append(
+                        {
+                            "start": _minutes_to_time_str(slot_start),
+                            "end": _minutes_to_time_str(slot_end),
+                            "branch_id": row.branch_id,
+                            "branch_name": branch.name if branch else None,
+                        }
+                    )
+                t += step_minutes
+
+        slots.sort(key=lambda s: s["start"])
+        results.append({"date": current.isoformat(), "slots": slots})
+        current += timedelta(days=1)
+
+    return results

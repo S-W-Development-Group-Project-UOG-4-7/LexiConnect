@@ -1,7 +1,9 @@
-import { Outlet } from "react-router-dom";
+import { Outlet, useLocation } from "react-router-dom";
 import TopNav from "../components/AppNavbar";
 
 const ClientLayout = () => {
+  const location = useLocation();
+  const isDashboard = location.pathname === "/client/dashboard";
   const navItems = [
     { to: "/client/dashboard", label: "Dashboard" },
     { to: "/client/search", label: "Search Lawyers" },
@@ -13,7 +15,13 @@ const ClientLayout = () => {
   return (
     <>
       <TopNav links={navItems} brand="LexiConnect Client Portal" />
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+      <main
+        className={
+          isDashboard
+            ? "w-full"
+            : "max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6"
+        }
+      >
         <Outlet />
       </main>
     </>

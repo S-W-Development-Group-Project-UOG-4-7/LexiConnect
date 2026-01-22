@@ -1,14 +1,17 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, aliased
 
 from app.database import get_db
 from app.models.booking import Booking
 from app.modules.cases.models import Case
 from app.routers.auth import get_current_user
-from app.schemas.booking import BookingCreate, BookingOut, BookingCancelOut
+from app.schemas.booking import BookingCreate, BookingOut, BookingCancelOut, BookingSummaryOut
 from app.models.user import User
 from app.modules.audit_log.service import log_event
 from app.modules.blackouts.models import BlackoutDay
+from app.modules.lawyer_profiles.models import LawyerProfile
+from app.models.branch import Branch
+from app.models.service_package import ServicePackage
 
 router = APIRouter(prefix="/api/bookings", tags=["bookings"])
 
@@ -91,6 +94,87 @@ def list_my_bookings(
         )
     
     return [BookingOut.model_validate(b) for b in bookings]
+
+
+@router.get("/my/summary", response_model=list[BookingSummaryOut])
+def list_my_bookings_summary(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    lawyer_user = aliased(User)
+    profile = aliased(LawyerProfile)
+
+    base_query = (
+        db.query(
+            Booking,
+            lawyer_user.full_name,
+            profile.specialization,
+            profile.city,
+            profile.district,
+            Branch.name,
+            Branch.city,
+            ServicePackage.name,
+            Case.title,
+            Case.summary_public,
+        )
+        .join(lawyer_user, Booking.lawyer_id == lawyer_user.id)
+        .outerjoin(profile, profile.user_id == lawyer_user.id)
+        .outerjoin(Branch, Booking.branch_id == Branch.id)
+        .outerjoin(ServicePackage, Booking.service_package_id == ServicePackage.id)
+        .outerjoin(Case, Booking.case_id == Case.id)
+    )
+
+    if current_user.role == "client":
+        base_query = base_query.filter(Booking.client_id == current_user.id)
+    elif current_user.role == "lawyer":
+        base_query = base_query.filter(Booking.lawyer_id == current_user.id)
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only clients and lawyers can list bookings",
+        )
+
+    rows = base_query.order_by(Booking.created_at.desc()).all()
+
+    summaries = []
+    for (
+        booking,
+        lawyer_name,
+        specialization,
+        lawyer_city,
+        lawyer_district,
+        branch_name,
+        branch_city,
+        service_name,
+        case_title,
+        case_summary,
+    ) in rows:
+        summaries.append(
+            BookingSummaryOut(
+                id=booking.id,
+                client_id=booking.client_id,
+                lawyer_id=booking.lawyer_id,
+                branch_id=booking.branch_id,
+                service_package_id=booking.service_package_id,
+                case_id=booking.case_id,
+                scheduled_at=booking.scheduled_at,
+                note=booking.note,
+                status=booking.status,
+                created_at=booking.created_at,
+                updated_at=booking.updated_at,
+                lawyer_name=lawyer_name,
+                lawyer_specialization=specialization,
+                lawyer_city=lawyer_city,
+                lawyer_district=lawyer_district,
+                branch_name=branch_name,
+                branch_city=branch_city,
+                service_name=service_name,
+                case_title=case_title,
+                case_summary=case_summary,
+            )
+        )
+
+    return summaries
 
 
 @router.get("/{booking_id}", response_model=BookingOut)

@@ -1,6 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
-import { getBookingById } from "../../../services/bookings";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import {
+  getBookingById,
+  getLawyerIdByUser,
+  getLawyerServicePackages,
+} from "../../../services/bookings";
 import { listDocuments } from "../../documents/services/documents.service";
 import { getIntakeByBooking, getIntakeByCase } from "../../intake/services/intake.service";
 import api from "../../../services/api";
@@ -34,20 +38,58 @@ const Card = ({ children }) => (
 export default function ClientBookingDetailPage() {
   const { bookingId } = useParams();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
 
+  // ---- tab state ----
   const [activeTab, setActiveTab] = useState("Details");
+
+  // ---- booking ----
   const [booking, setBooking] = useState(null);
   const [bookingError, setBookingError] = useState("");
   const [bookingLoading, setBookingLoading] = useState(true);
 
+  // ---- meta ----
+  const [metaLoading, setMetaLoading] = useState(false);
+  const [lawyerInfo, setLawyerInfo] = useState(null);
+  const [branchInfo, setBranchInfo] = useState(null);
+  const [serviceInfo, setServiceInfo] = useState(null);
+  const [caseInfo, setCaseInfo] = useState(null);
+
+  // ---- docs ----
   const [docs, setDocs] = useState([]);
   const [docError, setDocError] = useState("");
   const [docLoading, setDocLoading] = useState(true);
 
+  // ---- intake ----
   const [intake, setIntake] = useState(null);
   const [intakeError, setIntakeError] = useState("");
   const [intakeLoading, setIntakeLoading] = useState(true);
 
+  // =========================================================
+  // 1) Read tab from URL: ?tab=Documents
+  // =========================================================
+  useEffect(() => {
+    const t = searchParams.get("tab");
+    if (!t) return;
+
+    const desired = t.trim();
+    if (tabs.includes(desired)) {
+      setActiveTab(desired);
+    }
+  }, [searchParams]);
+
+  const setTabAndUrl = (tab) => {
+    setActiveTab(tab);
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.set("tab", tab);
+      return next;
+    });
+  };
+
+  // =========================================================
+  // 2) Load booking
+  // =========================================================
   useEffect(() => {
     const loadBooking = async () => {
       setBookingError("");
@@ -61,6 +103,7 @@ export default function ClientBookingDetailPage() {
           err?.response?.data?.message ||
           "Failed to load booking.";
         setBookingError(message);
+        setBooking(null);
       } finally {
         setBookingLoading(false);
       }
@@ -69,8 +112,52 @@ export default function ClientBookingDetailPage() {
     loadBooking();
   }, [bookingId]);
 
+  // =========================================================
+  // 3) Load meta/docs/intake after booking exists
+  // =========================================================
   useEffect(() => {
-    if (!booking) return;
+    if (!booking?.id) return;
+
+    const loadMeta = async () => {
+      setMetaLoading(true);
+      try {
+        const [lawyerRes, caseRes, serviceList, branchesRes] = await Promise.all([
+          booking.lawyer_id ? api.get(`/api/lawyers/${booking.lawyer_id}`) : Promise.resolve(null),
+          booking.case_id ? api.get(`/api/cases/${booking.case_id}`) : Promise.resolve(null),
+          booking.service_package_id ? getLawyerServicePackages(booking.lawyer_id) : Promise.resolve([]),
+          booking.branch_id
+            ? getLawyerIdByUser(booking.lawyer_id)
+                .then((lawyerId) => (lawyerId ? api.get(`/api/branches?lawyer_id=${lawyerId}`) : null))
+                .catch(() => null)
+            : Promise.resolve(null),
+        ]);
+
+        const servicesList = serviceList || [];
+        const branchesList = branchesRes?.data || [];
+
+        setLawyerInfo(lawyerRes?.data || null);
+        setCaseInfo(caseRes?.data || null);
+
+        setServiceInfo(
+          booking.service_package_id
+            ? servicesList.find((svc) => svc.id === booking.service_package_id) || null
+            : null
+        );
+
+        setBranchInfo(
+          booking.branch_id
+            ? branchesList.find((branch) => branch.id === booking.branch_id) || null
+            : null
+        );
+      } catch {
+        setLawyerInfo(null);
+        setCaseInfo(null);
+        setServiceInfo(null);
+        setBranchInfo(null);
+      } finally {
+        setMetaLoading(false);
+      }
+    };
 
     const loadDocs = async () => {
       setDocError("");
@@ -80,8 +167,8 @@ export default function ClientBookingDetailPage() {
           const { data } = await api.get(`/api/documents/by-case/${booking.case_id}`);
           setDocs(data || []);
         } else {
-          const res = await listDocuments(bookingId);
-          setDocs(res.data || []);
+          const res = await listDocuments(booking.id); // safe use numeric id
+          setDocs(res?.data || res || []);
         }
       } catch (err) {
         setDocError(
@@ -103,15 +190,15 @@ export default function ClientBookingDetailPage() {
             const data = await getIntakeByCase(booking.case_id);
             setIntake(data || null);
             return;
-          } catch (err) {
-            // fallback to booking-based if case call fails/404
-            const res = await getIntakeByBooking(bookingId);
-            setIntake(res.data || null);
+          } catch {
+            const res = await getIntakeByBooking(booking.id);
+            setIntake(res?.data || null);
             return;
           }
         }
-        const res = await getIntakeByBooking(bookingId);
-        setIntake(res.data || null);
+
+        const res = await getIntakeByBooking(booking.id);
+        setIntake(res?.data || null);
       } catch (err) {
         if (err?.response?.status === 404) {
           setIntake(null);
@@ -127,18 +214,19 @@ export default function ClientBookingDetailPage() {
       }
     };
 
+    loadMeta();
     loadDocs();
     loadIntake();
-  }, [bookingId, booking?.id, booking?.case_id, booking]);
+  }, [booking?.id]);
 
   const statusClass = useMemo(() => {
     const key = (booking?.status || "").toLowerCase();
-    return (
-      statusStyles[key] ||
-      "bg-slate-800 border border-slate-600 text-slate-100"
-    );
-  }, [booking]);
+    return statusStyles[key] || "bg-slate-800 border border-slate-600 text-slate-100";
+  }, [booking?.status]);
 
+  // =========================================================
+  // UI blocks
+  // =========================================================
   const renderDetails = () => (
     <div className="space-y-4">
       <Card>
@@ -147,48 +235,49 @@ export default function ClientBookingDetailPage() {
             <div className="text-sm text-slate-400">Booking ID</div>
             <div className="text-2xl font-semibold text-white">#{booking?.id}</div>
           </div>
-          <span
-            className={`px-4 py-1.5 rounded-full text-sm font-semibold ${statusClass}`}
-          >
-            {booking?.status || "Unknown"}
+          <span className={`px-4 py-1.5 rounded-full text-sm font-semibold ${statusClass}`}>
+            {(booking?.status || "Unknown").toUpperCase()}
           </span>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
           <div className="bg-slate-950/40 border border-slate-700/60 rounded-lg p-3">
-            <div className="text-slate-400 text-xs uppercase tracking-wide mb-1">
-              Lawyer
-            </div>
-            <div className="text-white font-medium">
-              ID {booking?.lawyer_id ?? "-"}
-            </div>
-          </div>
-
-          <div className="bg-slate-950/40 border border-slate-700/60 rounded-lg p-3">
-            <div className="text-slate-400 text-xs uppercase tracking-wide mb-1">
-              Branch
-            </div>
-            <div className="text-white font-medium">
-              ID {booking?.branch_id ?? "-"}
+            <div className="text-slate-400 text-xs uppercase tracking-wide mb-1">Lawyer</div>
+            <div className="text-white font-medium">{lawyerInfo?.full_name || "Lawyer"}</div>
+            <div className="text-xs text-slate-400 mt-1">
+              {[
+                lawyerInfo?.specialization,
+                [lawyerInfo?.city, lawyerInfo?.district].filter(Boolean).join(", "),
+              ]
+                .filter(Boolean)
+                .join(" - ") || "Profile not available"}
             </div>
           </div>
 
           <div className="bg-slate-950/40 border border-slate-700/60 rounded-lg p-3">
-            <div className="text-slate-400 text-xs uppercase tracking-wide mb-1">
-              Scheduled
-            </div>
-            <div className="text-white font-medium">
-              {formatDateTime(booking?.scheduled_at)}
-            </div>
+            <div className="text-slate-400 text-xs uppercase tracking-wide mb-1">Branch</div>
+            <div className="text-white font-medium">{branchInfo?.name || "Branch not assigned"}</div>
+            <div className="text-xs text-slate-400 mt-1">{branchInfo?.city || "-"}</div>
           </div>
 
           <div className="bg-slate-950/40 border border-slate-700/60 rounded-lg p-3">
-            <div className="text-slate-400 text-xs uppercase tracking-wide mb-1">
-              Created
-            </div>
-            <div className="text-white font-medium">
-              {formatDateTime(booking?.created_at)}
-            </div>
+            <div className="text-slate-400 text-xs uppercase tracking-wide mb-1">Scheduled</div>
+            <div className="text-white font-medium">{formatDateTime(booking?.scheduled_at)}</div>
+          </div>
+
+          <div className="bg-slate-950/40 border border-slate-700/60 rounded-lg p-3">
+            <div className="text-slate-400 text-xs uppercase tracking-wide mb-1">Created</div>
+            <div className="text-white font-medium">{formatDateTime(booking?.created_at)}</div>
+          </div>
+
+          <div className="bg-slate-950/40 border border-slate-700/60 rounded-lg p-3">
+            <div className="text-slate-400 text-xs uppercase tracking-wide mb-1">Service</div>
+            <div className="text-white font-medium">{serviceInfo?.name || "Service not available"}</div>
+          </div>
+
+          <div className="bg-slate-950/40 border border-slate-700/60 rounded-lg p-3">
+            <div className="text-slate-400 text-xs uppercase tracking-wide mb-1">Case</div>
+            <div className="text-white font-medium">{caseInfo?.title || "Case not available"}</div>
           </div>
         </div>
 
@@ -197,6 +286,10 @@ export default function ClientBookingDetailPage() {
             <div className="text-sm text-slate-400 mb-1">Client Note</div>
             <div className="text-white whitespace-pre-wrap">{booking.note}</div>
           </div>
+        )}
+
+        {metaLoading && (
+          <div className="mt-4 text-sm text-slate-400">Loading booking details...</div>
         )}
       </Card>
     </div>
@@ -211,6 +304,7 @@ export default function ClientBookingDetailPage() {
             Uploaded documents for this booking ({docs.length}).
           </div>
         </div>
+
         <Link
           to={`/client/bookings/${bookingId}/documents`}
           className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium"
@@ -219,7 +313,7 @@ export default function ClientBookingDetailPage() {
         </Link>
       </div>
 
-      {docLoading && <div className="text-slate-400">Loading documents…</div>}
+      {docLoading && <div className="text-slate-400">Loading documents...</div>}
 
       {docError && (
         <div className="p-3 rounded-lg border border-red-700/60 bg-red-900/30 text-red-200 text-sm">
@@ -245,8 +339,7 @@ export default function ClientBookingDetailPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         {docs.slice(0, 4).map((doc) => {
           const fileUrl = `${API_BASE}${doc.file_path?.startsWith("/") ? "" : "/"}${doc.file_path || ""}`;
-          const fileName =
-            doc.file_path?.split("/").pop() || doc.original_name || "file";
+          const fileName = doc.file_path?.split("/").pop() || doc.original_name || doc.original_filename || "file";
 
           return (
             <div
@@ -254,12 +347,8 @@ export default function ClientBookingDetailPage() {
               className="bg-slate-900/40 border border-slate-700/70 rounded-xl p-4 flex items-center justify-between gap-4"
             >
               <div className="min-w-0">
-                <div className="font-semibold text-white truncate">
-                  {doc.title || "Untitled"}
-                </div>
-                <div className="text-xs text-slate-400 truncate">
-                  {fileName} • #{doc.id}
-                </div>
+                <div className="font-semibold text-white truncate">{doc.title || "Untitled"}</div>
+                <div className="text-xs text-slate-400 truncate">{fileName} • #{doc.id}</div>
               </div>
 
               <a
@@ -300,7 +389,7 @@ export default function ClientBookingDetailPage() {
         </Link>
       </div>
 
-      {intakeLoading && <div className="text-slate-400">Checking intake status…</div>}
+      {intakeLoading && <div className="text-slate-400">Checking intake status...</div>}
 
       {intakeError && (
         <div className="p-3 rounded-lg border border-red-700/60 bg-red-900/30 text-red-200 text-sm">
@@ -350,9 +439,7 @@ export default function ClientBookingDetailPage() {
 
           <div>
             <div className="text-slate-400 text-xs uppercase mb-1">Details</div>
-            <div className="text-white whitespace-pre-wrap">
-              {intake.details || "No details provided."}
-            </div>
+            <div className="text-white whitespace-pre-wrap">{intake.details || "No details provided."}</div>
           </div>
         </Card>
       )}
@@ -378,10 +465,7 @@ export default function ClientBookingDetailPage() {
         </div>
 
         <div className="mt-4 text-sm">
-          <Link
-            to="/disputes/my"
-            className="text-amber-300 hover:text-amber-200 underline"
-          >
+          <Link to="/disputes/my" className="text-amber-300 hover:text-amber-200 underline">
             View my disputes
           </Link>
         </div>
@@ -398,7 +482,7 @@ export default function ClientBookingDetailPage() {
             You will soon be able to rate and review your experience with the lawyer.
           </div>
         </div>
-        <div className="text-3xl">⭐</div>
+        <div className="text-sm text-slate-400">N/A</div>
       </div>
 
       <div className="mt-4 text-sm text-slate-400">
@@ -422,9 +506,11 @@ export default function ClientBookingDetailPage() {
     }
   };
 
-  // ✅ Let layout handle full page background; keep content clean inside Outlet
+  // =========================================================
+  // Loading / Error
+  // =========================================================
   if (bookingLoading) {
-    return <div className="text-slate-300">Loading booking…</div>;
+    return <div className="text-slate-300">Loading booking...</div>;
   }
 
   if (bookingError || !booking) {
@@ -453,28 +539,45 @@ export default function ClientBookingDetailPage() {
   return (
     <div className="space-y-6">
       {/* Header row */}
-      <div className="flex items-center justify-between gap-4">
-        <div>
+      <div className="bg-slate-900/40 border border-slate-700/70 rounded-2xl p-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        <div className="space-y-1">
           <div className="text-sm text-slate-400">Booking</div>
-          <h1 className="text-3xl font-bold text-white">#{booking.id}</h1>
+          <div className="flex items-center gap-3">
+            <h1 className="text-3xl font-bold text-white">#{booking.id}</h1>
+            <span className={`px-3 py-1 rounded-full text-xs font-semibold ${statusClass}`}>
+              {(booking?.status || "Unknown").toUpperCase()}
+            </span>
+          </div>
+          <div className="text-slate-400 text-sm">
+            Scheduled: <span className="text-slate-200">{formatDateTime(booking?.scheduled_at)}</span>
+          </div>
         </div>
 
-        <Link
-          to="/client/manage-bookings"
-          className="px-4 py-2 rounded-lg border border-slate-600 bg-slate-800 hover:bg-slate-700 text-sm text-white"
-        >
-          Back to My Bookings
-        </Link>
+        <div className="flex gap-2 flex-wrap">
+          <Link
+            to="/client/manage-bookings"
+            className="px-4 py-2 rounded-lg border border-slate-600 bg-slate-800 hover:bg-slate-700 text-sm text-white"
+          >
+            Back to My Bookings
+          </Link>
+
+          <button
+            onClick={() => navigate(`/client/bookings/${bookingId}/documents`)}
+            className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium"
+          >
+            Open Documents
+          </button>
+        </div>
       </div>
 
       {/* Tabs */}
       <div className="flex flex-wrap gap-2">
-      {tabs.map((tab) => {
-        const active = activeTab === tab;
-        return (
-          <button
-            key={tab}
-              onClick={() => setActiveTab(tab)}
+        {tabs.map((tab) => {
+          const active = activeTab === tab;
+          return (
+            <button
+              key={tab}
+              onClick={() => setTabAndUrl(tab)}
               className={`px-4 py-2 rounded-full text-sm font-semibold border transition-colors ${
                 active
                   ? "bg-amber-600/20 border-amber-500 text-white"
