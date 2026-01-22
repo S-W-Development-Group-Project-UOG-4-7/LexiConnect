@@ -1,11 +1,12 @@
-// frontend/src/features/intake/services/intake.service.js
 import api from "../../../services/api";
 
 // CREATE
 export const submitIntake = (bookingId, payload) => {
+  // ✅ Do NOT send case_type from frontend
+  const { case_type, ...safePayload } = payload || {};
   return api.post("/api/intake", {
     booking_id: Number(bookingId),
-    ...payload,
+    ...safePayload,
   });
 };
 
@@ -25,6 +26,7 @@ export const deleteIntake = (bookingId) => {
     params: { booking_id: Number(bookingId) },
   });
 };
+
 export const getIntakeByCase = async (caseId) => {
   const { data } = await api.get(`/api/intake/cases/${caseId}`);
   return data;

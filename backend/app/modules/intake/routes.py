@@ -76,6 +76,31 @@ def _ensure_can_edit_intake(current_user, booking: Booking):
     raise HTTPException(status_code=403, detail="Not allowed to modify this intake")
 
 
+def _derive_case_info_from_booking(db: Session, booking: Booking) -> tuple[Optional[int], str]:
+    """
+    ✅ Always derive case_id + case_type from booking (and case table if exists).
+    """
+    case_id = getattr(booking, "case_id", None)
+
+    # If booking has case_type field directly, prefer it
+    booking_case_type = getattr(booking, "case_type", None)
+    if booking_case_type:
+        return case_id, str(booking_case_type)
+
+    # Otherwise derive from Case table
+    if case_id:
+        case = db.query(Case).filter(Case.id == case_id).first()
+        if case:
+            # Try common column names
+            for attr in ("case_type", "type", "category"):
+                v = getattr(case, attr, None)
+                if v:
+                    return case_id, str(v)
+
+    # Fallback (never empty)
+    return case_id, "General"
+
+
 # -------------------------
 # CREATE (booking-based)
 # -------------------------
@@ -93,10 +118,7 @@ def create_intake_form(
 
     booking_client_id = _booking_client_id(booking)
     if booking_client_id is None:
-        raise HTTPException(
-            status_code=400,
-            detail="Booking is missing a client identifier.",
-        )
+        raise HTTPException(status_code=400, detail="Booking is missing a client identifier.")
 
     if booking_client_id != current_user.id:
         raise HTTPException(status_code=403, detail="You can only submit intake for your own booking")
@@ -105,11 +127,14 @@ def create_intake_form(
     if existing:
         raise HTTPException(status_code=400, detail="Intake already submitted for this booking")
 
+    # ✅ derive case_id + case_type
+    case_id, case_type = _derive_case_info_from_booking(db, booking)
+
     intake = IntakeForm(
         booking_id=payload.booking_id,
-        case_id=getattr(booking, "case_id", None),
+        case_id=case_id,
         client_id=current_user.id,
-        case_type=payload.case_type,
+        case_type=case_type,  # ✅ forced
         subject=payload.subject,
         details=payload.details,
         urgency=payload.urgency,
@@ -153,11 +178,7 @@ def get_intake_by_booking_query(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    return get_intake_by_booking(
-        booking_id=booking_id,
-        db=db,
-        current_user=current_user,
-    )
+    return get_intake_by_booking(booking_id=booking_id, db=db, current_user=current_user)
 
 
 # -------------------------
@@ -178,8 +199,7 @@ def update_intake_form(
     booking = _get_booking_or_404(db, intake.booking_id)
     _ensure_can_edit_intake(current_user, booking)
 
-    if payload.case_type is not None:
-        intake.case_type = payload.case_type
+    # ✅ IMPORTANT: do NOT allow case_type changes from UI
     if payload.subject is not None:
         intake.subject = payload.subject
     if payload.details is not None:
@@ -276,15 +296,23 @@ def create_intake_for_case(
     if existing:
         raise HTTPException(status_code=400, detail="Intake already submitted for this case")
 
+    # ✅ derive case_type from case itself
+    derived_case_type = None
+    for attr in ("case_type", "type", "category"):
+        v = getattr(case, attr, None)
+        if v:
+            derived_case_type = str(v)
+            break
+
     intake = IntakeForm(
         booking_id=payload.booking_id,
         case_id=case_id,
         client_id=current_user.id,
-        case_type=payload.case_type,
+        case_type=derived_case_type or "General",
         subject=payload.subject,
         details=payload.details,
         urgency=payload.urgency,
-        answers_json=payload.answers_json or {},
+        answers_json=payload.extra_answers or {},
     )
 
     db.add(intake)

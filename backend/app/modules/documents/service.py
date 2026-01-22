@@ -5,19 +5,20 @@ from uuid import uuid4
 from typing import Optional
 
 from fastapi import UploadFile
+from sqlalchemy import and_, func
 from sqlalchemy.orm import Session
 
-from .model import Document  # ✅ correct import (module-local model)
-from sqlalchemy.orm import Session
-from .model import Document
+from .models import Document, DocumentComment
 
 UPLOAD_DIR = "uploads/documents"
 
 
+def _norm_path(p: str) -> str:
+    # convert Windows backslashes to URL-friendly slashes
+    return p.replace("\\", "/")
+
+
 def save_upload(file: UploadFile) -> str:
-    """
-    Saves an uploaded file to disk and returns the saved file path.
-    """
     os.makedirs(UPLOAD_DIR, exist_ok=True)
 
     ext = os.path.splitext(file.filename or "")[1]
@@ -27,25 +28,28 @@ def save_upload(file: UploadFile) -> str:
     with open(path, "wb") as f:
         f.write(file.file.read())
 
-    return path
+    return _norm_path(path)
 
 
 def create_document(
     db: Session,
     booking_id: int | None,
     case_id: int | None,
+    uploaded_by_user_id: int | None,
+    uploaded_by_role: str | None,
     title: str,
-    original_filename: str,
+    original_filename: str | None,
     file_path: str,
 ) -> Document:
     doc = Document(
         booking_id=booking_id,
         case_id=case_id,
+        uploaded_by_user_id=uploaded_by_user_id,
+        uploaded_by_role=uploaded_by_role,
         title=title,
         original_filename=original_filename,
-        file_path=file_path,
+        file_path=_norm_path(file_path),
     )
-
     db.add(doc)
     db.commit()
     db.refresh(doc)
@@ -53,29 +57,17 @@ def create_document(
 
 
 def list_documents(db: Session, booking_id: Optional[int] = None):
-    """
-    Lists documents.
-    - If booking_id is provided: returns documents for that booking
-    - If booking_id is None: returns all documents
-    """
     q = db.query(Document)
     if booking_id is not None:
         q = q.filter(Document.booking_id == booking_id)
-
     return q.order_by(Document.id.desc()).all()
 
 
 def get_document(db: Session, doc_id: int) -> Optional[Document]:
-    """
-    Returns a single document by ID, or None.
-    """
     return db.query(Document).filter(Document.id == doc_id).first()
 
 
 def get_documents_by_case(db: Session, case_id: int):
-    """
-    List documents scoped to a case, newest first.
-    """
     return (
         db.query(Document)
         .filter(Document.case_id == case_id)
@@ -85,27 +77,19 @@ def get_documents_by_case(db: Session, case_id: int):
 
 
 def resolve_case_id_from_booking(db: Session, booking_id: Optional[int]) -> Optional[int]:
-    """
-    Given a booking id, return its case_id if present.
-    """
     if not booking_id:
         return None
-    from app.models.booking import Booking  # local import to avoid circular
+    from app.models.booking import Booking  # avoid circular import
 
     booking = db.query(Booking).filter(Booking.id == booking_id).first()
     return getattr(booking, "case_id", None) if booking else None
 
 
 def delete_document(db: Session, doc_id: int) -> bool:
-    """
-    Deletes a document record and its file from disk.
-    Returns True if deleted, False if not found.
-    """
     doc = db.query(Document).filter(Document.id == doc_id).first()
     if not doc:
         return False
 
-    # Remove file from filesystem (best effort)
     if doc.file_path and os.path.exists(doc.file_path):
         try:
             os.remove(doc.file_path)
@@ -116,24 +100,97 @@ def delete_document(db: Session, doc_id: int) -> bool:
     db.commit()
     return True
 
+
 def create_document_for_case(
     db: Session,
     case_id: int,
     title: str,
     file_path: str,
     booking_id: int | None = None,
+    uploaded_by_user_id: int | None = None,
+    uploaded_by_role: str | None = None,
+    original_filename: str | None = None,
 ) -> Document:
-    """
-    Create a document attached to a case (booking_id optional).
-    Keeps backward compatibility with booking-based flow.
-    """
     doc = Document(
         case_id=case_id,
         booking_id=booking_id,
+        uploaded_by_user_id=uploaded_by_user_id,
+        uploaded_by_role=uploaded_by_role,
         title=title,
-        file_path=file_path,
+        original_filename=original_filename,
+        file_path=_norm_path(file_path),
     )
     db.add(doc)
     db.commit()
     db.refresh(doc)
     return doc
+
+
+def list_document_comments(db: Session, document_id: int):
+    return (
+        db.query(DocumentComment)
+        .filter(DocumentComment.document_id == document_id)
+        .order_by(DocumentComment.created_at.asc())
+        .all()
+    )
+
+
+def create_document_comment(
+    db: Session,
+    document_id: int,
+    comment_text: str,
+    created_by_user_id: int | None,
+    created_by_role: str | None,
+):
+    comment = DocumentComment(
+        document_id=document_id,
+        comment_text=comment_text,
+        created_by_user_id=created_by_user_id,
+        created_by_role=created_by_role,
+    )
+    db.add(comment)
+    db.commit()
+    db.refresh(comment)
+    return comment
+
+
+def get_document_comment_meta(db: Session, doc_ids: list[int]):
+    if not doc_ids:
+        return {}, {}
+
+    counts = dict(
+        db.query(DocumentComment.document_id, func.count(DocumentComment.id))
+        .filter(DocumentComment.document_id.in_(doc_ids))
+        .group_by(DocumentComment.document_id)
+        .all()
+    )
+
+    latest_subq = (
+        db.query(
+            DocumentComment.document_id.label("document_id"),
+            func.max(DocumentComment.created_at).label("max_created_at"),
+        )
+        .filter(DocumentComment.document_id.in_(doc_ids))
+        .group_by(DocumentComment.document_id)
+        .subquery()
+    )
+
+    latest_rows = (
+        db.query(DocumentComment)
+        .join(
+            latest_subq,
+            and_(
+                DocumentComment.document_id == latest_subq.c.document_id,
+                DocumentComment.created_at == latest_subq.c.max_created_at,
+            ),
+        )
+        .order_by(DocumentComment.id.desc())
+        .all()
+    )
+
+    latest = {}
+    for row in latest_rows:
+        if row.document_id not in latest:
+            latest[row.document_id] = row
+
+    return counts, latest

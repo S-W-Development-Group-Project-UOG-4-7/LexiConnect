@@ -1,6 +1,6 @@
 // frontend/src/features/intake/pages/ClientIntakeSubmitPage.jsx
 import React, { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import {
   submitIntake,
   getIntakeByBooking,
@@ -8,16 +8,9 @@ import {
   deleteIntake,
 } from "../services/intake.service";
 
-const CASE_TYPES = [
-  "Family Law",
-  "Criminal Law",
-  "Civil Litigation",
-  "Employment",
-  "Property",
-  "Corporate",
-  "Immigration",
-  "Other",
-];
+// ✅ you MUST fetch booking details to show derived case type BEFORE intake exists.
+// Change the import/function name if your bookings service exports differently.
+import { getBookingById } from "../../../services/bookings"; // <-- adjust if needed
 
 const URGENCY = ["Low", "Medium", "High"];
 
@@ -39,19 +32,42 @@ function answersToRows(obj) {
   return entries.map(([k, v]) => ({ key: k, value: String(v ?? "") }));
 }
 
+// ✅ safe extractor for "case type" from a booking payload (handles different schemas)
+function deriveCaseTypeFromBooking(booking) {
+  if (!booking) return "—";
+
+  // common names you might have
+  const direct =
+    booking.case_type ||
+    booking.caseType ||
+    booking.caseCategory ||
+    booking.category;
+  if (direct) return String(direct);
+
+  // if booking has embedded case object
+  const c = booking.case || booking.case_obj;
+  if (c) {
+    const v = c.case_type || c.caseType || c.type || c.category;
+    if (v) return String(v);
+  }
+
+  return "General";
+}
+
 export default function ClientIntakeSubmitPage() {
   const { bookingId } = useParams();
   const bookingIdNum = Number(bookingId);
   const hasValidBookingId = Number.isFinite(bookingIdNum) && bookingIdNum > 0;
 
-  const navigate = useNavigate();
+  // booking info (for derived case type)
+  const [booking, setBooking] = useState(null);
+  const [loadingBooking, setLoadingBooking] = useState(true);
 
   // server intake
   const [existingIntake, setExistingIntake] = useState(null);
   const [loadingIntake, setLoadingIntake] = useState(true);
 
   // form fields
-  const [caseType, setCaseType] = useState(CASE_TYPES[0]);
   const [subject, setSubject] = useState("");
   const [details, setDetails] = useState("");
   const [urgency, setUrgency] = useState(URGENCY[1]);
@@ -71,13 +87,47 @@ export default function ClientIntakeSubmitPage() {
     details.trim().length >= 10 &&
     !submitting;
 
+  const readOnly = mode === "view";
+
+  // -------------------------
+  // Load booking details
+  // -------------------------
+  useEffect(() => {
+    if (!hasValidBookingId) return;
+    let mounted = true;
+
+    async function loadBooking() {
+      setLoadingBooking(true);
+      try {
+        // booking service may return {data: {...}} or plain object
+        const res = await getBookingById(bookingIdNum);
+        const data = res?.data ?? res;
+        if (!mounted) return;
+        setBooking(data || null);
+      } catch (e) {
+        if (!mounted) return;
+        // don't hard-block intake UI, just show fallback case type
+        console.error("Failed to load booking", e);
+      } finally {
+        if (mounted) setLoadingBooking(false);
+      }
+    }
+
+    loadBooking();
+    return () => {
+      mounted = false;
+    };
+  }, [bookingIdNum, hasValidBookingId]);
+
+  // -------------------------
   // Load existing intake
+  // -------------------------
   useEffect(() => {
     if (!hasValidBookingId) return;
 
     let mounted = true;
 
-    async function load() {
+    async function loadIntake() {
       setLoadingIntake(true);
       setErr("");
       setSuccess("");
@@ -90,7 +140,6 @@ export default function ClientIntakeSubmitPage() {
         setExistingIntake(data);
 
         // prefill form
-        setCaseType(data?.case_type || CASE_TYPES[0]);
         setUrgency(data?.urgency || URGENCY[1]);
         setSubject(data?.subject || "");
         setDetails(data?.details || "");
@@ -105,14 +154,17 @@ export default function ClientIntakeSubmitPage() {
           setExistingIntake(null);
           setMode("create");
         } else {
-          setErr(e?.response?.data?.detail || "Failed to load intake");
+          const status = e?.response?.status;
+          if (status === 401) setErr("Unauthorized. Please login again.");
+          else if (status === 403) setErr("You are not allowed to view this intake.");
+          else setErr(e?.response?.data?.detail || "Failed to load intake");
         }
       } finally {
         if (mounted) setLoadingIntake(false);
       }
     }
 
-    load();
+    loadIntake();
     return () => {
       mounted = false;
     };
@@ -132,8 +184,6 @@ export default function ClientIntakeSubmitPage() {
     );
   }
 
-  const readOnly = mode === "view";
-
   async function onSubmit(e) {
     e.preventDefault();
     setErr("");
@@ -147,31 +197,48 @@ export default function ClientIntakeSubmitPage() {
     try {
       setSubmitting(true);
 
-      const payload = {
-        case_type: caseType,
-        subject: subject.trim(),
-        details: details.trim(),
-        urgency,
-        answers_json: Object.keys(answersJson).length ? answersJson : {},
-      };
-
       if (mode === "create") {
+        // ✅ CREATE expects: booking_id, subject, details, urgency, extra_answers
+        const payload = {
+          subject: subject.trim(),
+          details: details.trim(),
+          urgency,
+          extra_answers: Object.keys(answersJson).length ? answersJson : {},
+        };
+
         const res = await submitIntake(bookingIdNum, payload);
         setExistingIntake(res?.data || null);
         setMode("view");
         setSuccess("Intake submitted successfully.");
-      } else if (mode === "edit") {
+        return;
+      }
+
+      if (mode === "edit") {
         if (!existingIntake?.id) {
           setErr("Missing intake id for update.");
           return;
         }
+
+        // ✅ UPDATE expects: subject/details/urgency/answers_json
+        const payload = {
+          subject: subject.trim(),
+          details: details.trim(),
+          urgency,
+          answers_json: Object.keys(answersJson).length ? answersJson : {},
+        };
+
         const res = await updateIntake(existingIntake.id, payload);
         setExistingIntake(res?.data || null);
         setMode("view");
         setSuccess("Intake updated successfully.");
       }
     } catch (e2) {
-      setErr(e2?.response?.data?.detail || "Failed to save intake");
+      const status = e2?.response?.status;
+
+      if (status === 401) setErr("Unauthorized. Please login again.");
+      else if (status === 403) setErr("You are not allowed to submit/update this intake.");
+      else if (status >= 500) setErr("Server error while saving intake. Check backend logs.");
+      else setErr(e2?.response?.data?.detail || "Failed to save intake");
     } finally {
       setSubmitting(false);
     }
@@ -193,7 +260,6 @@ export default function ClientIntakeSubmitPage() {
       // reset UI
       setExistingIntake(null);
       setMode("create");
-      setCaseType(CASE_TYPES[0]);
       setUrgency(URGENCY[1]);
       setSubject("");
       setDetails("");
@@ -201,7 +267,10 @@ export default function ClientIntakeSubmitPage() {
 
       setSuccess("Intake deleted.");
     } catch (e) {
-      setErr(e?.response?.data?.detail || "Failed to delete intake");
+      const status = e?.response?.status;
+      if (status === 401) setErr("Unauthorized. Please login again.");
+      else if (status === 403) setErr("You are not allowed to delete this intake.");
+      else setErr(e?.response?.data?.detail || "Failed to delete intake");
     } finally {
       setSubmitting(false);
     }
@@ -219,7 +288,6 @@ export default function ClientIntakeSubmitPage() {
 
     // restore from existingIntake
     const data = existingIntake;
-    setCaseType(data?.case_type || CASE_TYPES[0]);
     setUrgency(data?.urgency || URGENCY[1]);
     setSubject(data?.subject || "");
     setDetails(data?.details || "");
@@ -227,6 +295,10 @@ export default function ClientIntakeSubmitPage() {
 
     setMode("view");
   }
+
+  // ✅ derived case type to display
+  const derivedCaseType =
+    existingIntake?.case_type || deriveCaseTypeFromBooking(booking);
 
   return (
     <div className="min-h-screen p-6 text-white">
@@ -299,9 +371,9 @@ export default function ClientIntakeSubmitPage() {
           </div>
         )}
 
-        {loadingIntake && (
+        {(loadingBooking || loadingIntake) && (
           <div className="mb-4 rounded border border-slate-700 bg-slate-900/60 p-3 opacity-80">
-            Loading intake...
+            Loading...
           </div>
         )}
 
@@ -322,20 +394,15 @@ export default function ClientIntakeSubmitPage() {
           className="rounded-xl border border-slate-700 bg-slate-900/60 p-5"
         >
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* ✅ Case Type display only */}
             <div>
               <label className="text-sm opacity-90">Case Type</label>
-              <select
-                value={caseType}
-                onChange={(e) => setCaseType(e.target.value)}
-                disabled={readOnly}
-                className="mt-1 w-full rounded bg-slate-800 border border-slate-700 px-3 py-2 disabled:opacity-60"
-              >
-                {CASE_TYPES.map((c) => (
-                  <option key={c} value={c}>
-                    {c}
-                  </option>
-                ))}
-              </select>
+              <div className="mt-1 w-full rounded bg-slate-800 border border-slate-700 px-3 py-2 opacity-90">
+                {derivedCaseType}
+              </div>
+              <div className="text-xs opacity-70 mt-1">
+                Case type is derived from your booking and cannot be edited here.
+              </div>
             </div>
 
             <div>
@@ -459,7 +526,6 @@ export default function ClientIntakeSubmitPage() {
               View Documents
             </Link>
 
-            {/* Only show Save/Submit button when creating or editing */}
             {(mode === "create" || mode === "edit") && (
               <button
                 type="submit"
@@ -478,7 +544,6 @@ export default function ClientIntakeSubmitPage() {
               </button>
             )}
 
-            {/* Hint in view mode */}
             {mode === "view" && (
               <div className="text-sm opacity-70">
                 Click <span className="font-semibold">Edit</span> to modify, or{" "}

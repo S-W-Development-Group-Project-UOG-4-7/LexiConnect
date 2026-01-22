@@ -251,7 +251,7 @@ const ManageBookings = () => {
                       View Details
                     </button>
                     <button
-                      onClick={() => navigate(`/client/bookings/${booking.id}/documents`)}
+                      onClick={() => navigate(`/client/bookings/${booking.id}?tab=Documents`)}
                       className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-sm font-semibold text-white transition-colors"
                     >
                       Documents
