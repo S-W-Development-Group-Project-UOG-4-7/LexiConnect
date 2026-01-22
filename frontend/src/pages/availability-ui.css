@@ -1062,12 +1062,21 @@ body {
 }
 
 .popover-slot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
   padding: 10px 12px;
   border-radius: 12px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   background: rgba(255, 255, 255, 0.03);
   cursor: pointer;
   transition: border-color 120ms ease, background 120ms ease;
+}
+
+.popover-slot-body {
+  flex: 1;
+  min-width: 0;
 }
 
 .popover-slot.active {
@@ -1079,6 +1088,7 @@ body {
   font-weight: 800;
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
 }
 
