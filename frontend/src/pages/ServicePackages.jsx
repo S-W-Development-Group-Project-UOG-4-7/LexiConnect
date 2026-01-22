@@ -12,23 +12,24 @@ function ServicePackages() {
   const [packages, setPackages] = useState([]);
   const [editingId, setEditingId] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
   const [form, setForm] = useState({
     name: "",
     description: "",
-    price: "",
     duration: "",
     active: true,
   });
 
   const loadPackages = async () => {
     setLoading(true);
+    setError("");
     try {
       const data = await getMyServicePackages();
       setPackages(data);
     } catch (err) {
       console.error(err);
-      alert("Failed to load service packages. Make sure you are logged in as Lawyer.");
+      setError("Failed to load service packages. Make sure you are logged in as Lawyer.");
     } finally {
       setLoading(false);
     }
@@ -51,7 +52,6 @@ function ServicePackages() {
     setForm({
       name: "",
       description: "",
-      price: "",
       duration: "",
       active: true,
     });
@@ -59,11 +59,11 @@ function ServicePackages() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setError("");
 
     const payload = {
       name: form.name,
       description: form.description,
-      price: Number(form.price),
       duration: Number(form.duration),
       active: Boolean(form.active),
     };
@@ -81,7 +81,7 @@ function ServicePackages() {
       await loadPackages();
     } catch (err) {
       console.error(err);
-      alert("Failed to save service package. Check Swagger token + backend logs.");
+      setError("Failed to save service package. Check Swagger token + backend logs.");
     }
   };
 
@@ -90,7 +90,6 @@ function ServicePackages() {
     setForm({
       name: pkg.name || "",
       description: pkg.description || "",
-      price: pkg.price?.toString?.() ?? "",
       duration: pkg.duration?.toString?.() ?? "",
       active: !!pkg.active,
     });
@@ -100,12 +99,13 @@ function ServicePackages() {
     const ok = confirm("Delete this service package?");
     if (!ok) return;
 
+    setError("");
     try {
       await deleteServicePackage(id);
       await loadPackages();
     } catch (err) {
       console.error(err);
-      alert("Failed to delete service package.");
+      setError("Failed to delete service package.");
     }
   };
 
@@ -115,12 +115,18 @@ function ServicePackages() {
     <div className="">
       <div className="lc-card">
         <div className="lc-header">
-          <div className="lc-icon">📦</div>
+          <div className="lc-icon">SP</div>
           <div>
             <h1 className="lc-title">Service Packages</h1>
             <p className="lc-subtitle">Manage your service offerings</p>
           </div>
         </div>
+
+        {error && (
+          <div className="alert alert-error" style={{ marginBottom: "1.5rem" }}>
+            {error}
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} className="availability-form">
           <div className="lc-form-grid">
@@ -152,24 +158,6 @@ function ServicePackages() {
                 onChange={handleChange}
                 placeholder="Brief description of the service"
                 className="lc-input"
-                required
-              />
-            </div>
-
-            <div className="form-group">
-              <label htmlFor="price" className="form-label">
-                Price (LKR) <span className="required-star">*</span>
-              </label>
-              <input
-                type="number"
-                id="price"
-                name="price"
-                value={form.price}
-                onChange={handleChange}
-                placeholder="e.g., 5000"
-                className="lc-input"
-                min="0"
-                step="0.01"
                 required
               />
             </div>
@@ -233,6 +221,18 @@ function ServicePackages() {
           <div className="empty-state">
             <p>No service packages yet</p>
             <p className="empty-sub">Add your first service package to get started.</p>
+            <button
+              type="button"
+              className="lc-primary-btn"
+              style={{ marginTop: "1rem" }}
+              onClick={() => {
+                const el = document.getElementById("name");
+                if (el) el.focus();
+              }}
+            >
+              <span>+</span>
+              Add First Package
+            </button>
           </div>
         ) : (
           <div className="lc-card-grid">
@@ -245,24 +245,24 @@ function ServicePackages() {
                   </span>
                 </div>
                 <div className="lc-list-card-meta" style={{ marginBottom: "1rem" }}>
-                  {pkg.description}
+                  {pkg.description || "No description provided."}
                 </div>
                 <div style={{ marginBottom: "1rem" }}>
-                  <div style={{ fontSize: "1.5rem", fontWeight: 700, color: "rgba(242, 184, 75, 0.95)", marginBottom: "0.25rem" }}>
-                    LKR {Number(pkg.price).toLocaleString()}
-                  </div>
                   <div className="lc-list-card-meta">
                     {pkg.duration} minutes
                   </div>
                 </div>
-                <div style={{ display: "flex", gap: "0.5rem", marginTop: "1rem" }}>
+                <div className="lc-list-card-meta" style={{ marginBottom: "1rem" }}>
+                  Pricing will be discussed directly with the client.
+                </div>
+                <div style={{ display: "flex", gap: "0.5rem" }}>
                   <button
                     type="button"
                     className="lc-primary-btn"
                     style={{ flex: 1, height: "36px", fontSize: "0.85rem", padding: "0 1rem" }}
                     onClick={() => handleEdit(pkg)}
                   >
-                    ✏️ Edit
+                    Edit
                   </button>
                   <button
                     type="button"
@@ -270,7 +270,7 @@ function ServicePackages() {
                     onClick={() => handleDelete(pkg.id)}
                     title="Delete"
                   >
-                    🗑️
+                    Delete
                   </button>
                 </div>
               </div>

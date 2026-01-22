@@ -1,5 +1,4 @@
 from typing import List, Optional
-from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
@@ -15,6 +14,7 @@ from .schemas import (
     CaseOut,
     CaseRequestCreate,
     CaseRequestOut,
+    LawyerCaseRequestOut,
 )
 
 router = APIRouter(prefix="/cases", tags=["Cases"])
@@ -51,20 +51,6 @@ def _ensure_case_owner(user: User, case: Case):
 
 class RequestStatusUpdate(BaseModel):
     status: str = Field(..., pattern="^(approved|rejected)$")
-
-
-# ✅ response model for lawyer "my requests"
-class LawyerMyRequestOut(BaseModel):
-    id: int
-    case_id: int
-    lawyer_id: int
-    status: str
-    message: Optional[str] = None
-    created_at: datetime
-
-    case_title: str
-    district: str
-    category: str
 
 
 @router.post("", response_model=CaseOut, status_code=status.HTTP_201_CREATED)
@@ -207,7 +193,7 @@ def update_case_request_status(
 
 
 # ✅ NEW: Lawyer can see their own requests (so they know approval)
-@router.get("/requests/my", response_model=List[LawyerMyRequestOut])
+@router.get("/requests/my", response_model=List[LawyerCaseRequestOut])
 def list_my_case_requests(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
@@ -222,10 +208,10 @@ def list_my_case_requests(
         .all()
     )
 
-    out: List[LawyerMyRequestOut] = []
+    out: List[LawyerCaseRequestOut] = []
     for req, case in rows:
         out.append(
-            LawyerMyRequestOut(
+            LawyerCaseRequestOut(
                 id=req.id,
                 case_id=req.case_id,
                 lawyer_id=req.lawyer_id,

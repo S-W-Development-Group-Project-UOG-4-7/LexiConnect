@@ -1,13 +1,34 @@
-from pydantic import BaseModel
 from datetime import datetime
+from typing import Optional
+
+from pydantic import BaseModel, ConfigDict
+
+
+class DocumentCommentCreate(BaseModel):
+    comment_text: str
+
+
+class DocumentCommentOut(BaseModel):
+    id: int
+    document_id: int
+    comment_text: str
+    created_by_user_id: Optional[int] = None
+    created_by_role: Optional[str] = None
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
 
 class DocumentOut(BaseModel):
     id: int
-    booking_id: int | None = None
-    case_id: int | None = None
-    title: str
+    booking_id: Optional[int] = None
+    uploaded_by_user_id: Optional[int] = None
+    uploaded_by_role: Optional[str] = None
+    case_id: Optional[int] = None
+    title: Optional[str] = None
     file_path: str
     uploaded_at: datetime
+    comment_count: int = 0
+    latest_comment: Optional[DocumentCommentOut] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)

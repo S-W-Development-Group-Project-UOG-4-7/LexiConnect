@@ -49,21 +49,26 @@ import LawyerDocumentsView from "../features/documents/pages/LawyerDocumentsView
 import LawyerIntakeViewPage from "../features/intake/pages/LawyerIntakeViewPage";
 import LawyerPublicProfile from "../pages/LawyerPublicProfile";
 import LawyerMyRequestsPage from "../features/cases/pages/LawyerMyRequestsPage";
+import LawyerEditProfilePage from "../features/lawyer_profile/pages/LawyerEditProfilePage";
+import LawyerPublicProfilePage from "../features/lawyer_profile/pages/LawyerPublicProfilePage";
+import LawyerSettingsPage from "../features/lawyer_profile/pages/LawyerSettingsPage";
+import LawyerDashboard from "../pages/LawyerDashboard";
 
-// ✅ Cases
+// OK Cases
 import ClientCasesPage from "../features/cases/pages/ClientCasesPage";
 import LawyerCaseFeedPage from "../features/cases/pages/LawyerCaseFeedPage";
 import ClientCaseChecklistPage from "../features/checklist/pages/ClientCaseChecklistPage";
 import LawyerCaseDetailPage from "../features/cases/pages/LawyerCaseDetailPage";
 import ClientCaseDetailPage from "../features/cases/pages/ClientCaseDetailPage";
 
-// ✅ Apprenticeship pages
+// OK Apprenticeship pages
 import ApprenticeDashboard from "../features/apprenticeship/pages/ApprenticeDashboard";
 import ApprenticeCaseView from "../features/apprenticeship/pages/ApprenticeCaseView";
 import LawyerApprenticesPage from "../features/apprenticeship/pages/LawyerApprenticesPage";
 import ApprenticeLayout from "../layouts/ApprenticeLayout";
 import ApprenticeCases from "../features/apprenticeship/pages/ApprenticeCases";
 import ApprenticeProfile from "../features/apprenticeship/pages/ApprenticeProfile";
+import ApprenticeAssignedCases from "../features/apprenticeship/pages/ApprenticeAssignedCases";
 // Admin pages (real)
 import AdminDashboard from "../pages/admin/AdminDashboard";
 import KYCApproval from "../pages/admin/KYCApproval";
@@ -82,10 +87,10 @@ const DashboardRedirect = () => {
 
 const RequireAuth = ({ children }) => {
   const token = localStorage.getItem("access_token");
-  return token ? children : <Navigate to="/" replace />;
+  return token ? children : <Navigate to="/login" replace />;
 };
 
-// ✅ Minimal Lawyer dashboard (with Case Feed link)
+// OK Minimal Lawyer dashboard (with Case Feed link)
 const LawyerDashboardHome = () => {
   return (
     <div className="space-y-4">
@@ -126,7 +131,7 @@ const LawyerDashboardHome = () => {
           className="block bg-slate-800 border border-slate-700 rounded-lg p-5 hover:bg-slate-700"
         >
           <div className="text-lg font-semibold text-white">Token Queue</div>
-          <div className="text-slate-300 text-sm mt-1">Today’s consultation queue</div>
+          <div className="text-slate-300 text-sm mt-1">Today's consultation queue</div>
         </a>
 
         <a
@@ -214,7 +219,7 @@ const AppRoutes = () => {
           </RequireAuth>
         }
       >
-        <Route path="/lawyer/dashboard" element={<LawyerDashboardHome />} />
+        <Route path="/lawyer/dashboard" element={<LawyerDashboard />} />
         <Route path="/lawyer/availability" element={<AvailabilityEditor />} />
         <Route path="/lawyer/token-queue" element={<TokenQueue />} />
         <Route path="/lawyer/branches" element={<BranchManagement />} />
@@ -224,11 +229,15 @@ const AppRoutes = () => {
         <Route path="/lawyer/bookings/incoming" element={<LawyerIncomingBookingsPage />} />
         <Route path="/lawyer/bookings/:bookingId" element={<LawyerBookingDetailPage />} />
         <Route path="/lawyer/bookings/:bookingId/documents" element={<LawyerDocumentsView />} />
+        <Route path="/lawyer/bookings/:bookingId/documents/upload" element={<DocumentUpload />} />
         <Route path="/lawyer/bookings/:bookingId/intake" element={<LawyerIntakeViewPage />} />
 
         <Route path="/lawyer/cases/feed" element={<LawyerCaseFeedPage />} />
         <Route path="/lawyer/cases/requests" element={<LawyerMyRequestsPage />} />
         <Route path="/lawyer/cases/:caseId" element={<LawyerCaseDetailPage />} />
+        <Route path="/lawyer/profile/edit" element={<LawyerEditProfilePage />} />
+        <Route path="/lawyer/public-profile" element={<LawyerPublicProfilePage />} />
+        <Route path="/lawyer/settings" element={<LawyerSettingsPage />} />
 
         {/* Optional: Apprenticeship page for lawyers */}
         <Route path="/lawyer/apprenticeship" element={<LawyerApprenticesPage />} />
@@ -238,14 +247,15 @@ const AppRoutes = () => {
       <Route
         element={
           <RequireAuth>
-            <ProtectedRoute allowedRoles={["apprentice"]}>
-            <ApprenticeLayout />
+            <ProtectedRoute allowedRoles={["apprentice"]} redirectTo="/dashboard">
+              <ApprenticeLayout />
             </ProtectedRoute>
           </RequireAuth>
         }
       >
+        <Route path="/apprentice" element={<Navigate to="/apprentice/dashboard" replace />} />
         <Route path="/apprentice/dashboard" element={<ApprenticeDashboard />} />  
-        <Route path="/apprentice/cases" element={<ApprenticeCases />} />
+        <Route path="/apprentice/cases" element={<ApprenticeAssignedCases />} />
         <Route path="/apprentice/cases/:caseId" element={<ApprenticeCaseView />} />
         <Route path="/apprentice/profile" element={<ApprenticeProfile />} />
       </Route>
