@@ -78,7 +78,8 @@ const AvailabilityEditor = () => {
   const [loadingAvailabilities, setLoadingAvailabilities] = useState(false);
   const [selectedDate, setSelectedDate] = useState(null);
   const [selectedSlot, setSelectedSlot] = useState(null);
-  const [canceling, setCanceling] = useState(false);
+  const [cancelingSlotId, setCancelingSlotId] = useState(null);
+  const [cancelledSlotKeys, setCancelledSlotKeys] = useState(() => new Set());
   const [cancelMessage, setCancelMessage] = useState('');
   const [cancelError, setCancelError] = useState('');
   const [viewDate, setViewDate] = useState(() => {
@@ -95,6 +96,46 @@ const AvailabilityEditor = () => {
     repeatMode: 'weeks',
   };
   const [wizardDefaults] = useState(defaultWizardData);
+
+  const getStoredToken = () =>
+    localStorage.getItem('access_token') ||
+    sessionStorage.getItem('access_token') ||
+    localStorage.getItem('token') ||
+    sessionStorage.getItem('token');
+
+  const withAuthConfig = (config = {}, onMissing) => {
+    const token = getStoredToken();
+    if (!token) {
+      onMissing?.('Please login again');
+      return null;
+    }
+    return {
+      ...config,
+      headers: {
+        ...(config.headers || {}),
+        Authorization: `Bearer ${token}`,
+      },
+    };
+  };
+
+  const handleAuthFailure = (err, onAuthFail) => {
+    if (err?.response?.status === 401) {
+      localStorage.removeItem('access_token');
+      localStorage.removeItem('token');
+      sessionStorage.removeItem('access_token');
+      sessionStorage.removeItem('token');
+      onAuthFail?.('Session expired');
+      try {
+        if (window?.location?.pathname !== '/login') {
+          window.location.assign('/login');
+        }
+      } catch (_) {
+        /* noop */
+      }
+      return true;
+    }
+    return false;
+  };
 
   useEffect(() => {
     const fetchBranches = async () => {
@@ -122,9 +163,14 @@ const AvailabilityEditor = () => {
   }, []);
 
   const loadAvailabilities = async () => {
+    const authConfig = withAuthConfig({}, (msg) => setErrors((prev) => ({ ...prev, list: msg })));
+    if (!authConfig) {
+      setAvailabilities([]);
+      return;
+    }
     try {
       setLoadingAvailabilities(true);
-      const { data } = await api.get('/api/lawyer-availability/weekly');
+      const { data } = await api.get('/api/lawyer-availability/weekly', authConfig);
       console.log('[availability] fetched list', data?.length, data);
       const deduped = [];
       const seen = new Set();
@@ -140,6 +186,7 @@ const AvailabilityEditor = () => {
       console.log('[availability] deduped list', deduped.length, deduped);
       setAvailabilities(deduped);
     } catch (err) {
+      if (handleAuthFailure(err, (msg) => setErrors((prev) => ({ ...prev, list: msg })))) return;
       const detail =
         err?.response?.data?.detail ||
         err?.response?.data?.message ||
@@ -152,10 +199,16 @@ const AvailabilityEditor = () => {
   };
 
   const loadBlackouts = async () => {
+    const authConfig = withAuthConfig({}, (msg) => setErrors((prev) => ({ ...prev, list: msg })));
+    if (!authConfig) {
+      setBlackouts([]);
+      return;
+    }
     try {
-      const { data } = await api.get('/api/lawyer-availability/blackouts');
+      const { data } = await api.get('/api/lawyer-availability/blackouts', authConfig);
       setBlackouts(data || []);
     } catch (err) {
+      if (handleAuthFailure(err, (msg) => setErrors((prev) => ({ ...prev, list: msg })))) return;
       const detail =
         err?.response?.data?.detail ||
         err?.response?.data?.message ||
@@ -217,12 +270,13 @@ const AvailabilityEditor = () => {
       return;
     }
 
-    const token = localStorage.getItem('access_token') || localStorage.getItem('token');
-
     if (!wizardData.branchId || wizardData.days.length === 0) {
       setErrors((prev) => ({ ...prev, save: 'Select at least one day and a branch before saving.' }));
       return;
     }
+
+    const authConfig = withAuthConfig({}, (msg) => setErrors((prev) => ({ ...prev, save: msg })));
+    if (!authConfig) return;
 
     const payloads = wizardData.days.map((day) => ({
       day_of_week: weekdayPayload[day] || day.toLowerCase(),
@@ -238,9 +292,7 @@ const AvailabilityEditor = () => {
     try {
       setSaving(true);
       for (const body of payloads) {
-        const res = await api.post('/api/lawyer-availability/weekly', body, {
-          headers: token ? { Authorization: `Bearer ${token}` } : {},
-        });
+        const res = await api.post('/api/lawyer-availability/weekly', body, authConfig);
         console.log('[availability] save success', res.status, res.data);
       }
       setSaveMessage('Availability saved successfully.');
@@ -248,6 +300,7 @@ const AvailabilityEditor = () => {
       setWizardStep(1);
       setWizardData({ ...wizardDefaults });
     } catch (err) {
+      if (handleAuthFailure(err, (msg) => setErrors((prev) => ({ ...prev, save: msg })))) return;
       const status = err?.response?.status;
       const errorDetail =
         err?.response?.data?.detail ||
@@ -266,28 +319,55 @@ const AvailabilityEditor = () => {
     }
   };
 
-  const cancelSelectedSlot = async () => {
-    if (!selectedDate) {
-      setCancelError('Select a date to cancel.');
+  const slotKey = (slot, date) => {
+    const idPart =
+      slot?.id != null
+        ? slot.id
+        : `${slot?.branch_id ?? 'branchless'}-${slot?.start_time ?? slot?.startLabel ?? ''}-${slot?.end_time ?? slot?.endLabel ?? ''}`;
+    return `${date || slot?.date || 'unknown'}|${idPart}`;
+  };
+
+  const cancelSlot = async (slot) => {
+    const dateToCancel = slot?.date || selectedDate;
+    if (!dateToCancel || !slot) {
+      setCancelError('Select a slot to cancel.');
       return;
     }
+
+    const key = slotKey(slot, dateToCancel);
+    const startLabel = slot.startLabel || (slot.start_time || '').slice(0, 5) || '--:--';
+    const endLabel = slot.endLabel || (slot.end_time || '').slice(0, 5) || '--:--';
+
     setCancelMessage('');
     setCancelError('');
-    const token = localStorage.getItem('access_token') || localStorage.getItem('token');
+
+    const authConfig = withAuthConfig({}, (msg) => setCancelError(msg));
+    if (!authConfig) return;
+
+    const payload = {
+      date: dateToCancel,
+      reason: 'Cancelled via dashboard',
+    };
+    if (slot.id != null) payload.slot_id = slot.id;
+    if (slot.start_time) payload.start_time = slot.start_time;
+    if (slot.end_time) payload.end_time = slot.end_time;
+    if (slot.branch_id != null) payload.branch_id = slot.branch_id;
+
     try {
-      setCanceling(true);
-      await api.post(
-        '/api/lawyer-availability/blackouts',
-        { date: selectedDate, reason: 'Cancelled via dashboard' },
-        { headers: token ? { Authorization: `Bearer ${token}` } : {} }
-      );
-      setCancelMessage(`Availability on ${selectedDate} cancelled.`);
-      await loadAvailabilityData();
+      setCancelingSlotId(slot.id ?? key);
+      await api.post('/api/lawyer-availability/blackouts', payload, authConfig);
+      setCancelMessage(`Availability on ${dateToCancel} ${startLabel}–${endLabel} cancelled.`);
+      setCancelledSlotKeys((prev) => {
+        const next = new Set(prev);
+        next.add(key);
+        return next;
+      });
       setSelectedSlot(null);
-      setSelectedDate(null);
+      await loadAvailabilityData();
     } catch (err) {
+      if (handleAuthFailure(err, (msg) => setCancelError(msg))) return;
       if (err?.response?.status === 400) {
-        setCancelMessage('This date is already cancelled.');
+        setCancelMessage('This slot is already cancelled.');
         return;
       }
       const detail =
@@ -297,7 +377,7 @@ const AvailabilityEditor = () => {
         'Failed to cancel availability.';
       setCancelError(detail);
     } finally {
-      setCanceling(false);
+      setCancelingSlotId(null);
     }
   };
 
@@ -799,14 +879,6 @@ const AvailabilityEditor = () => {
                 <div className="popover-head">
                   <div className="popover-title">Availability on {selectedDate}</div>
                   <div className="popover-actions">
-                    <button
-                      className="ghost-btn small danger"
-                      type="button"
-                      disabled={!selectedDate || canceling}
-                      onClick={cancelSelectedSlot}
-                    >
-                      {canceling ? 'Cancelling...' : 'Cancel slot'}
-                    </button>
                     <button className="ghost-btn small" type="button" onClick={() => { setSelectedDate(null); setSelectedSlot(null); }}>
                       Clear selection
                     </button>
@@ -820,19 +892,36 @@ const AvailabilityEditor = () => {
                 <div className="popover-list">
                   {getSlotsForDate(selectedDate).map((slot, idx) => {
                     const isSelectedSlot = selectedSlot && selectedSlot.id === slot.id && selectedSlot.date === slot.date;
+                    const key = slotKey(slot, selectedDate);
+                    const isCanceling = cancelingSlotId === (slot.id ?? key);
+                    const isCancelled = cancelledSlotKeys.has(key);
                     return (
                       <div
                         key={`${selectedDate}-slot-${idx}`}
                         className={`popover-slot ${isSelectedSlot ? 'active' : ''}`}
                         onClick={() => handleChipClick(slot, selectedDate)}
                       >
-                        <div className="popover-slot-time">
-                          {slot.startLabel} – {slot.endLabel}
-                          {!slot.is_active && <span className="status-pill">Inactive</span>}
+                        <div className="popover-slot-body">
+                          <div className="popover-slot-time">
+                            {slot.startLabel} – {slot.endLabel}
+                            {!slot.is_active && <span className="status-pill">Inactive</span>}
+                            {isCancelled && <span className="status-pill">Cancelled</span>}
+                          </div>
+                          <div className="popover-slot-meta">
+                            Branch #{slot.branch_id ?? '—'} · Max {slot.max_bookings ?? 1}
+                          </div>
                         </div>
-                        <div className="popover-slot-meta">
-                          Branch #{slot.branch_id ?? '—'} · Max {slot.max_bookings ?? 1}
-                        </div>
+                        <button
+                          type="button"
+                          className="ghost-btn small danger"
+                          disabled={isCanceling || isCancelled}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            cancelSlot(slot);
+                          }}
+                        >
+                          {isCancelled ? 'Cancelled' : isCanceling ? 'Cancelling...' : 'Cancel slot'}
+                        </button>
                       </div>
                     );
                   })}
