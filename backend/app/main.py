@@ -10,8 +10,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
 from fastapi.staticfiles import StaticFiles
 
-# ✅ Checklist Answers module router
-from app.modules.checklist_answers.router import router as checklist_answers_router
+# OK Checklist Answers module router
+from app.modules.checklist_answers.router import (
+    router as checklist_answers_router,
+    booking_checklist_router,
+)
 
 # Core DB
 from .database import SessionLocal
@@ -71,12 +74,12 @@ app = FastAPI(
     swagger_ui_parameters={"persistAuthorization": True},
 )
 
-# ✅ Serve uploaded files so frontend can open PDFs/images in browser
+# OK Serve uploaded files so frontend can open PDFs/images in browser
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 
 # =============================================================================
-# ✅ CORS (DEV-SAFE) — Fixes "blocked by CORS policy" + frontend "Network Error"
+# OK CORS (DEV-SAFE) - Fixes "blocked by CORS policy" + frontend "Network Error"
 # =============================================================================
 # NOTE:
 # - If you use Authorization: Bearer <token>, you do NOT need cookies.
@@ -87,12 +90,15 @@ origins = [
     "http://127.0.0.1:5173",
     "http://localhost:5174",
     "http://127.0.0.1:5174",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
 ]
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
-    allow_credentials=False,   # ✅ IMPORTANT: keep false unless you use cookies
+    allow_origin_regex=r"http://(localhost|127\.0\.0\.1):\d+",
+    allow_credentials=False,   # OK IMPORTANT: keep false unless you use cookies
     allow_methods=["*"],
     allow_headers=["*"],
     expose_headers=["*"],
@@ -127,8 +133,9 @@ app.include_router(token_queue.router)
 app.include_router(apprenticeship_router, prefix="/api")
 
 
-# ✅ Checklist Answers router
+# OK Checklist Answers router
 app.include_router(checklist_answers_router)
+app.include_router(booking_checklist_router)
 
 # Feature modules
 app.include_router(service_packages_router)

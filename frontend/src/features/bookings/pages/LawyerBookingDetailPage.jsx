@@ -7,9 +7,10 @@ import { getBookingById } from "../../../services/bookings";
 import api from "../../../services/api";
 import { getIntakeByBooking, getIntakeByCase } from "../../intake/services/intake.service";
 import { getBookingChecklist } from "../services/bookingChecklist.service";
+import { createDocumentComment, uploadDocument } from "../../documents/services/documents.service";
 
 const formatDateTime = (value) => {
-  if (!value) return "—";
+  if (!value) return "-";
   try {
     return new Date(value).toLocaleString();
   } catch {
@@ -29,6 +30,28 @@ export default function LawyerBookingDetailPage() {
   const [checklist, setChecklist] = useState(null);
   const [checklistError, setChecklistError] = useState("");
   const [checklistLoading, setChecklistLoading] = useState(false);
+  const [showWrapUp, setShowWrapUp] = useState(false);
+  const [wrapUpFile, setWrapUpFile] = useState(null);
+  const [wrapUpFileName, setWrapUpFileName] = useState("");
+  const [wrapUpComment, setWrapUpComment] = useState("");
+  const [wrapUpSaving, setWrapUpSaving] = useState(false);
+  const [wrapUpError, setWrapUpError] = useState("");
+  const [wrapUpSuccess, setWrapUpSuccess] = useState("");
+
+  const fetchDocs = async (bookingData) => {
+    if (!bookingData) return;
+    try {
+      if (bookingData?.case_id) {
+        const { data: caseDocs } = await api.get(`/api/documents/by-case/${bookingData.case_id}`);
+        setDocs(caseDocs || []);
+      } else {
+        const { data: bookingDocs } = await api.get(`/api/documents`, { params: { booking_id: bookingId } });
+        setDocs(bookingDocs || []);
+      }
+    } catch (e) {
+      setDocError(e?.response?.data?.detail || "Failed to load documents");
+    }
+  };
 
   useEffect(() => {
     setBooking(null);
@@ -59,20 +82,6 @@ export default function LawyerBookingDetailPage() {
 
   useEffect(() => {
     if (!booking) return;
-
-    const loadDocs = async () => {
-      try {
-        if (booking?.case_id) {
-          const { data: caseDocs } = await api.get(`/api/documents/by-case/${booking.case_id}`);
-          setDocs(caseDocs || []);
-        } else {
-          const { data: bookingDocs } = await api.get(`/api/documents`, { params: { booking_id: bookingId } });
-          setDocs(bookingDocs || []);
-        }
-      } catch (e) {
-        setDocError(e?.response?.data?.detail || "Failed to load documents");
-      }
-    };
 
     const loadIntake = async () => {
       try {
@@ -110,12 +119,52 @@ export default function LawyerBookingDetailPage() {
       }
     };
 
-    loadDocs();
+    fetchDocs(booking);
     loadIntake();
     loadChecklist();
   }, [bookingId, booking?.id, booking?.case_id, booking]);
 
+  useEffect(() => {
+    if (booking?.status?.toLowerCase() === "completed") {
+      setShowWrapUp(true);
+    }
+  }, [booking?.status]);
+
   const statusClass = useMemo(() => booking?.status, [booking]);
+
+  const handleWrapUpSubmit = async (e) => {
+    e.preventDefault();
+    setWrapUpError("");
+    setWrapUpSuccess("");
+
+    if (!wrapUpFile) {
+      setWrapUpError("Please attach session notes.");
+      return;
+    }
+
+    try {
+      setWrapUpSaving(true);
+      const res = await uploadDocument({
+        bookingId,
+        fileName: wrapUpFileName || wrapUpFile?.name,
+        file: wrapUpFile,
+      });
+      const createdDoc = res?.data;
+      const commentText = wrapUpComment.trim();
+      if (commentText && createdDoc?.id) {
+        await createDocumentComment(createdDoc.id, commentText);
+      }
+      setWrapUpSuccess("Session wrap-up saved.");
+      setWrapUpFile(null);
+      setWrapUpFileName("");
+      setWrapUpComment("");
+      fetchDocs(booking);
+    } catch (e2) {
+      setWrapUpError(e2?.response?.data?.detail || "Failed to save wrap-up.");
+    } finally {
+      setWrapUpSaving(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -165,7 +214,7 @@ export default function LawyerBookingDetailPage() {
           </div>
           <div className="space-y-1">
             <div className="text-slate-400 text-xs uppercase tracking-wide">Client ID</div>
-            <div className="text-white font-medium">{booking.client_id ?? "—"}</div>
+            <div className="text-white font-medium">{booking.client_id ?? "-"}</div>
           </div>
         </div>
 
@@ -226,7 +275,7 @@ export default function LawyerBookingDetailPage() {
           </div>
         </div>
 
-        {checklistLoading && <div className="text-slate-300 text-sm">Loading checklist…</div>}
+        {checklistLoading && <div className="text-slate-300 text-sm">Loading checklist...</div>}
 
         {!checklistLoading && checklist && checklist.missing_required?.length > 0 && (
           <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg text-amber-100 text-sm">
@@ -261,7 +310,7 @@ export default function LawyerBookingDetailPage() {
                       <td className="py-2 pr-4 text-slate-200">
                         {(item.answer_text || "").trim() ? item.answer_text : "Not provided"}
                       </td>
-                      <td className="py-2 text-slate-300">{item.document_id ?? "—"}</td>
+                      <td className="py-2 text-slate-300">{item.document_id ?? "-"}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -270,6 +319,84 @@ export default function LawyerBookingDetailPage() {
           </>
         )}
       </div>
+
+      {showWrapUp && (
+        <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-lg p-6 space-y-4">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <div className="text-lg font-semibold text-white">Session Wrap-up</div>
+                <div className="text-sm text-slate-400">
+                  Upload session notes and add a summary for the client.
+                </div>
+              </div>
+              <button
+                onClick={() => setShowWrapUp(false)}
+                className="text-slate-400 hover:text-white text-sm"
+              >
+                Close
+              </button>
+            </div>
+
+            {wrapUpError && (
+              <div className="text-sm text-red-200 bg-red-900/40 border border-red-700 rounded p-2">
+                {wrapUpError}
+              </div>
+            )}
+            {wrapUpSuccess && (
+              <div className="text-sm text-emerald-200 bg-emerald-900/40 border border-emerald-700 rounded p-2">
+                {wrapUpSuccess}
+              </div>
+            )}
+
+            <form onSubmit={handleWrapUpSubmit} className="space-y-3">
+              <div>
+                <label className="text-sm text-slate-300">Document title</label>
+                <input
+                  value={wrapUpFileName}
+                  onChange={(e) => setWrapUpFileName(e.target.value)}
+                  placeholder="Session notes - summary"
+                  className="mt-1 w-full rounded-lg bg-slate-950/70 border border-slate-700 px-3 py-2 text-sm"
+                />
+              </div>
+              <div>
+                <label className="text-sm text-slate-300">Upload notes</label>
+                <input
+                  type="file"
+                  onChange={(e) => setWrapUpFile(e.target.files?.[0] || null)}
+                  className="mt-1 w-full text-sm text-slate-300"
+                />
+              </div>
+              <div>
+                <label className="text-sm text-slate-300">Comment for client</label>
+                <textarea
+                  value={wrapUpComment}
+                  onChange={(e) => setWrapUpComment(e.target.value)}
+                  rows={3}
+                  placeholder="Key takeaways, next steps, and follow-ups..."
+                  className="mt-1 w-full rounded-lg bg-slate-950/70 border border-slate-700 px-3 py-2 text-sm"
+                />
+              </div>
+              <div className="flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowWrapUp(false)}
+                  className="px-4 py-2 rounded-lg border border-slate-600 text-slate-200 text-sm"
+                >
+                  Later
+                </button>
+                <button
+                  type="submit"
+                  disabled={wrapUpSaving}
+                  className="px-4 py-2 rounded-lg bg-amber-500 hover:bg-amber-600 text-slate-950 text-sm font-semibold disabled:opacity-60"
+                >
+                  {wrapUpSaving ? "Saving..." : "Save Wrap-up"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </PageShell>
   );
 }

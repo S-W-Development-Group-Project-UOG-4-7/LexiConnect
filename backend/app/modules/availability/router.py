@@ -9,7 +9,9 @@ Endpoints (mounted by leader):
 
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from datetime import date
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -19,13 +21,16 @@ from app.modules.availability.schemas import (
     AvailabilityTemplateCreate,
     AvailabilityTemplateOut,
     AvailabilityTemplateUpdate,
+    BookableSlotsByDate,
 )
 from app.modules.availability.service import (
     create_availability_template,
     delete_availability_template,
+    get_bookable_slots,
     list_my_availability,
     update_availability_template,
 )
+from app.modules.branches.service import get_lawyer_by_user
 
 router = APIRouter(prefix="/api/availability", tags=["availability"])
 
@@ -85,3 +90,36 @@ def delete_template(
     _require_lawyer(current_user)
     delete_availability_template(db, lawyer_id=current_user.id, template_id=template_id)
     return None
+
+
+@router.get("/bookable-slots", response_model=list[BookableSlotsByDate])
+def get_bookable_slots_for_lawyer(
+    lawyer_id: int | None = Query(default=None),
+    date_from: date = Query(..., description="YYYY-MM-DD"),
+    days: int = Query(14, ge=1, le=31),
+    duration_minutes: int = Query(..., ge=5, le=240),
+    step_minutes: int = Query(15, ge=5, le=120),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    if getattr(current_user, "role", None) == "lawyer":
+        lawyer = get_lawyer_by_user(db, current_user.email)
+        target_id = lawyer_id or lawyer.id
+        if target_id != lawyer.id:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not allowed")
+    else:
+        if lawyer_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="lawyer_id is required",
+            )
+        target_id = lawyer_id
+
+    return get_bookable_slots(
+        db,
+        lawyer_id=target_id,
+        date_from=date_from,
+        days=days,
+        duration_minutes=duration_minutes,
+        step_minutes=step_minutes,
+    )
