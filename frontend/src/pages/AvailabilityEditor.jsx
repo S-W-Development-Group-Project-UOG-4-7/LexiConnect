@@ -348,10 +348,6 @@ const AvailabilityEditor = () => {
       date: dateToCancel,
       reason: 'Cancelled via dashboard',
     };
-    if (slot.id != null) payload.slot_id = slot.id;
-    if (slot.start_time) payload.start_time = slot.start_time;
-    if (slot.end_time) payload.end_time = slot.end_time;
-    if (slot.branch_id != null) payload.branch_id = slot.branch_id;
 
     try {
       setCancelingSlotId(slot.id ?? key);
@@ -366,6 +362,13 @@ const AvailabilityEditor = () => {
     } catch (err) {
       if (handleAuthFailure(err, (msg) => setCancelError(msg))) return;
       if (err?.response?.status === 400) {
+        // Slot already cancelled - remove it from display
+        setCancelledSlotKeys((prev) => {
+          const next = new Set(prev);
+          next.add(key);
+          return next;
+        });
+        setSelectedSlot(null);
         setCancelMessage('This slot is already cancelled.');
         return;
       }
