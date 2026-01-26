@@ -711,7 +711,7 @@ const TokenQueue = () => {
                   <div key={slot.id} className="slot-section">
                     {/* Slot Header */}
                     <div className="px-5 py-3 bg-gradient-to-r from-cyan-500/10 to-blue-500/10 border-b border-white/5">
-                      <div className="flex items-center justify-between">
+                      <div className="flex items-center justify-between gap-4 mb-3">
                         <div className="flex items-center gap-3">
                           <div className="w-10 h-10 rounded-lg bg-cyan-500/20 border border-cyan-400/30 flex items-center justify-center">
                             <span className="text-cyan-200 text-lg">🕐</span>
@@ -740,6 +740,44 @@ const TokenQueue = () => {
                           )}
                         </div>
                       </div>
+
+                      {/* Slot Action Buttons */}
+                      {slot.tokens.length > 0 && (
+                        <div className="flex flex-wrap gap-2 pl-14">
+                          <button
+                            onClick={() => {
+                              slot.tokens.forEach(t => handleStatusChange(t.id, "completed"));
+                            }}
+                            className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-emerald-400/30 bg-emerald-500/15 text-emerald-200 hover:bg-emerald-500/25 transition-colors"
+                          >
+                            ✅ Complete All
+                          </button>
+                          <button
+                            onClick={() => {
+                              slot.tokens.forEach(t => handleStatusChange(t.id, "in_progress"));
+                            }}
+                            className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-amber-400/30 bg-amber-500/15 text-amber-200 hover:bg-amber-500/25 transition-colors"
+                          >
+                            🔄 Ongoing
+                          </button>
+                          <button
+                            onClick={() => {
+                              slot.tokens.forEach(t => handleStatusChange(t.id, "no_show"));
+                            }}
+                            className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-red-400/30 bg-red-500/15 text-red-200 hover:bg-red-500/25 transition-colors"
+                          >
+                            🚫 Not Done
+                          </button>
+                          <button
+                            onClick={() => {
+                              slot.tokens.forEach(t => handleStatusChange(t.id, "pending"));
+                            }}
+                            className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-yellow-400/30 bg-yellow-500/15 text-yellow-200 hover:bg-yellow-500/25 transition-colors"
+                          >
+                            ⏳ Reset
+                          </button>
+                        </div>
+                      )}
                     </div>
 
                     {/* Bookings for this slot */}

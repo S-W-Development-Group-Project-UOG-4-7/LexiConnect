@@ -647,13 +647,16 @@ const AvailabilityEditor = () => {
       const current = new Date(Date.UTC(viewDate.getUTCFullYear(), viewDate.getUTCMonth(), d));
       const weekday = current.getUTCDay(); // 0 sun
       const dateKey = current.toISOString().slice(0, 10);
+      // Skip past dates - only show from today onwards
+      if (dateKey < todayISO) continue;
       if (blackoutDates.has(dateKey)) continue;
       const matches = (availabilities || []).filter((slot) => {
-        const idx = dayToIndex(slot.day_of_week || slot.day || '');
-        if (idx === null) return false;
-        // dayToIndex uses Mon=0; translate to Sunday=0 for getUTCDay
-        const sundayIdx = (idx + 1) % 7;
-        return sundayIdx === weekday;
+        const dayName = (slot.day_of_week || slot.day || '').toLowerCase();
+        // Direct mapping to JS weekday (0=Sun, 6=Sat)
+        const dayMap = { sunday: 0, sun: 0, monday: 1, mon: 1, tuesday: 2, tue: 2, wednesday: 3, wed: 3, thursday: 4, thu: 4, friday: 5, fri: 5, saturday: 6, sat: 6 };
+        const expectedWeekday = dayMap[dayName];
+        if (expectedWeekday === undefined) return false;
+        return expectedWeekday === weekday;
       });
       if (matches.length) {
         const daySlots = [];
@@ -675,20 +678,16 @@ const AvailabilityEditor = () => {
       }
     }
     return occurrences;
-  }, [availabilities, viewDate, blackoutDates, cancelledSlotKeys]);
+  }, [availabilities, viewDate, blackoutDates, cancelledSlotKeys, todayISO]);
 
   const filteredMonthlyOccurrences = useMemo(() => {
-    if (wizardData.repeatMode === 'until') {
-      if (!untilDate) return {};
-      return Object.fromEntries(
-        Object.entries(monthlyOccurrences).filter(([dateKey]) => dateKey <= untilDate)
-      );
-    }
-    // repeatMode weeks: filter to range based on selected weeks count
+    // Always filter from today to the limit date
+    const limitDate = wizardData.repeatMode === 'until' && untilDate ? untilDate : weeksLimitISO;
+    if (wizardData.repeatMode === 'until' && !untilDate) return {};
     return Object.fromEntries(
-      Object.entries(monthlyOccurrences).filter(([dateKey]) => dateKey <= weeksLimitISO)
+      Object.entries(monthlyOccurrences).filter(([dateKey]) => dateKey >= todayISO && dateKey <= limitDate)
     );
-  }, [monthlyOccurrences, wizardData.repeatMode, untilDate, weeksLimitISO]);
+  }, [monthlyOccurrences, wizardData.repeatMode, untilDate, weeksLimitISO, todayISO]);
 
   const getSlotsForDate = (date) => {
     if (!date) return [];
@@ -825,11 +824,15 @@ const AvailabilityEditor = () => {
                 <button
                   className="ghost-btn small"
                   type="button"
-                  onClick={() =>
-                    setViewDate(
-                      (prev) => new Date(Date.UTC(prev.getUTCFullYear(), prev.getUTCMonth() - 1, 1))
-                    )
-                  }
+                  disabled={viewDate.getUTCFullYear() === 2026 && viewDate.getUTCMonth() === 0}
+                  onClick={() => {
+                    setViewDate((prev) => {
+                      const newDate = new Date(Date.UTC(prev.getUTCFullYear(), prev.getUTCMonth() - 1, 1));
+                      // Don't go before January 2026
+                      if (newDate.getUTCFullYear() < 2026) return prev;
+                      return newDate;
+                    });
+                  }}
                 >
                   ←
                 </button>
