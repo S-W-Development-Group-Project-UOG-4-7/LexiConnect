@@ -665,12 +665,6 @@ const TokenQueue = () => {
                     {isDemo && <span className="ml-2 text-amber-300">(Demo Mode)</span>}
                   </p>
                 </div>
-                <button
-                  onClick={() => setShowAddForm(true)}
-                  className="px-4 py-2 rounded-lg text-sm font-medium border border-emerald-400/30 bg-emerald-500/15 text-emerald-200 hover:bg-emerald-500/25 transition-colors"
-                >
-                  + Add Token
-                </button>
               </div>
 
               {/* Filters */}
