@@ -3,17 +3,19 @@ from datetime import date, datetime, timezone
 import logging
 
 import sqlalchemy as sa
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models.user import User
+from app.models.user import User, UserRole
 from app.modules.queue.models import QueueEntry, QueueEntryStatus
 from app.schemas.token_queue import TokenQueueCreate, TokenQueueOut, TokenQueueUpdate
+from app.routers.auth import get_current_user
 
 router = APIRouter(prefix="/token-queue", tags=["Token Queue"])
 logger = logging.getLogger(__name__)
+
 
 @router.post("", response_model=TokenQueueOut, status_code=status.HTTP_201_CREATED)
 def create_token_queue_entry(payload: TokenQueueCreate, db: Session = Depends(get_db)):
@@ -58,9 +60,13 @@ def create_token_queue_entry(payload: TokenQueueCreate, db: Session = Depends(ge
         id=uuid.uuid4(),
         date=payload.date,
         token_number=payload.token_number,
+        time=payload.time,
         lawyer_id=payload.lawyer_id,
         client_id=payload.client_id,
-        status=payload.status or QueueEntryStatus.waiting,
+        branch_id=payload.branch_id,
+        reason=payload.reason,
+        notes=payload.notes,
+        status=payload.status or QueueEntryStatus.pending,
     )
 
     db.add(entry)
@@ -121,22 +127,36 @@ def create_token_queue_entry(payload: TokenQueueCreate, db: Session = Depends(ge
         )
 
     db.refresh(entry)
-    return TokenQueueOut.model_validate(entry)
+    data = TokenQueueOut.model_validate(entry)
+    data.client_name = client.full_name if client else None
+    return data
+
 
 @router.get("", response_model=list[TokenQueueOut])
 def list_token_queue_entries(
-    date: date | None = None,
-    lawyer_id: int | None = None,
-    status: QueueEntryStatus | None = None,
+    date: date | None = Query(None),
+    lawyer_id: int | None = Query(None),
+    status: QueueEntryStatus | None = Query(None),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
+    """List token queue entries. Lawyers see only their own queue."""
     stmt = sa.select(QueueEntry)
+
+    # Lawyers can only see their own queue
+    if current_user.role == UserRole.lawyer:
+        from app.modules.branches.service import get_lawyer_by_user
+        lawyer = get_lawyer_by_user(db, current_user.email)
+        if lawyer:
+            stmt = stmt.where(QueueEntry.lawyer_id == lawyer.id)
 
     if date is not None:
         stmt = stmt.where(QueueEntry.date == date)
 
     if lawyer_id is not None:
-        stmt = stmt.where(QueueEntry.lawyer_id == lawyer_id)
+        # Admins can filter by lawyer_id
+        if current_user.role == UserRole.admin:
+            stmt = stmt.where(QueueEntry.lawyer_id == lawyer_id)
 
     if status is not None:
         stmt = stmt.where(QueueEntry.status == status)
@@ -144,28 +164,78 @@ def list_token_queue_entries(
     stmt = stmt.order_by(QueueEntry.date.desc(), QueueEntry.token_number.asc())
 
     entries = list(db.execute(stmt).scalars().all())
-    return [TokenQueueOut.model_validate(e) for e in entries]
+    
+    # Build response with client names
+    result = []
+    for e in entries:
+        client = db.get(User, e.client_id)
+        data = TokenQueueOut.model_validate(e)
+        data.client_name = client.full_name if client else None
+        result.append(data)
+    
+    return result
 
 
-@router.patch("/{id}", response_model=TokenQueueOut)
+@router.get("/{entry_id}", response_model=TokenQueueOut)
+def get_token_queue_entry(
+    entry_id: uuid.UUID,
+    db: Session = Depends(get_db),
+):
+    entry = db.get(QueueEntry, entry_id)
+    if entry is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Token queue entry not found")
+    client = db.get(User, entry.client_id)
+    data = TokenQueueOut.model_validate(entry)
+    data.client_name = client.full_name if client else None
+    return data
+
+
+@router.patch("/{entry_id}", response_model=TokenQueueOut)
 def update_token_queue_entry(
-    id: uuid.UUID,
+    entry_id: uuid.UUID,
     payload: TokenQueueUpdate,
     db: Session = Depends(get_db),
 ):
-    entry = db.get(QueueEntry, id)
+    entry = db.get(QueueEntry, entry_id)
     if entry is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Token queue entry not found")
 
     previous_status = entry.status
     entry.status = payload.status
 
-    if payload.served_at is not None:
-        entry.served_at = payload.served_at
-    else:
-        if previous_status != QueueEntryStatus.served and payload.status == QueueEntryStatus.served:
-            entry.served_at = datetime.now(timezone.utc)
+    # Auto-set timestamps based on status changes
+    if payload.status == QueueEntryStatus.in_progress and previous_status != QueueEntryStatus.in_progress:
+        entry.started_at = datetime.now(timezone.utc)
+    
+    if payload.status == QueueEntryStatus.completed and previous_status != QueueEntryStatus.completed:
+        entry.completed_at = datetime.now(timezone.utc)
+
+    if payload.notes is not None:
+        entry.notes = payload.notes
+
+    if payload.started_at is not None:
+        entry.started_at = payload.started_at
+
+    if payload.completed_at is not None:
+        entry.completed_at = payload.completed_at
 
     db.commit()
     db.refresh(entry)
-    return TokenQueueOut.model_validate(entry)
+    client = db.get(User, entry.client_id)
+    data = TokenQueueOut.model_validate(entry)
+    data.client_name = client.full_name if client else None
+    return data
+
+
+@router.delete("/{entry_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_token_queue_entry(
+    entry_id: uuid.UUID,
+    db: Session = Depends(get_db),
+):
+    entry = db.get(QueueEntry, entry_id)
+    if entry is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Token queue entry not found")
+    
+    db.delete(entry)
+    db.commit()
+    return None

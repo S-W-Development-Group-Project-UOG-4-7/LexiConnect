@@ -167,6 +167,7 @@ app.include_router(apprentices.router, prefix="/api")
 # ✅ Bookings + Token queue (kept as you had; do NOT double-prefix blindly)
 app.include_router(bookings.router)
 app.include_router(token_queue.router)
+app.include_router(token_queue.router, prefix="/api")
 
 # ✅ Apprenticeship (main include adds /api)
 app.include_router(apprenticeship_router, prefix="/api")
