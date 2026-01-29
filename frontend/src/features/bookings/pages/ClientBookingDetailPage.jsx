@@ -164,8 +164,7 @@ export default function ClientBookingDetailPage() {
       setDocLoading(true);
       try {
         if (booking?.case_id) {
-          const { data } = await api.get(`/api/documents/by-case/${booking.case_id}`)
-;
+          const { data } = await api.get(`/api/documents/by-case/${booking.case_id}`);
           setDocs(data || []);
         } else {
           const res = await listDocuments(booking.id); // safe use numeric id

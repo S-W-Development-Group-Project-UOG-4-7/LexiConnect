@@ -2,9 +2,6 @@ from sqlalchemy.orm import Session
 from sqlalchemy import desc
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from fastapi import HTTPException, status
-from app.models.user import User
-from app.modules.cases.models import Case
-
 
 from .models import CaseApprentice, ApprenticeCaseNote
 
@@ -96,14 +93,6 @@ def assign_apprentice(db: Session, current_user, case_id: int, apprentice_id: in
     return assignment
 
 
-from sqlalchemy.orm import Session
-from sqlalchemy import desc
-from fastapi import HTTPException, status
-from app.models.user import User
-from app.modules.cases.models import Case
-from .models import CaseApprentice
-
-
 def get_my_assigned_cases(db: Session, current_user):
     if not _is_apprentice(current_user):
         raise HTTPException(
@@ -111,43 +100,13 @@ def get_my_assigned_cases(db: Session, current_user):
             detail="Only apprentices can access this endpoint",
         )
 
-    rows = (
-        db.query(CaseApprentice, User, Case)
-        .join(User, User.id == CaseApprentice.lawyer_id)
-        .join(Case, Case.id == CaseApprentice.case_id)
+    return (
+        db.query(CaseApprentice)
         .filter(CaseApprentice.apprentice_id == current_user.id)
         .order_by(desc(CaseApprentice.created_at))
         .all()
     )
 
-    out = []
-    for ca, lawyer, case in rows:
-        out.append(
-            {
-                "id": ca.id,
-                "case_id": ca.case_id,
-                "lawyer_id": ca.lawyer_id,
-                "apprentice_id": ca.apprentice_id,
-                "created_at": ca.created_at,
-
-                # lawyer info
-                "lawyer_full_name": lawyer.full_name,
-                "lawyer_email": lawyer.email,
-
-                # case info
-                "case_title": case.title,
-                "case_category": case.category,
-                "case_status": case.status,
-                "district": getattr(case, "district", None),
-
-                # ✅ keys frontend will read for "Assigned Lawyer"
-                "supervising_lawyer": lawyer.full_name,
-                "lawyer_name": lawyer.full_name,
-                "lawyer": lawyer.full_name,
-            }
-        )
-
-    return out
 
 def add_note(db: Session, current_user, case_id: int, note: str):
     if not _is_apprentice(current_user):
