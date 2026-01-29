@@ -48,10 +48,11 @@ class AvailabilityTemplateOut(BaseModel):
 
 
 class BookableSlot(BaseModel):
-    start: str
-    end: str
+    start_time: str
+    end_time: str
     branch_id: int | None = None
     branch_name: str | None = None
+    duration_minutes: int | None = None
 
 
 class BookableSlotsByDate(BaseModel):

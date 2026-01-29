@@ -185,14 +185,17 @@ def search_lawyers(
 
     price_subq = None
     if inspector.has_table("service_packages") and inspector.has_table("lawyers"):
-        lawyer_map = db.query(Lawyer.id.label("lawyer_id"), Lawyer.email.label("email")).subquery()
+        lawyer_map = db.query(
+            Lawyer.id.label("lawyer_id"),
+            Lawyer.user_id.label("user_id"),
+        ).subquery()
         price_subq = (
             db.query(
-                lawyer_map.c.email.label("email"),
+                lawyer_map.c.user_id.label("user_id"),
                 func.min(ServicePackage.price).label("starting_price"),
             )
             .join(ServicePackage, ServicePackage.lawyer_id == lawyer_map.c.lawyer_id)
-            .group_by(lawyer_map.c.email)
+            .group_by(lawyer_map.c.user_id)
             .subquery()
         )
 
@@ -225,7 +228,7 @@ def search_lawyers(
     if review_subq is not None:
         data_query = data_query.outerjoin(review_subq, review_subq.c.lawyer_user_id == User.id)
     if price_subq is not None:
-        data_query = data_query.outerjoin(price_subq, price_subq.c.email == User.email)
+        data_query = data_query.outerjoin(price_subq, price_subq.c.user_id == User.id)
     if cases_subq is not None:
         data_query = data_query.outerjoin(cases_subq, cases_subq.c.lawyer_user_id == User.id)
 
@@ -401,7 +404,7 @@ def get_lawyer_public_profile(lawyer_id: int, db: Session = Depends(get_db)):
 
     service_packages: List[ServicePackagePublicOut] = []
     if inspector.has_table("service_packages") and inspector.has_table("lawyers"):
-        lawyer_row = db.query(Lawyer).filter(Lawyer.email == user.email).first()
+        lawyer_row = db.query(Lawyer).filter(Lawyer.user_id == user.id).first()
         if lawyer_row:
             packages = (
                 db.query(ServicePackage)
@@ -467,7 +470,7 @@ def get_lawyer_by_user_id(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Map a users.id to the corresponding lawyers.id via email."""
+    """Map a users.id to the corresponding lawyer profile (users.id is the public lawyer id)."""
     if current_user.role not in {UserRole.client, UserRole.lawyer, UserRole.admin}:
         raise HTTPException(status_code=403, detail="Not authorized")
 
@@ -475,11 +478,11 @@ def get_lawyer_by_user_id(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    lawyer = db.query(Lawyer).filter(Lawyer.email == user.email).first()
+    lawyer = db.query(Lawyer).filter(Lawyer.user_id == user.id).first()
     if not lawyer:
         raise HTTPException(status_code=404, detail="Lawyer profile not found for this user")
 
-    return {"lawyer_id": lawyer.id, "email": user.email}
+    return {"lawyer_id": user.id, "email": user.email}
 
 
 @router.get("/{lawyer_id}/service-packages")
@@ -487,10 +490,13 @@ def get_service_packages_for_lawyer(
     lawyer_id: int,
     db: Session = Depends(get_db),
 ):
-    """Return ACTIVE service packages for a given lawyers.id."""
+    """Return ACTIVE service packages for a given users.id."""
+    lawyer_row = db.query(Lawyer).filter(Lawyer.user_id == lawyer_id).first()
+    if not lawyer_row:
+        raise HTTPException(status_code=404, detail="Lawyer profile not found")
     packages = (
         db.query(ServicePackage)
-        .filter(ServicePackage.lawyer_id == lawyer_id)
+        .filter(ServicePackage.lawyer_id == lawyer_row.id)
         .filter(ServicePackage.active == True)
         .order_by(ServicePackage.id.asc())
         .all()
@@ -499,7 +505,7 @@ def get_service_packages_for_lawyer(
     return [
         {
             "id": p.id,
-            "lawyer_id": p.lawyer_id,
+            "lawyer_id": lawyer_id,
             "name": p.name,
             "description": p.description,
             "price": float(p.price),

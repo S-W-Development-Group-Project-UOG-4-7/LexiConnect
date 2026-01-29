@@ -113,6 +113,7 @@ def seed_lawyer_records(db: Session):
             continue
 
         lawyer = Lawyer(
+            user_id=user.id,
             name=user.full_name,
             email=user.email,
         )
@@ -174,7 +175,7 @@ def seed_demo_branches(db: Session):
     for template in templates:
         exists = (
             db.query(Branch)
-            .filter(Branch.lawyer_id == lawyer.id, Branch.name == template["name"])
+            .filter(Branch.user_id == lawyer.user_id, Branch.name == template["name"])
             .first()
         )
         if exists:
@@ -183,7 +184,7 @@ def seed_demo_branches(db: Session):
 
         db.add(
             Branch(
-                lawyer_id=lawyer.id,
+                user_id=lawyer.user_id,
                 name=template["name"],
                 district=template["district"],
                 city=template["city"],
@@ -196,7 +197,7 @@ def seed_demo_branches(db: Session):
         db.commit()
 
     print(
-        f"[SEED] Branches -> created={created}, skipped={skipped} for lawyer_id={lawyer.id}"
+        f"[SEED] Branches -> created={created}, skipped={skipped} for user_id={lawyer.user_id}"
     )
 
 

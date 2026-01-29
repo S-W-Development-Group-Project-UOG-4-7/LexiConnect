@@ -6,7 +6,7 @@ from datetime import time
 
 from ..database import get_db
 from ..models.availability_template import AvailabilityTemplate
-from ..models.lawyer import Lawyer
+from ..models.user import User, UserRole
 from ..models.branch import Branch
 from pydantic import BaseModel
 
@@ -92,8 +92,12 @@ def get_lawyer_availability(lawyer_id: int, db: Session = Depends(get_db)):
     """Get all availability for a lawyer"""
     
     # Verify lawyer exists
-    lawyer = db.query(Lawyer).filter(Lawyer.id == lawyer_id).first()
-    if not lawyer:
+    lawyer_user = (
+        db.query(User)
+        .filter(User.id == lawyer_id, User.role == UserRole.lawyer)
+        .first()
+    )
+    if not lawyer_user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Lawyer not found"
@@ -134,8 +138,12 @@ def create_weekly_availability(
     """Create a new weekly availability template"""
     
     # Verify lawyer exists
-    lawyer = db.query(Lawyer).filter(Lawyer.id == lawyer_id).first()
-    if not lawyer:
+    lawyer_user = (
+        db.query(User)
+        .filter(User.id == lawyer_id, User.role == UserRole.lawyer)
+        .first()
+    )
+    if not lawyer_user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Lawyer not found"

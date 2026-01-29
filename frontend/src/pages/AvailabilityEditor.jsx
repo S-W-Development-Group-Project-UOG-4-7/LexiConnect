@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import './availability-ui.css';
 import WeeksStepper from '../components/WeeksStepper';
@@ -37,6 +38,7 @@ const TimeField = ({ label, value, onChange, error }) => (
 );
 
 const AvailabilityEditor = () => {
+  const navigate = useNavigate();
   const [wizardStep, setWizardStep] = useState(1);
   const [wizardData, setWizardData] = useState({
     days: [],
@@ -141,9 +143,9 @@ const AvailabilityEditor = () => {
     const fetchBranches = async () => {
       try {
         setLoadingBranches(true);
-        const url = '/api/branches';
+        const url = '/api/branches/me';
         console.log('[availability] fetching branches from', url, 'base', api.defaults.baseURL);
-        const { data } = await api.get('/api/branches');
+        const { data } = await api.get(url);
         setBranches(data || []);
       } catch (err) {
         const detail =
@@ -448,7 +450,9 @@ const AvailabilityEditor = () => {
                 onClick={() => setWizardData((p) => ({ ...p, branchId: branch.id != null ? Number(branch.id) : null }))}
               >
                 <span className="location-name">{branch.name}</span>
-                {branch.address && <span className="location-desc">{branch.address}</span>}
+                <span className="location-desc">
+                  {[branch.address, branch.city, branch.district].filter(Boolean).join(', ') || '—'}
+                </span>
               </button>
             ))}
             {loadingBranches && (
@@ -456,10 +460,14 @@ const AvailabilityEditor = () => {
             )}
             {!loadingBranches && branches.length === 0 && (
               <div className="location-empty">
-                No branches found. Create one first (e.g., via POST /api/branches or run seed_branches.py).
+                No branches yet. Create a branch to set availability.
                 <div className="location-actions">
-                  <button className="ghost-btn small" type="button" onClick={() => window.location.reload()}>
-                    Refresh
+                  <button
+                    className="cta-btn small"
+                    type="button"
+                    onClick={() => navigate('/lawyer/branches')}
+                  >
+                    Create Branch
                   </button>
                 </div>
               </div>

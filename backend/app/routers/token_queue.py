@@ -145,10 +145,7 @@ def list_token_queue_entries(
 
     # Lawyers can only see their own queue
     if current_user.role == UserRole.lawyer:
-        from app.modules.branches.service import get_lawyer_by_user
-        lawyer = get_lawyer_by_user(db, current_user.email)
-        if lawyer:
-            stmt = stmt.where(QueueEntry.lawyer_id == lawyer.id)
+        stmt = stmt.where(QueueEntry.lawyer_id == current_user.id)
 
     if date is not None:
         stmt = stmt.where(QueueEntry.date == date)

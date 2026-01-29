@@ -131,7 +131,7 @@ export const rejectBooking = async (id) => {
 };
 
 /**
- * Public: list active service packages for a lawyer
+ * Public: list active service packages for a lawyer (users.id)
  * @param {number} lawyerId
  * @returns {Promise<Array>}
  */
@@ -141,7 +141,7 @@ export const getLawyerServicePackages = async (lawyerId) => {
 };
 
 /**
- * Map a user_id (users table) to a lawyers.id row.
+ * Map a user_id (users table) to a lawyer profile (returns users.id).
  * @param {number} userId
  * @returns {Promise<number>} lawyer_id
  */

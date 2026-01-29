@@ -31,3 +31,5 @@ class User(Base):
         cascade="all, delete-orphan",
         foreign_keys="Booking.client_id",
     )
+
+    

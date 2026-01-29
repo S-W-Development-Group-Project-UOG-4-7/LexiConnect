@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
   getBookingById,
-  getLawyerIdByUser,
   getLawyerServicePackages,
 } from "../../../services/bookings";
 import { listDocuments } from "../../documents/services/documents.service";
@@ -126,9 +125,7 @@ export default function ClientBookingDetailPage() {
           booking.case_id ? api.get(`/api/cases/${booking.case_id}`) : Promise.resolve(null),
           booking.service_package_id ? getLawyerServicePackages(booking.lawyer_id) : Promise.resolve([]),
           booking.branch_id
-            ? getLawyerIdByUser(booking.lawyer_id)
-                .then((lawyerId) => (lawyerId ? api.get(`/api/branches?lawyer_id=${lawyerId}`) : null))
-                .catch(() => null)
+            ? api.get(`/api/branches?lawyer_id=${booking.lawyer_id}`)
             : Promise.resolve(null),
         ]);
 

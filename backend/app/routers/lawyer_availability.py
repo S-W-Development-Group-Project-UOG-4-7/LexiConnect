@@ -10,9 +10,7 @@ from app.models.user import User, UserRole
 from app.models.lawyer_availability import WeeklyAvailability, WeekDay
 from app.modules.blackouts.models import BlackoutDay
 from app.models.branch import Branch
-from app.models.lawyer import Lawyer
 from app.routers.auth import get_current_user
-from app.modules.branches.service import get_lawyer_by_user
 
 # ---------------------------------------------------------------------------
 # Canonical tables for availability in this phase:
@@ -115,11 +113,6 @@ def _require_lawyer(user: User):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only lawyers can access this resource")
 
 
-def _current_lawyer(db: Session, current_user: User):
-    # Branches/weekly availability are keyed to the Lawyer table (FK)
-    return get_lawyer_by_user(db, current_user.email)
-
-
 def _to_weekday(day_str: str) -> WeekDay:
     DAY_TO_ENUM = {
         "MON": WeekDay.MONDAY,
@@ -147,13 +140,13 @@ def _to_weekday(day_str: str) -> WeekDay:
     return DAY_TO_ENUM[key]
 
 
-def _branch_for_lawyer(db: Session, branch_id: Optional[int], lawyer_id: int) -> Optional[Branch]:
+def _branch_for_lawyer(db: Session, branch_id: Optional[int], user_id: int) -> Optional[Branch]:
     if branch_id is None:
         raise HTTPException(status_code=400, detail="branch_id is required")
     branch = db.query(Branch).filter(Branch.id == branch_id).first()
     if not branch:
         raise HTTPException(status_code=404, detail="Branch not found")
-    if branch.lawyer_id and branch.lawyer_id != lawyer_id:
+    if branch.user_id and branch.user_id != user_id:
         raise HTTPException(status_code=403, detail="Branch does not belong to this lawyer")
     return branch
 
@@ -185,11 +178,10 @@ def get_my_availability(
     current_user: User = Depends(get_current_user),
 ):
     _require_lawyer(current_user)
-    lawyer = _current_lawyer(db, current_user)
 
     weekly_rows = (
         db.query(WeeklyAvailability)
-        .filter(WeeklyAvailability.lawyer_id == lawyer.id)
+        .filter(WeeklyAvailability.user_id == current_user.id)
         .order_by(WeeklyAvailability.day_of_week, WeeklyAvailability.start_time)
         .all()
     )
@@ -218,7 +210,7 @@ def get_my_availability(
         BlackoutOut(id=str(b.id), date=b.date, reason=b.reason) for b in blackout_rows
     ]
 
-    branches = db.query(Branch).filter(Branch.lawyer_id == lawyer.id).all()
+    branches = db.query(Branch).filter(Branch.user_id == current_user.id).all()
     branch_out = [
         {"id": b.id, "name": b.name, "district": b.district, "city": b.city} for b in branches
     ]
@@ -233,14 +225,13 @@ def list_weekly(
     current_user: User = Depends(get_current_user),
 ):
     _require_lawyer(current_user)
-    lawyer = _current_lawyer(db, current_user)
-    target_id = lawyer_id or lawyer.id
-    if target_id != lawyer.id:
+    target_id = lawyer_id or current_user.id
+    if target_id != current_user.id:
         raise HTTPException(status_code=403, detail="Cannot view another lawyer's availability")
 
     weekly_rows = (
         db.query(WeeklyAvailability)
-        .filter(WeeklyAvailability.lawyer_id == target_id)
+        .filter(WeeklyAvailability.user_id == target_id)
         .order_by(WeeklyAvailability.day_of_week, WeeklyAvailability.start_time)
         .all()
     )
@@ -266,11 +257,10 @@ def list_branches(
     current_user: User = Depends(get_current_user),
 ):
     _require_lawyer(current_user)
-    lawyer = _current_lawyer(db, current_user)
-    target_id = lawyer_id or lawyer.id
-    if target_id != lawyer.id:
+    target_id = lawyer_id or current_user.id
+    if target_id != current_user.id:
         raise HTTPException(status_code=403, detail="Cannot view another lawyer's branches")
-    branches = db.query(Branch).filter(Branch.lawyer_id == target_id).all()
+    branches = db.query(Branch).filter(Branch.user_id == target_id).all()
     return [{"id": b.id, "name": b.name, "district": b.district, "city": b.city} for b in branches]
 
 
@@ -306,8 +296,7 @@ def create_weekly_slot(
     Ignores any client-supplied lawyer_id and uses the JWT user instead.
     """
     _require_lawyer(current_user)
-    lawyer = _current_lawyer(db, current_user)
-    target_id = lawyer.id
+    target_id = current_user.id
 
     print("[availability] create_weekly_slot payload", payload.model_dump())
 
@@ -333,7 +322,7 @@ def create_weekly_slot(
         existing = (
             db.query(WeeklyAvailability)
             .filter(
-                WeeklyAvailability.lawyer_id == target_id,
+                WeeklyAvailability.user_id == target_id,
                 WeeklyAvailability.branch_id == payload.branch_id,
                 WeeklyAvailability.day_of_week == weekday,
                 WeeklyAvailability.start_time == payload.start_time,
@@ -349,7 +338,7 @@ def create_weekly_slot(
             )
 
         entry = WeeklyAvailability(
-            lawyer_id=target_id,
+            user_id=target_id,
             branch_id=payload.branch_id,
             location=location_value,
             day_of_week=weekday,
@@ -389,10 +378,9 @@ def update_weekly_slot(
     current_user: User = Depends(get_current_user),
 ):
     _require_lawyer(current_user)
-    lawyer = _current_lawyer(db, current_user)
     entry = (
         db.query(WeeklyAvailability)
-        .filter(WeeklyAvailability.id == entry_id, WeeklyAvailability.lawyer_id == lawyer.id)
+        .filter(WeeklyAvailability.id == entry_id, WeeklyAvailability.user_id == current_user.id)
         .first()
     )
     if not entry:
@@ -408,7 +396,7 @@ def update_weekly_slot(
         updates["day_of_week"] = _to_weekday(updates["day_of_week"])
 
     target_branch_id = updates.get("branch_id", entry.branch_id)
-    branch = _branch_for_lawyer(db, target_branch_id, lawyer.id)
+    branch = _branch_for_lawyer(db, target_branch_id, current_user.id)
 
     start_time = updates.get("start_time", entry.start_time)
     end_time = updates.get("end_time", entry.end_time)
@@ -442,10 +430,9 @@ def delete_weekly_slot(
     current_user: User = Depends(get_current_user),
 ):
     _require_lawyer(current_user)
-    lawyer = _current_lawyer(db, current_user)
     entry = (
         db.query(WeeklyAvailability)
-        .filter(WeeklyAvailability.id == entry_id, WeeklyAvailability.lawyer_id == lawyer.id)
+        .filter(WeeklyAvailability.id == entry_id, WeeklyAvailability.user_id == current_user.id)
         .first()
     )
     if not entry:
@@ -558,22 +545,25 @@ def preview_slots(
 
     # Determine target lawyer
     if current_user.role == UserRole.lawyer:
-        lawyer_row = _current_lawyer(db, current_user)
-        target_lawyer_id = lawyer_id or lawyer_row.id
-        if target_lawyer_id != lawyer_row.id:
+        target_lawyer_id = lawyer_id or current_user.id
+        if target_lawyer_id != current_user.id:
             raise HTTPException(status_code=403, detail="Cannot view another lawyer's slots")
     else:
         if lawyer_id is None:
             raise HTTPException(status_code=422, detail="lawyer_id is required")
         target_lawyer_id = lawyer_id
-        lawyer_row = db.query(Lawyer).filter(Lawyer.id == target_lawyer_id).first()
-        if not lawyer_row:
+        target_user = (
+            db.query(User)
+            .filter(User.id == target_lawyer_id, User.role == UserRole.lawyer)
+            .first()
+        )
+        if not target_user:
             raise HTTPException(status_code=404, detail="Lawyer not found")
 
-    # weekly availability uses lawyer_id (Lawyer table id)
+    # weekly availability uses user_id (users table id)
     weekly_rows = (
         db.query(WeeklyAvailability)
-        .filter(WeeklyAvailability.lawyer_id == target_lawyer_id, WeeklyAvailability.is_active.is_(True))
+        .filter(WeeklyAvailability.user_id == target_lawyer_id, WeeklyAvailability.is_active.is_(True))
         .all()
     )
 
@@ -582,7 +572,7 @@ def preview_slots(
         key = row.day_of_week.name.upper()
         weekly_by_day.setdefault(key, []).append(row)
 
-    branch_map = {b.id: b for b in db.query(Branch).filter(Branch.lawyer_id == target_lawyer_id).all()}
+    branch_map = {b.id: b for b in db.query(Branch).filter(Branch.user_id == target_lawyer_id).all()}
 
     # ✅ optional: ignore blackouts for now (per your message)
     blackout_dates = set()
