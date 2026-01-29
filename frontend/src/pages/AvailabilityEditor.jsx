@@ -363,6 +363,7 @@ const AvailabilityEditor = () => {
         return next;
       });
       setSelectedSlot(null);
+      await loadAvailabilityData();
     } catch (err) {
       if (handleAuthFailure(err, (msg) => setCancelError(msg))) return;
       if (err?.response?.status === 400) {
@@ -653,26 +654,16 @@ const AvailabilityEditor = () => {
         return sundayIdx === weekday;
       });
       if (matches.length) {
-        const daySlots = [];
-        matches.forEach((m) => {
-          const occurrence = {
-            ...m,
-            date: dateKey,
-            startLabel: (m.start_time || '').slice(0, 5) || '--:--',
-            endLabel: (m.end_time || '').slice(0, 5) || '--:--',
-          };
-          const occurrenceKey = slotKey(occurrence, dateKey);
-          if (!cancelledSlotKeys.has(occurrenceKey)) {
-            daySlots.push(occurrence);
-          }
-        });
-        if (daySlots.length) {
-          occurrences[dateKey] = daySlots;
-        }
+        occurrences[dateKey] = matches.map((m) => ({
+          ...m,
+          date: dateKey,
+          startLabel: (m.start_time || '').slice(0, 5) || '--:--',
+          endLabel: (m.end_time || '').slice(0, 5) || '--:--',
+        }));
       }
     }
     return occurrences;
-  }, [availabilities, viewDate, blackoutDates, cancelledSlotKeys]);
+  }, [availabilities, viewDate, blackoutDates]);
 
   const filteredMonthlyOccurrences = useMemo(() => {
     if (wizardData.repeatMode === 'until') {
@@ -687,11 +678,7 @@ const AvailabilityEditor = () => {
     );
   }, [monthlyOccurrences, wizardData.repeatMode, untilDate, weeksLimitISO]);
 
-  const getSlotsForDate = (date) => {
-    if (!date) return [];
-    const slots = filteredMonthlyOccurrences[date] || [];
-    return slots.filter((s) => !cancelledSlotKeys.has(slotKey(s, date)));
-  };
+  const getSlotsForDate = (date) => (date ? filteredMonthlyOccurrences[date] || [] : []);
 
   useEffect(() => {
     if (!selectedDate) return;
