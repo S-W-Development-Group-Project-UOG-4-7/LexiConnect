@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useLocation } from "react-router-dom";
 import {
   assignApprenticeToCase,
   fetchCaseNotesForLawyer,
@@ -7,6 +8,19 @@ import {
 } from "../api/apprenticeshipApi";
 
 export default function LawyerApprenticesPage() {
+  const location = useLocation();
+
+  const initialTab = useMemo(() => {
+    const t = location?.state?.tab;
+    return t === "notes" ? "notes" : "assign";
+  }, [location?.state?.tab]);
+
+  const [tab, setTab] = useState(initialTab);
+
+  useEffect(() => {
+    setTab(initialTab);
+  }, [initialTab]);
+
   // Dropdown data
   const [apprentices, setApprentices] = useState([]);
   const [cases, setCases] = useState([]);
@@ -81,10 +95,6 @@ export default function LawyerApprenticesPage() {
       setOk("Apprentice assigned successfully.");
       setApprenticeId("");
       setCaseId("");
-
-      // Optional: refresh cases list (if assignment affects what you want to view later)
-      // const cs = await fetchCaseChoices();
-      // setCases(Array.isArray(cs) ? cs : []);
     } catch (e) {
       setErr(e?.response?.data?.detail || "Failed to assign apprentice.");
     } finally {
@@ -116,6 +126,32 @@ export default function LawyerApprenticesPage() {
         <p className="text-slate-300 mt-2">
           Assign apprentices to cases and review internal notes.
         </p>
+
+        {/* Tabs */}
+        <div className="mt-5 flex gap-2">
+          <button
+            onClick={() => setTab("assign")}
+            className={[
+              "px-4 py-2 rounded-lg border text-sm font-semibold",
+              tab === "assign"
+                ? "bg-amber-500 text-white border-amber-400/50"
+                : "bg-slate-950/30 text-slate-200 border-slate-700/60 hover:bg-slate-800/40",
+            ].join(" ")}
+          >
+            Assign
+          </button>
+          <button
+            onClick={() => setTab("notes")}
+            className={[
+              "px-4 py-2 rounded-lg border text-sm font-semibold",
+              tab === "notes"
+                ? "bg-amber-500 text-white border-amber-400/50"
+                : "bg-slate-950/30 text-slate-200 border-slate-700/60 hover:bg-slate-800/40",
+            ].join(" ")}
+          >
+            Notes
+          </button>
+        </div>
       </div>
 
       {/* Dropdown load status */}
@@ -126,39 +162,107 @@ export default function LawyerApprenticesPage() {
       )}
 
       {/* Assign */}
-      <div className="bg-slate-900/40 border border-slate-700/60 rounded-2xl p-6 text-white">
-        <h2 className="text-xl font-semibold">Assign apprentice to case</h2>
+      {tab === "assign" && (
+        <div className="bg-slate-900/40 border border-slate-700/60 rounded-2xl p-6 text-white">
+          <h2 className="text-xl font-semibold">Assign apprentice to case</h2>
+          <p className="text-slate-300 text-sm mt-1">
+            Select an apprentice and a case to assign.
+          </p>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-          <label className="text-sm text-slate-200">
-            Apprentice
-            <select
-              className="mt-2 w-full rounded-lg bg-slate-950/30 border border-slate-700/60 px-4 py-3 text-white outline-none focus:border-amber-400/70 focus:ring-2 focus:ring-amber-400/30"
-              value={apprenticeId}
-              onChange={(e) => setApprenticeId(e.target.value)}
-              disabled={choicesLoading}
-            >
-              <option value="">
-                {choicesLoading ? "Loading apprentices..." : "Select an apprentice"}
-              </option>
-              {apprentices.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {apprenticeLabel(a)}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+            <label className="text-sm text-slate-200">
+              Apprentice
+              <select
+                className="mt-2 w-full rounded-lg bg-slate-950/30 border border-slate-700/60 px-4 py-3 text-white outline-none focus:border-amber-400/70 focus:ring-2 focus:ring-amber-400/30"
+                value={apprenticeId}
+                onChange={(e) => setApprenticeId(e.target.value)}
+                disabled={choicesLoading}
+              >
+                <option value="">
+                  {choicesLoading ? "Loading apprentices..." : "Select an apprentice"}
                 </option>
-              ))}
-            </select>
-          </label>
+                {apprentices.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {apprenticeLabel(a)}
+                  </option>
+                ))}
+              </select>
+            </label>
 
-          <label className="text-sm text-slate-200">
-            Case
+            <label className="text-sm text-slate-200">
+              Case
+              <select
+                className="mt-2 w-full rounded-lg bg-slate-950/30 border border-slate-700/60 px-4 py-3 text-white outline-none focus:border-amber-400/70 focus:ring-2 focus:ring-amber-400/30"
+                value={caseId}
+                onChange={(e) => setCaseId(e.target.value)}
+                disabled={choicesLoading}
+              >
+                <option value="">
+                  {choicesLoading ? "Loading cases..." : "Select a case"}
+                </option>
+                {cases.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {caseLabel(c)}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+          {ok && (
+            <div className="mt-4 rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">
+              {ok}
+            </div>
+          )}
+
+          {err && (
+            <div className="mt-4 rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+              {err}
+            </div>
+          )}
+
+          <div className="mt-5 flex gap-3">
+            <button
+              onClick={handleAssign}
+              disabled={assignLoading || !apprenticeId || !caseId || choicesLoading}
+              className="rounded-lg bg-amber-500 px-6 py-3 font-semibold text-white hover:bg-amber-400 disabled:opacity-60"
+            >
+              {assignLoading ? "Assigning..." : "Assign Apprentice"}
+            </button>
+
+            <button
+              onClick={() => {
+                setApprenticeId("");
+                setCaseId("");
+                setErr("");
+                setOk("");
+              }}
+              className="rounded-lg bg-slate-800 border border-slate-700 px-6 py-3 font-semibold text-white hover:bg-slate-700"
+              disabled={assignLoading}
+            >
+              Clear
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Notes */}
+      {tab === "notes" && (
+        <div className="bg-slate-900/40 border border-slate-700/60 rounded-2xl p-6 text-white">
+          <h2 className="text-xl font-semibold">View notes by Case</h2>
+          <p className="text-slate-300 text-sm mt-1">
+            Notes are visible only to lawyers and apprentices (not clients).
+          </p>
+
+          <div className="mt-4 flex flex-col md:flex-row gap-3">
             <select
-              className="mt-2 w-full rounded-lg bg-slate-950/30 border border-slate-700/60 px-4 py-3 text-white outline-none focus:border-amber-400/70 focus:ring-2 focus:ring-amber-400/30"
-              value={caseId}
-              onChange={(e) => setCaseId(e.target.value)}
+              className="w-full md:max-w-2xl rounded-lg bg-slate-950/30 border border-slate-700/60 px-4 py-3 text-white outline-none focus:border-amber-400/70 focus:ring-2 focus:ring-amber-400/30"
+              value={notesCaseId}
+              onChange={(e) => setNotesCaseId(e.target.value)}
               disabled={choicesLoading}
             >
               <option value="">
-                {choicesLoading ? "Loading cases..." : "Select a case"}
+                {choicesLoading ? "Loading cases..." : "Select a case to view notes"}
               </option>
               {cases.map((c) => (
                 <option key={c.id} value={c.id}>
@@ -166,103 +270,67 @@ export default function LawyerApprenticesPage() {
                 </option>
               ))}
             </select>
-          </label>
-        </div>
 
-        {ok && (
-          <div className="mt-4 rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">
-            {ok}
+            <button
+              onClick={handleLoadNotes}
+              disabled={notesLoading || !notesCaseId || choicesLoading}
+              className="rounded-lg bg-slate-800 border border-slate-700 px-6 py-3 font-semibold text-white hover:bg-slate-700 disabled:opacity-60"
+            >
+              {notesLoading ? "Loading..." : "Load Notes"}
+            </button>
           </div>
-        )}
 
-        {err && (
-          <div className="mt-4 rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-200">
-            {err}
-          </div>
-        )}
+          {selectedCaseForNotes && (
+            <div className="mt-3 text-slate-300 text-sm">
+              Selected:{" "}
+              <span className="text-white">{selectedCaseForNotes.title}</span>
+              {selectedCaseForNotes.district ? (
+                <>
+                  {" "}
+                  •{" "}
+                  <span className="text-slate-200">
+                    {selectedCaseForNotes.district}
+                  </span>
+                </>
+              ) : null}
+            </div>
+          )}
 
-        <button
-          onClick={handleAssign}
-          disabled={assignLoading || !apprenticeId || !caseId || choicesLoading}
-          className="mt-5 rounded-lg bg-amber-500 px-6 py-3 font-semibold text-white hover:bg-amber-400 disabled:opacity-60"
-        >
-          {assignLoading ? "Assigning..." : "Assign Apprentice"}
-        </button>
-      </div>
+          {notesErr && (
+            <div className="mt-4 rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+              {notesErr}
+            </div>
+          )}
 
-      {/* Notes Viewer (NOW by Case Name via dropdown) */}
-      <div className="bg-slate-900/40 border border-slate-700/60 rounded-2xl p-6 text-white">
-        <h2 className="text-xl font-semibold">View notes by Case</h2>
+          {!notesLoading && !notesErr && notesCaseId && notes.length === 0 && (
+            <div className="mt-4 text-slate-300">No notes found.</div>
+          )}
 
-        <div className="mt-4 flex flex-col md:flex-row gap-3">
-          <select
-            className="w-full md:max-w-2xl rounded-lg bg-slate-950/30 border border-slate-700/60 px-4 py-3 text-white outline-none focus:border-amber-400/70 focus:ring-2 focus:ring-amber-400/30"
-            value={notesCaseId}
-            onChange={(e) => setNotesCaseId(e.target.value)}
-            disabled={choicesLoading}
-          >
-            <option value="">
-              {choicesLoading ? "Loading cases..." : "Select a case to view notes"}
-            </option>
-            {cases.map((c) => (
-              <option key={c.id} value={c.id}>
-                {caseLabel(c)}
-              </option>
-            ))}
-          </select>
+          {!notesLoading && notes.length > 0 && (
+            <div className="mt-5 space-y-3">
+              {notes.map((n) => {
+                const id = n.id ?? `${n.created_at}-${Math.random()}`;
+                const text = n.text ?? n.note ?? "";
+                const ts = n.created_at ?? n.createdAt ?? "";
+                const apprentice = n.apprentice_id ?? n.apprenticeId ?? null;
 
-          <button
-            onClick={handleLoadNotes}
-            disabled={notesLoading || !notesCaseId || choicesLoading}
-            className="rounded-lg bg-slate-800 border border-slate-700 px-6 py-3 font-semibold text-white hover:bg-slate-700 disabled:opacity-60"
-          >
-            {notesLoading ? "Loading..." : "Load Notes"}
-          </button>
-        </div>
-
-        {selectedCaseForNotes && (
-          <div className="mt-3 text-slate-300 text-sm">
-            Selected: <span className="text-white">{selectedCaseForNotes.title}</span>
-            {selectedCaseForNotes.district ? (
-              <> • <span className="text-slate-200">{selectedCaseForNotes.district}</span></>
-            ) : null}
-          </div>
-        )}
-
-        {notesErr && (
-          <div className="mt-4 rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-200">
-            {notesErr}
-          </div>
-        )}
-
-        {!notesLoading && !notesErr && notesCaseId && notes.length === 0 && (
-          <div className="mt-4 text-slate-300">No notes found.</div>
-        )}
-
-        {!notesLoading && notes.length > 0 && (
-          <div className="mt-5 space-y-3">
-            {notes.map((n) => {
-              const id = n.id ?? `${n.created_at}-${Math.random()}`;
-              const text = n.text ?? n.note ?? "";
-              const ts = n.created_at ?? n.createdAt ?? "";
-              const apprentice = n.apprentice_id ?? n.apprenticeId ?? null;
-
-              return (
-                <div
-                  key={id}
-                  className="rounded-xl border border-slate-700/60 bg-slate-950/30 p-4"
-                >
-                  <div className="text-slate-200">{text}</div>
-                  <div className="text-slate-500 text-xs mt-2">
-                    {ts ? ts : ""}
-                    {apprentice ? ` • Apprentice #${apprentice}` : ""}
+                return (
+                  <div
+                    key={id}
+                    className="rounded-xl border border-slate-700/60 bg-slate-950/30 p-4"
+                  >
+                    <div className="text-slate-200">{text}</div>
+                    <div className="text-slate-500 text-xs mt-2">
+                      {ts ? ts : ""}
+                      {apprentice ? ` Apprentice #${apprentice}` : ""}
+                    </div>
                   </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

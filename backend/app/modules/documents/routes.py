@@ -111,6 +111,25 @@ def _attach_comment_meta(db: Session, docs: List):
     return docs
 
 
+def _file_url(file_path: Optional[str]) -> Optional[str]:
+    if not file_path:
+        return None
+    path = file_path.replace("\\", "/")
+    if "/uploads/" in path:
+        path = path.split("/uploads/", 1)[1]
+    if path.startswith("/"):
+        path = path[1:]
+    if path.startswith("uploads/"):
+        return f"/{path}"
+    return f"/uploads/{path}"
+
+
+def _attach_file_urls(docs: List):
+    for doc in docs or []:
+        setattr(doc, "file_url", _file_url(getattr(doc, "file_path", None)))
+    return docs
+
+
 # -------------------------
 # CASE routes MUST come first
 # -------------------------
@@ -128,14 +147,15 @@ def list_case_documents(
         raise HTTPException(status_code=403, detail="Not allowed")
 
     docs = get_documents_by_case(db, case_id)
-    return _attach_comment_meta(db, docs)
+    _attach_comment_meta(db, docs)
+    return _attach_file_urls(docs)
 
 
 @router.post("/by-case/{case_id}", response_model=DocumentOut, status_code=status.HTTP_201_CREATED)
 def upload_case_document(
     case_id: int,
+    title: str = Form(...),
     file_name: Optional[str] = Form(None),
-    title: Optional[str] = Form(None),
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -148,19 +168,22 @@ def upload_case_document(
         raise HTTPException(status_code=403, detail="Not allowed")
 
     safe_title = (title or file_name or file.filename or "Untitled").strip()
-    file_path = save_upload(file)
-
-    doc = create_document_for_case(
-        db,
-        case_id=case_id,
-        title=safe_title,
-        file_path=file_path,
-        uploaded_by_user_id=current_user.id,
-        uploaded_by_role=_role_str(current_user),
-        original_filename=file.filename or safe_title,
-    )
+    try:
+        file_path = save_upload(file)
+        doc = create_document_for_case(
+            db,
+            case_id=case_id,
+            title=safe_title,
+            file_path=file_path,
+            uploaded_by_user_id=current_user.id,
+            uploaded_by_role=_role_str(current_user),
+            original_filename=file.filename or safe_title,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to upload document: {e}")
 
     _attach_comment_meta(db, [doc])
+    _attach_file_urls([doc])
     return doc
 
 
@@ -208,7 +231,8 @@ def get_documents(
     _ensure_can_access_booking_docs(current_user, booking)
 
     docs = list_documents(db, booking_id=booking_id)
-    return _attach_comment_meta(db, docs)
+    _attach_comment_meta(db, docs)
+    return _attach_file_urls(docs)
 
 
 @router.get("/{doc_id}", response_model=DocumentOut)
@@ -225,6 +249,7 @@ def get_document_by_id(
     _ensure_can_access_booking_docs(current_user, booking)
 
     _attach_comment_meta(db, [doc])
+    _attach_file_urls([doc])
     return doc
 
 

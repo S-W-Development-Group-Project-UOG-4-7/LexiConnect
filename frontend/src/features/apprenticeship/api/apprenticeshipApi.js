@@ -31,7 +31,10 @@ export const addApprenticeCaseNote = async (caseId, text) => {
 
 // ✅ Lawyer
 export const assignApprenticeToCase = async ({ case_id, apprentice_id }) => {
-  const res = await api.post("/api/apprenticeship/assign", { case_id, apprentice_id });
+  const res = await api.post("/api/apprenticeship/assign", {
+    case_id,
+    apprentice_id,
+  });
   return res.data;
 };
 
@@ -40,13 +43,27 @@ export const fetchCaseNotesForLawyer = async (caseId) => {
   return res.data;
 };
 
+// ✅ Dropdown: lawyer approved cases
+export const fetchLawyerCases = async () => {
+  const res = await api.get("/api/lawyer/cases");
+  return res.data;
+};
+
+// ✅ Search apprentices
+export const searchApprentices = async (query) => {
+  const res = await api.get("/api/apprentices/search", {
+    params: { q: query },
+  });
+  return res.data;
+};
+
 // ✅ NEW: dropdown choices
 export const fetchApprenticeChoices = async () => {
   const res = await api.get("/api/apprenticeship/choices/apprentices");
-  return res.data; // [{id, full_name, email}]
+  return res.data; // [{ id, full_name, email }]
 };
 
 export const fetchCaseChoices = async () => {
   const res = await api.get("/api/apprenticeship/choices/cases");
-  return res.data; // [{id, title, district, status, category}]
+  return res.data; // [{ id, title, district, status, category }]
 };

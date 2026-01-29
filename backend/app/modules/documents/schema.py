@@ -27,6 +27,7 @@ class DocumentOut(BaseModel):
     case_id: Optional[int] = None
     title: Optional[str] = None
     file_path: str
+    file_url: Optional[str] = None
     uploaded_at: datetime
     comment_count: int = 0
     latest_comment: Optional[DocumentCommentOut] = None
