@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { submitKyc, getMyKyc } from "../services/lawyerKyc.service";
+import { submitKyc, getMyKycStatus } from "../services/lawyerKyc.service";
 import "../../../pages/lawyer-ui.css";
 
 function LawyerKYC() {
@@ -19,8 +19,8 @@ function LawyerKYC() {
   useEffect(() => {
     const fetchMyKyc = async () => {
       try {
-        const res = await getMyKyc();
-        if (res?.data?.status) setKycStatus(res.data.status);
+        const status = await getMyKycStatus();
+        setKycStatus(status);
       } catch {
         setKycStatus("not_submitted");
       }

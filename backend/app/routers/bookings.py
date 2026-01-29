@@ -96,6 +96,31 @@ def list_my_bookings(
     return [BookingOut.model_validate(b) for b in bookings]
 
 
+@router.get("", response_model=list[BookingOut])
+def list_bookings(
+    case_id: int | None = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    if case_id is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="case_id is required")
+
+    q = db.query(Booking).filter(Booking.case_id == case_id)
+
+    if current_user.role == "client":
+        q = q.filter(Booking.client_id == current_user.id)
+    elif current_user.role == "lawyer":
+        q = q.filter(Booking.lawyer_id == current_user.id)
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only clients and lawyers can view bookings by case",
+        )
+
+    bookings = q.order_by(Booking.created_at.desc()).all()
+    return [BookingOut.model_validate(b) for b in bookings]
+
+
 @router.get("/my/summary", response_model=list[BookingSummaryOut])
 def list_my_bookings_summary(
     db: Session = Depends(get_db),
@@ -266,6 +291,26 @@ def list_lawyer_incoming_bookings(
         .all()
     )
 
+    return [BookingOut.model_validate(b) for b in bookings]
+
+
+@router.get("/incoming", response_model=list[BookingOut])
+def list_incoming_bookings(
+    status: str = "pending",
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Alias for incoming bookings (lawyer only) with optional status filter."""
+    if current_user.role != "lawyer":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only lawyers can view incoming bookings",
+        )
+
+    q = db.query(Booking).filter(Booking.lawyer_id == current_user.id)
+    if status:
+        q = q.filter(Booking.status.ilike(status))
+    bookings = q.order_by(Booking.created_at.desc()).all()
     return [BookingOut.model_validate(b) for b in bookings]
 
 

@@ -2,11 +2,10 @@
 
 # Load environment variables first
 from dotenv import load_dotenv
+
 load_dotenv()
 
-# Third-party imports
 import time
-
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
@@ -14,12 +13,6 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import RedirectResponse, Response
 from sqlalchemy import text
 from sqlalchemy.exc import OperationalError
-
-# OK Checklist Answers module router
-from app.modules.checklist_answers.router import (
-    router as checklist_answers_router,
-    booking_checklist_router,
-)
 
 # Core DB
 from .database import SessionLocal, engine
@@ -35,13 +28,28 @@ from .models import (  # noqa
 )
 
 from app.modules.cases import models as case_models  # noqa: F401
-from app.modules.intake.routes import router as intake_router
 
-# Routers (existing app routers) ✅ include users here
+# Seed
+from app.seed import seed_all
+
+# ---------------------------
+# Routers (legacy + modules)
+# ---------------------------
+
+# OK Checklist Answers module router
+from app.modules.checklist_answers.router import (
+    router as checklist_answers_router,
+    booking_checklist_router,
+)
+
+# Legacy routers
 from .routers import admin, auth, bookings, dev, lawyers, token_queue, users  # noqa: F401
+from .routers import apprentices  # noqa: F401
 from .routers import admin_overview  # noqa: F401
+from app.routers.lawyer_cases import router as lawyer_cases_router
+from app.routers.lawyer_availability import router as lawyer_availability_router
 
-# Module routers (new modular structure)
+# Module routers
 from app.modules.kyc.router import router as kyc_router
 from app.modules.kyc.router import admin_router as admin_kyc_router
 from app.modules.branches.router import router as branches_router
@@ -50,42 +58,38 @@ from app.modules.checklist_templates.router import router as checklist_router
 from app.modules.availability.router import router as availability_router
 from app.modules.blackouts.router import router as blackouts_router
 from app.modules.apprenticeship.router import router as apprenticeship_router
+from app.modules.queue.router import router as queue_router
 from app.modules.lawyer_dashboard.routes import router as lawyer_dashboard_router
-
+from app.modules.documents.routes import router as documents_router
 from app.modules.disputes.routes import (
     router as disputes_router,
     admin_router as admin_disputes_router,
     booking_router as booking_disputes_router,
 )
-
-from app.modules.documents.routes import router as documents_router
 from app.modules.case_files.router import router as case_files_router
 from app.modules.lawyer_profiles.routes import router as lawyer_profiles_router
-from app.routers.lawyer_availability import router as lawyer_availability_router
 from app.modules.audit_log.routes import router as audit_log_router
+from app.modules.intake.routes import router as intake_router
 from app.modules.cases.routes import router as cases_router
 
 # API v1 routers
 from .api.v1 import admin as admin_v1, booking as booking_v1
 
-# Seed
-from app.seed import seed_all
-
-
+# ---------------------------
 # FastAPI app
+# ---------------------------
 app = FastAPI(
     title="LexiConnect API",
     version="0.1.0",
     swagger_ui_parameters={"persistAuthorization": True},
 )
 
-# OK Serve uploaded files so frontend can open PDFs/images in browser
+# ✅ Serve uploaded files so frontend can open PDFs/images
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
-
-# =============================================================================
-# OK CORS (DEV-SAFE) - Fixes "blocked by CORS policy" + frontend "Network Error"
-# =============================================================================
+# ---------------------------
+# CORS (DEV-SAFE)
+# ---------------------------
 origins = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
@@ -99,15 +103,16 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
     allow_origin_regex=r"http://(localhost|127\.0\.0\.1):\d+",
-    allow_credentials=False,  # OK IMPORTANT: keep false unless you use cookies
+    allow_credentials=False,  # keep false unless using cookies
     allow_methods=["*"],
     allow_headers=["*"],
     expose_headers=["*"],
 )
 
-
+# ---------------------------
+# DB wait + seed
+# ---------------------------
 def wait_for_db(max_attempts: int = 10, delay_seconds: float = 1.0) -> None:
-    """Keep trying until the database accepts connections before seeding."""
     for attempt in range(1, max_attempts + 1):
         try:
             with engine.connect() as conn:
@@ -119,7 +124,6 @@ def wait_for_db(max_attempts: int = 10, delay_seconds: float = 1.0) -> None:
             time.sleep(delay_seconds)
 
 
-# ---- Startup seed ----
 @app.on_event("startup")
 def startup():
     wait_for_db()
@@ -130,19 +134,23 @@ def startup():
         db.close()
 
 
-# ---- Health check ----
+# ---------------------------
+# Health check
+# ---------------------------
 @app.get("/health")
 def health_check():
     return {"status": "ok"}
 
 
-# ---- Routers ----
+# ---------------------------
+# Router includes
+# ---------------------------
 
 # ✅ Auth (also /api parity)
 app.include_router(auth.router)
 app.include_router(auth.router, prefix="/api")
 
-# ✅ Users (also /api parity)  <-- THIS FIXES /api/users/me
+# ✅ Users (also /api parity)  <-- fixes /api/users/me
 app.include_router(users.router)
 app.include_router(users.router, prefix="/api")
 
@@ -150,19 +158,30 @@ app.include_router(users.router, prefix="/api")
 app.include_router(lawyers.router)
 app.include_router(lawyers.router, prefix="/api")
 
-# ✅ Bookings
-app.include_router(bookings.router)
+# ✅ Lawyer cases (explicit /api)
+app.include_router(lawyer_cases_router, prefix="/api")
 
-# ✅ Token queue
+# ✅ Apprentices (search) (kept as you had)
+app.include_router(apprentices.router, prefix="/api")
+
+# ✅ Bookings + Token queue (kept as you had; do NOT double-prefix blindly)
+app.include_router(bookings.router)
 app.include_router(token_queue.router)
 
-# ✅ Apprenticeship (already has /api prefix in main include)
+# ✅ Apprenticeship (main include adds /api)
 app.include_router(apprenticeship_router, prefix="/api")
 
-# ✅ Lawyer Dashboard (explicit /api)
+# ✅ Queue (router already uses /api/queue)
+app.include_router(queue_router)
+
+# ✅ Lawyer dashboard (explicit /api)
 app.include_router(lawyer_dashboard_router, prefix="/api")
 
-# OK Checklist Answers router
+# ✅ Documents router MUST be included ONCE
+# NOTE: documents_router already has prefix="/api/documents" in its own file.
+app.include_router(documents_router)
+
+# ✅ Checklist answers routers
 app.include_router(checklist_answers_router)
 app.include_router(booking_checklist_router)
 
@@ -170,30 +189,26 @@ app.include_router(booking_checklist_router)
 app.include_router(service_packages_router)
 app.include_router(checklist_router)
 
-# ✅ Admin / Dev / Branches / KYC
+# ✅ Admin / Dev / Overview / Branches / Availability / Blackouts / KYC
 app.include_router(admin.router)
+app.include_router(dev.router)
+app.include_router(admin_overview.router)
 app.include_router(branches_router)
 app.include_router(availability_router)
 app.include_router(blackouts_router)
 app.include_router(kyc_router)
-app.include_router(dev.router)
-app.include_router(admin_overview.router)
 
-# ✅ Modules (grouped)
-for module_router in (
-    disputes_router,
-    admin_disputes_router,
-    booking_disputes_router,
-    documents_router,
-    intake_router,
-    case_files_router,
-    admin_kyc_router,
-    audit_log_router,
-    lawyer_profiles_router,
-):
-    app.include_router(module_router)
+# ✅ Disputes + Intake + Case files + Audit log + Lawyer profiles + Admin KYC
+app.include_router(disputes_router)
+app.include_router(admin_disputes_router)
+app.include_router(booking_disputes_router)
+app.include_router(intake_router)
+app.include_router(case_files_router)
+app.include_router(audit_log_router)
+app.include_router(lawyer_profiles_router)
+app.include_router(admin_kyc_router)
 
-# ✅ Dedicated router include
+# ✅ Dedicated includes
 app.include_router(lawyer_availability_router, prefix="/api")
 app.include_router(cases_router, prefix="/api")
 
@@ -201,8 +216,9 @@ app.include_router(cases_router, prefix="/api")
 app.include_router(admin_v1.router)
 app.include_router(booking_v1.router)
 
-
-# ---- Custom OpenAPI (JWT Bearer Auth in Swagger) ----
+# ---------------------------
+# Custom OpenAPI (JWT Bearer Auth in Swagger)
+# ---------------------------
 def custom_openapi():
     if app.openapi_schema:
         return app.openapi_schema
@@ -230,14 +246,14 @@ def custom_openapi():
 app.openapi = custom_openapi
 
 
-# ---- Root + favicon helpers ----
+# ---------------------------
+# Root + favicon helpers
+# ---------------------------
 @app.get("/", include_in_schema=False)
 def root():
-    # Send browser users to Swagger UI instead of 404
     return RedirectResponse(url="/docs")
 
 
 @app.get("/favicon.ico", include_in_schema=False)
 def favicon():
-    # Lightweight empty icon to avoid 404 noise in logs
     return Response(status_code=204, media_type="image/x-icon")
