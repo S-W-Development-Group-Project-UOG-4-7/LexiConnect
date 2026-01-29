@@ -27,7 +27,7 @@ class CaseApprenticeOut(BaseModel):
     case_status: Optional[str] = None
     district: Optional[str] = None
 
-    # ✅ IMPORTANT: matches your frontend normalizeCase()
+    # matches frontend normalizeCase()
     supervising_lawyer: Optional[str] = None
     lawyer_name: Optional[str] = None
     lawyer: Optional[str] = None
@@ -45,3 +45,17 @@ class ApprenticeNoteOut(BaseModel):
     apprentice_id: int
     note: str
     created_at: datetime
+
+
+class ApprenticeChoiceOut(BaseModel):
+    id: int
+    full_name: str
+    email: str
+
+
+class CaseChoiceOut(BaseModel):
+    id: int
+    title: str
+    district: Optional[str] = None
+    status: Optional[str] = None
+    category: Optional[str] = None

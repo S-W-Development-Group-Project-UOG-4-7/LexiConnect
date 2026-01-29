@@ -238,3 +238,42 @@ def get_case_notes_for_lawyer(db: Session, current_user, case_id: int):
         detail="Not allowed to view notes for this case",
     )
 
+def list_apprentices(db: Session, current_user):
+    if not _is_lawyer(current_user):
+        raise HTTPException(status_code=403, detail="Only lawyers can access this endpoint")
+
+    apprentices = (
+        db.query(User)
+        .filter(User.role == "apprentice")   # if role is Enum, see note below
+        .order_by(User.full_name.asc())
+        .all()
+    )
+
+    return [
+        {"id": u.id, "full_name": u.full_name, "email": u.email}
+        for u in apprentices
+    ]
+
+
+def list_my_cases_for_apprenticeship(db: Session, current_user):
+    if not _is_lawyer(current_user):
+        raise HTTPException(status_code=403, detail="Only lawyers can access this endpoint")
+
+    # ✅ Most common: cases that belong to this lawyer (based on your cases table screenshot)
+    cases = (
+        db.query(Case)
+        .filter(Case.selected_lawyer_id == current_user.id)
+        .order_by(desc(Case.created_at))
+        .all()
+    )
+
+    return [
+        {
+            "id": c.id,
+            "title": c.title,
+            "district": getattr(c, "district", None),
+            "status": getattr(c, "status", None),
+            "category": getattr(c, "category", None),
+        }
+        for c in cases
+    ]
