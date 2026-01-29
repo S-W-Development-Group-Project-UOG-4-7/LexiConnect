@@ -60,6 +60,7 @@ import LawyerCaseFeedPage from "../features/cases/pages/LawyerCaseFeedPage";
 import ClientCaseChecklistPage from "../features/checklist/pages/ClientCaseChecklistPage";
 import LawyerCaseDetailPage from "../features/cases/pages/LawyerCaseDetailPage";
 import ClientCaseDetailPage from "../features/cases/pages/ClientCaseDetailPage";
+import ClientLawyerProfilePage from "../features/lawyers/pages/ClientLawyerProfilePage";
 
 // OK Apprenticeship pages
 import ApprenticeDashboard from "../features/apprenticeship/pages/ApprenticeDashboard";
@@ -182,6 +183,7 @@ const AppRoutes = () => {
         <Route path="/client/dashboard" element={<Dashboard />} />
         <Route path="/client/search" element={<SearchLawyers />} />
         <Route path="/client/profile/:id" element={<LawyerPublicProfile />} />
+        <Route path="/client/lawyers/:lawyerId" element={<ClientLawyerProfilePage />} />
 
         {/* Cases */}
         <Route path="/client/cases" element={<ClientCasesPage />} />

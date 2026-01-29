@@ -10,6 +10,11 @@ from app.modules.queue.models import QueueEntry, QueueEntryStatus
 
 
 def generate_today_queue(db: Session, *, lawyer_id: int, today: date) -> list[QueueEntry]:
+    """
+    Generates token_queue entries for today's scheduled bookings.
+    Only creates entries that don't already exist for the same client.
+    Newly created entries start as `pending`.
+    """
     bookings_stmt = (
         sa.select(Booking)
         .where(
@@ -46,7 +51,7 @@ def generate_today_queue(db: Session, *, lawyer_id: int, today: date) -> list[Qu
             token_number=next_number,
             lawyer_id=lawyer_id,
             client_id=booking.client_id,
-            status=QueueEntryStatus.waiting,
+            status=QueueEntryStatus.pending,  # ✅ fixed (was waiting)
         )
         db.add(entry)
         created.append(entry)
@@ -72,12 +77,22 @@ def generate_today_queue(db: Session, *, lawyer_id: int, today: date) -> list[Qu
 
 
 def list_today_queue(db: Session, *, lawyer_id: int, today: date) -> list[QueueEntry]:
+    """
+    Returns today's queue entries for the lawyer.
+    Shows active statuses (pending/confirmed/in_progress).
+    """
     stmt = (
         sa.select(QueueEntry)
         .where(
             QueueEntry.date == today,
             QueueEntry.lawyer_id == lawyer_id,
-            QueueEntry.status == QueueEntryStatus.waiting,
+            QueueEntry.status.in_(
+                [
+                    QueueEntryStatus.pending,
+                    QueueEntryStatus.confirmed,
+                    QueueEntryStatus.in_progress,
+                ]
+            ),  # ✅ fixed (was waiting)
         )
         .order_by(QueueEntry.token_number.asc())
     )
@@ -85,13 +100,17 @@ def list_today_queue(db: Session, *, lawyer_id: int, today: date) -> list[QueueE
 
 
 def mark_queue_entry_served(db: Session, *, lawyer_id: int, entry_id) -> QueueEntry:
+    """
+    Marks an entry as completed and sets completed_at.
+    (Because enum has no 'served' status.)
+    """
     entry = db.get(QueueEntry, entry_id)
     if entry is None or entry.lawyer_id != lawyer_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Queue entry not found")
 
-    if entry.status != QueueEntryStatus.served:
-        entry.status = QueueEntryStatus.served
-        entry.served_at = datetime.now(timezone.utc)
+    if entry.status != QueueEntryStatus.completed:
+        entry.status = QueueEntryStatus.completed  # ✅ fixed (was served)
+        entry.completed_at = datetime.now(timezone.utc)  # ✅ fixed (was served_at)
         db.commit()
         db.refresh(entry)
 
