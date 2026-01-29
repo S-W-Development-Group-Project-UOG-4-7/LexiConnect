@@ -39,3 +39,15 @@ export const fetchCaseNotesForLawyer = async (caseId) => {
   const res = await api.get(`/api/apprenticeship/cases/${caseId}/notes`);
   return res.data;
 };
+
+// ✅ Dropdown: lawyer approved cases
+export const fetchLawyerCases = async () => {
+  const res = await api.get("/api/lawyer/cases");
+  return res.data;
+};
+
+// ✅ Search apprentices
+export const searchApprentices = async (query) => {
+  const res = await api.get("/api/apprentices/search", { params: { q: query } });
+  return res.data;
+};
