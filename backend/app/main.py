@@ -78,6 +78,7 @@ from app.modules.audit_log.routes import router as audit_log_router  # noqa: E40
 from app.modules.intake.routes import router as intake_router  # noqa: E402
 from app.modules.cases.routes import router as cases_router  # noqa: E402
 from app.modules.specializations.routes import router as specializations_router  # noqa: E402
+from app.modules.rbac.routes import router as rbac_router  # noqa: E402
 
 # API v1 routers
 from .api.v1 import admin as admin_v1, booking as booking_v1  # noqa: E402
@@ -222,6 +223,7 @@ app.include_router(admin_kyc_router)
 app.include_router(lawyer_availability_router, prefix="/api")
 app.include_router(cases_router, prefix="/api")
 app.include_router(specializations_router, prefix="/api")
+app.include_router(rbac_router)
 
 # ✅ API v1 routers
 app.include_router(admin_v1.router)

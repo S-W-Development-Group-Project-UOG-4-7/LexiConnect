@@ -74,6 +74,7 @@ import ApprenticeAssignedCases from "../features/apprenticeship/pages/Apprentice
 import AdminDashboard from "../pages/admin/AdminDashboard";
 import KYCApproval from "../pages/admin/KYCApproval";
 import AuditLog from "../pages/admin/AuditLog";
+import AccessControl from "../pages/admin/AccessControl";
 
 const DashboardRedirect = () => {
   const role = (getRole() || localStorage.getItem("role") || "").toLowerCase();
@@ -273,6 +274,7 @@ const AppRoutes = () => {
         <Route path="/admin/dashboard" element={<AdminDashboard />} />
         <Route path="/admin/kyc-approval" element={<KYCApproval />} />
         <Route path="/admin/audit-log" element={<AuditLog />} />
+        <Route path="/admin/access-control" element={<AccessControl />} />
 
         <Route path="/admin/disputes" element={<AdminDisputesListPage />} />
         <Route path="/admin/disputes/:id" element={<AdminDisputeDetailPage />} />

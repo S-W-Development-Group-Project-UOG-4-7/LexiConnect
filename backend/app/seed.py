@@ -20,6 +20,7 @@ from app.routers.auth import get_password_hash, get_user_by_email
 # ✅ Correct imports based on your project structure
 from app.modules.disputes.models import Dispute
 from app.models.booking import Booking
+from app.scripts.seed_rbac import seed_rbac
 
 
 def _is_true(name: str) -> bool:
@@ -278,6 +279,7 @@ def seed_demo_disputes(db: Session):
 # ENTRY POINT
 # ======================================================
 def seed_all(db: Session):
+    seed_rbac(db)
     seed_demo_users(db)
     seed_demo_branches(db)
     seed_demo_disputes(db)

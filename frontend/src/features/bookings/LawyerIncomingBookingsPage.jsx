@@ -6,6 +6,7 @@ import {
   lawyerRejectBooking,
 } from "../../services/bookings";
 import "../../pages/availability-ui.css";
+import Can from "../../components/Can";
 
 const LawyerIncomingBookingsPage = () => {
   const navigate = useNavigate();
@@ -28,6 +29,10 @@ const LawyerIncomingBookingsPage = () => {
       const data = await lawyerListIncomingBookings(statusParam);
       setBookings(data || []);
     } catch (err) {
+      if (err?.response?.status === 403) {
+        setError("You do not have permission to view incoming bookings.");
+        return;
+      }
       // Handle 404 specifically with friendly message
       if (err?.response?.status === 404) {
         setError("Incoming bookings endpoint not available.");
@@ -65,6 +70,10 @@ const LawyerIncomingBookingsPage = () => {
       );
       setSuccessMessage("Booking confirmed.");
     } catch (err) {
+      if (err?.response?.status === 403) {
+        setError("You don't have permission to perform this action.");
+        return;
+      }
       const message =
         err?.response?.data?.detail ||
         err?.response?.data?.message ||
@@ -90,6 +99,10 @@ const LawyerIncomingBookingsPage = () => {
       );
       setSuccessMessage("Booking rejected.");
     } catch (err) {
+      if (err?.response?.status === 403) {
+        setError("You don't have permission to perform this action.");
+        return;
+      }
       const message =
         err?.response?.data?.detail ||
         err?.response?.data?.message ||
@@ -326,33 +339,37 @@ const LawyerIncomingBookingsPage = () => {
                       >
                         View Details
                       </button>
-                      <button
-                        onClick={() => handleConfirm(booking.id)}
-                        disabled={
-                          actionId === booking.id || booking.status?.toUpperCase() !== "PENDING"
-                        }
-                        className="lc-primary-btn"
-                        style={{
-                          height: "36px",
-                          fontSize: "0.85rem",
-                          padding: "0 1rem",
-                          background: booking.status?.toUpperCase() === "PENDING"
-                            ? "linear-gradient(180deg, rgba(52, 211, 153, 0.8), rgba(34, 197, 94, 0.9))"
-                            : undefined,
-                        }}
-                      >
-                        {actionId === booking.id ? "Confirming..." : "Confirm"}
-                      </button>
-                      <button
-                        onClick={() => handleReject(booking.id)}
-                        disabled={
-                          actionId === booking.id || booking.status?.toUpperCase() !== "PENDING"
-                        }
-                        className="availability-danger-btn"
-                        style={{ height: "36px", fontSize: "0.85rem" }}
-                      >
-                        {actionId === booking.id ? "Rejecting..." : "Reject"}
-                      </button>
+                      <Can privilege="booking.confirm">
+                        <button
+                          onClick={() => handleConfirm(booking.id)}
+                          disabled={
+                            actionId === booking.id || booking.status?.toUpperCase() !== "PENDING"
+                          }
+                          className="lc-primary-btn"
+                          style={{
+                            height: "36px",
+                            fontSize: "0.85rem",
+                            padding: "0 1rem",
+                            background: booking.status?.toUpperCase() === "PENDING"
+                              ? "linear-gradient(180deg, rgba(52, 211, 153, 0.8), rgba(34, 197, 94, 0.9))"
+                              : undefined,
+                          }}
+                        >
+                          {actionId === booking.id ? "Confirming..." : "Confirm"}
+                        </button>
+                      </Can>
+                      <Can privilege="booking.reject">
+                        <button
+                          onClick={() => handleReject(booking.id)}
+                          disabled={
+                            actionId === booking.id || booking.status?.toUpperCase() !== "PENDING"
+                          }
+                          className="availability-danger-btn"
+                          style={{ height: "36px", fontSize: "0.85rem" }}
+                        >
+                          {actionId === booking.id ? "Rejecting..." : "Reject"}
+                        </button>
+                      </Can>
                     </div>
                   </div>
                 ))}

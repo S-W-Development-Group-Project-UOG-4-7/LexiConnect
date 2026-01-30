@@ -12,6 +12,14 @@ from app.models.kyc_submission import KYCSubmission
 from app.models.lawyer import Lawyer
 from app.models.lawyer_kyc import LawyerKYC
 from app.models.user import User
+from app.modules.rbac.models import (
+    Module,
+    Privilege,
+    Role,
+    RolePrivilege,
+    UserPrivilegeOverride,
+    UserRole,
+)
 
 
 

@@ -24,6 +24,7 @@ from app.models.branch import Branch
 from app.models.service_package import ServicePackage
 from app.modules.availability.service import get_available_slots
 from app.models.lawyer import Lawyer
+from app.modules.rbac.dependencies import require_privilege
 
 router = APIRouter(prefix="/api/bookings", tags=["bookings"])
 logger = logging.getLogger(__name__)
@@ -34,6 +35,7 @@ def create_booking(
     booking_in: BookingCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
+    _: None = Depends(require_privilege("booking.create")),
 ):
     """Create a new booking. Only clients can create bookings."""
     if current_user.role != "client":
@@ -177,6 +179,19 @@ def create_booking(
         )
     except Exception as exc:
         logger.warning("Booking insert diagnostic failed: %s", exc)
+    log_event(
+        db,
+        user=current_user,
+        action="BOOKING_CREATED",
+        description=f"Booking {booking.id} created by client",
+        meta={
+            "booking_id": booking.id,
+            "lawyer_id": booking.lawyer_id,
+            "client_id": booking.client_id,
+            "status_from": "new",
+            "status_to": booking.status,
+        },
+    )
     return BookingOut.model_validate(booking)
 
 
@@ -205,6 +220,7 @@ def list_available_slots(
 def list_my_bookings(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
+    _: None = Depends(require_privilege("booking.view")),
 ):
     """List bookings for the current user. Clients see their bookings, lawyers see bookings assigned to them."""
     if current_user.role == "client":
@@ -235,13 +251,17 @@ def list_bookings(
     case_id: int | None = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
+    _: None = Depends(require_privilege("booking.view")),
 ):
     if case_id is None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="case_id is required")
 
     q = db.query(Booking).filter(Booking.case_id == case_id)
 
-    if current_user.role == "client":
+    if current_user.role == "admin":
+        # Admins can view all bookings for the case.
+        pass
+    elif current_user.role == "client":
         q = q.filter(Booking.client_id == current_user.id)
     elif current_user.role == "lawyer":
         q = q.filter(Booking.lawyer_id == current_user.id)
@@ -407,11 +427,14 @@ def list_lawyer_incoming_bookings(
     status: str | None = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
+    _: None = Depends(require_privilege("booking.view")),
 ):
     """List incoming booking requests for the current lawyer (status: pending).
     Only available for lawyers.
     """
-    if current_user.role != "lawyer":
+    # Incoming list is lawyer-only: require a linked lawyer profile instead of role string.
+    lawyer_row = db.query(Lawyer).filter(Lawyer.user_id == current_user.id).first()
+    if not lawyer_row:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only lawyers can view incoming bookings",
@@ -447,9 +470,12 @@ def list_incoming_bookings(
     status: str = "pending",
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
+    _: None = Depends(require_privilege("booking.view")),
 ):
     """Alias for incoming bookings (lawyer only) with optional status filter."""
-    if current_user.role != "lawyer":
+    # Incoming list is lawyer-only: require a linked lawyer profile instead of role string.
+    lawyer_row = db.query(Lawyer).filter(Lawyer.user_id == current_user.id).first()
+    if not lawyer_row:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only lawyers can view incoming bookings",
@@ -475,6 +501,7 @@ def confirm_booking(
     booking_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
+    _: None = Depends(require_privilege("booking.confirm")),
 ):
     """Confirm a booking request. Only the assigned lawyer can confirm pending bookings."""
     if current_user.role != "lawyer":
@@ -504,6 +531,7 @@ def confirm_booking(
             detail=f"Cannot confirm booking with status '{booking.status}'. Only pending bookings can be confirmed.",
         )
 
+    status_from = booking.status
     booking.status = "confirmed"
     booking.blocks_time = True
     db.commit()
@@ -517,6 +545,8 @@ def confirm_booking(
             "booking_id": booking.id,
             "lawyer_id": booking.lawyer_id,
             "client_id": booking.client_id,
+            "status_from": status_from,
+            "status_to": booking.status,
         },
     )
     return BookingOut.model_validate(booking)
@@ -527,6 +557,7 @@ def reject_booking(
     booking_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
+    _: None = Depends(require_privilege("booking.reject")),
 ):
     """Reject a booking request. Only the assigned lawyer can reject pending bookings."""
     if current_user.role != "lawyer":
@@ -556,6 +587,7 @@ def reject_booking(
             detail=f"Cannot reject booking with status '{booking.status}'. Only pending bookings can be rejected.",
         )
 
+    status_from = booking.status
     booking.status = "rejected"
     booking.blocks_time = False
     db.commit()
@@ -569,6 +601,8 @@ def reject_booking(
             "booking_id": booking.id,
             "lawyer_id": booking.lawyer_id,
             "client_id": booking.client_id,
+            "status_from": status_from,
+            "status_to": booking.status,
         },
     )
     return BookingOut.model_validate(booking)

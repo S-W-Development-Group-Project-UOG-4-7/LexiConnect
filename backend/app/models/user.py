@@ -32,4 +32,10 @@ class User(Base):
         foreign_keys="Booking.client_id",
     )
 
+    roles = relationship(
+        "Role",
+        secondary="user_roles",
+        back_populates="users",
+    )
+
     
