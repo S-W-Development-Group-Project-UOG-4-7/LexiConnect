@@ -10,6 +10,7 @@ from app.database import get_db
 from app.models.user import User, UserRole
 from app.models.lawyer import Lawyer
 from app.models.service_package import ServicePackage
+from app.models.branch import Branch
 from app.models.booking import Booking
 from app.modules.lawyer_profiles.models import LawyerProfile
 from app.routers.auth import get_current_user
@@ -513,4 +514,31 @@ def get_service_packages_for_lawyer(
             "active": p.active,
         }
         for p in packages
+    ]
+
+
+@router.get("/{lawyer_id}/branches")
+def get_branches_for_lawyer(
+    lawyer_id: int,
+    db: Session = Depends(get_db),
+):
+    """Return branches for a given users.id lawyer."""
+    lawyer_row = db.query(Lawyer).filter(Lawyer.user_id == lawyer_id).first()
+    if not lawyer_row:
+        raise HTTPException(status_code=404, detail="Lawyer profile not found")
+    branches = (
+        db.query(Branch)
+        .filter(Branch.user_id == lawyer_id)
+        .order_by(Branch.id.asc())
+        .all()
+    )
+    return [
+        {
+            "id": b.id,
+            "name": b.name,
+            "district": b.district,
+            "city": b.city,
+            "address": b.address,
+        }
+        for b in branches
     ]

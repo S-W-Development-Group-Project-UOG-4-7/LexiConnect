@@ -12,15 +12,20 @@ const LawyerIncomingBookingsPage = () => {
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
   const [actionId, setActionId] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
 
-  const fetchBookings = async () => {
+  const fetchBookings = async (statusValue = statusFilter) => {
     setError("");
     setLoading(true);
     try {
-      const data = await lawyerListIncomingBookings();
+      const statusParam =
+        statusValue && statusValue.toUpperCase() !== "ALL"
+          ? statusValue.toLowerCase()
+          : "all";
+      const data = await lawyerListIncomingBookings(statusParam);
       setBookings(data || []);
     } catch (err) {
       // Handle 404 specifically with friendly message
@@ -41,9 +46,9 @@ const LawyerIncomingBookingsPage = () => {
   };
 
   useEffect(() => {
-    fetchBookings();
+    fetchBookings(statusFilter);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [statusFilter]);
 
   const handleConfirm = async (id) => {
     if (!window.confirm("Are you sure you want to confirm this booking request?")) {
@@ -51,11 +56,14 @@ const LawyerIncomingBookingsPage = () => {
     }
 
     setError("");
+    setSuccessMessage("");
     setActionId(id);
     try {
-      await lawyerConfirmBooking(id);
-      // Refresh bookings list
-      await fetchBookings();
+      const updated = await lawyerConfirmBooking(id);
+      setBookings((prev) =>
+        prev.map((booking) => (booking.id === id ? { ...booking, ...updated } : booking))
+      );
+      setSuccessMessage("Booking confirmed.");
     } catch (err) {
       const message =
         err?.response?.data?.detail ||
@@ -73,11 +81,14 @@ const LawyerIncomingBookingsPage = () => {
     }
 
     setError("");
+    setSuccessMessage("");
     setActionId(id);
     try {
-      await lawyerRejectBooking(id);
-      // Refresh bookings list
-      await fetchBookings();
+      const updated = await lawyerRejectBooking(id);
+      setBookings((prev) =>
+        prev.map((booking) => (booking.id === id ? { ...booking, ...updated } : booking))
+      );
+      setSuccessMessage("Booking rejected.");
     } catch (err) {
       const message =
         err?.response?.data?.detail ||
@@ -166,6 +177,11 @@ const LawyerIncomingBookingsPage = () => {
         {error && (
           <div className="alert alert-error" style={{ marginBottom: "1.5rem" }}>
             {error}
+          </div>
+        )}
+        {successMessage && (
+          <div className="alert alert-success" style={{ marginBottom: "1.5rem" }}>
+            {successMessage}
           </div>
         )}
 

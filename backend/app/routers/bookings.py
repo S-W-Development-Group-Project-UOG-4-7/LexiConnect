@@ -1,19 +1,32 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from datetime import date, datetime, timezone, timedelta
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+import logging
+from sqlalchemy import func, text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, aliased
 
 from app.database import get_db
 from app.models.booking import Booking
 from app.modules.cases.models import Case
 from app.routers.auth import get_current_user
-from app.schemas.booking import BookingCreate, BookingOut, BookingCancelOut, BookingSummaryOut
+from app.schemas.booking import (
+    BookingCreate,
+    BookingOut,
+    BookingCancelOut,
+    BookingSummaryOut,
+    BookingSlotsByDateOut,
+)
 from app.models.user import User
 from app.modules.audit_log.service import log_event
 from app.modules.blackouts.models import BlackoutDay
 from app.modules.lawyer_profiles.models import LawyerProfile
 from app.models.branch import Branch
 from app.models.service_package import ServicePackage
+from app.modules.availability.service import get_available_slots
+from app.models.lawyer import Lawyer
 
 router = APIRouter(prefix="/api/bookings", tags=["bookings"])
+logger = logging.getLogger(__name__)
 
 
 @router.post("", response_model=BookingOut, status_code=status.HTTP_201_CREATED)
@@ -31,6 +44,8 @@ def create_booking(
 
     if booking_in.case_id is None:
         raise HTTPException(status_code=422, detail="case_id required")
+    if booking_in.scheduled_at is None:
+        raise HTTPException(status_code=422, detail="scheduled_at required")
 
     case = db.query(Case).filter(Case.id == booking_in.case_id).first()
     if not case or case.client_id != current_user.id:
@@ -51,20 +66,139 @@ def create_booking(
         if blackout:
             raise HTTPException(status_code=400, detail="Lawyer unavailable on this date")
 
+    if booking_in.branch_id is None:
+        raise HTTPException(status_code=422, detail="branch_id required")
+    if booking_in.service_package_id is None:
+        raise HTTPException(status_code=422, detail="service_package_id required")
+
+    branch = db.query(Branch).filter(Branch.id == booking_in.branch_id).first()
+    if not branch:
+        raise HTTPException(status_code=404, detail="Branch not found")
+    branch_user_id = getattr(branch, "user_id", None)
+    branch_lawyer_id = getattr(branch, "lawyer_id", None)
+    if branch_user_id is not None and branch_user_id != booking_in.lawyer_id:
+        raise HTTPException(status_code=403, detail="Branch does not belong to lawyer")
+    if branch_lawyer_id is not None:
+        # fallback for legacy schemas
+        lawyer_row = db.query(Lawyer).filter(Lawyer.user_id == booking_in.lawyer_id).first()
+        if lawyer_row is None:
+            raise HTTPException(status_code=404, detail="Lawyer profile not found")
+        if branch_lawyer_id != lawyer_row.id:
+            raise HTTPException(status_code=403, detail="Branch does not belong to lawyer")
+
+    pkg = db.query(ServicePackage).filter(ServicePackage.id == booking_in.service_package_id).first()
+    if not pkg:
+        raise HTTPException(status_code=404, detail="Service package not found")
+    lawyer_row = db.query(Lawyer).filter(Lawyer.user_id == booking_in.lawyer_id).first()
+    if not lawyer_row:
+        raise HTTPException(status_code=404, detail="Lawyer profile not found")
+    if pkg.lawyer_id != lawyer_row.id:
+        raise HTTPException(status_code=403, detail="Service package does not belong to lawyer")
+
+    # Enforce sequential booking rule: only earliest available slot can be booked
+    slot_days = get_available_slots(
+        db,
+        lawyer_user_id=booking_in.lawyer_id,
+        branch_id=booking_in.branch_id,
+        service_package_id=booking_in.service_package_id,
+        start_date=scheduled_date,
+        days=1,
+    )
+    allowed_starts = []
+    for day in slot_days:
+        for slot in day.get("slots", []):
+            try:
+                allowed_starts.append(datetime.fromisoformat(slot["start"]))
+            except Exception:
+                continue
+    if not allowed_starts:
+        raise HTTPException(status_code=400, detail="No available slot for selected time")
+    scheduled_at = booking_in.scheduled_at
+    matches = any(
+        (s.astimezone(timezone.utc) == scheduled_at.astimezone(timezone.utc)) for s in allowed_starts
+    )
+    if not matches:
+        raise HTTPException(status_code=400, detail="Selected time is not the next available slot")
+
+    duration_minutes = int(pkg.duration or 0)
+    if duration_minutes <= 0:
+        raise HTTPException(status_code=400, detail="Service duration is invalid")
+    ends_at = booking_in.scheduled_at + timedelta(minutes=duration_minutes)
+
+    # Conflict check (pending + confirmed)
+    conflict = (
+        db.query(Booking)
+        .filter(
+            Booking.lawyer_id == booking_in.lawyer_id,
+            Booking.branch_id == booking_in.branch_id,
+            Booking.blocks_time.is_(True),
+            Booking.scheduled_at.isnot(None),
+            Booking.ends_at.isnot(None),
+            Booking.scheduled_at < ends_at,
+            Booking.ends_at > booking_in.scheduled_at,
+        )
+        .first()
+    )
+    if conflict:
+        raise HTTPException(status_code=409, detail="Selected time overlaps an existing booking")
+
     booking = Booking(
         client_id=current_user.id,
         lawyer_id=booking_in.lawyer_id,
         branch_id=booking_in.branch_id,
         scheduled_at=booking_in.scheduled_at,
+        ends_at=ends_at,
         note=booking_in.note,
         service_package_id=booking_in.service_package_id,
         case_id=booking_in.case_id,
         status="pending",
+        blocks_time=True,
     )
     db.add(booking)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="Selected time overlaps an existing booking")
     db.refresh(booking)
+    # Diagnostics: confirm insert + log DB URL/schema and timestamps (sanitized).
+    try:
+        db_url = db.get_bind().engine.url.render_as_string(hide_password=True)
+        schema = db.execute(text("SELECT current_schema()")).scalar_one_or_none()
+        exists = db.query(Booking.id).filter(Booking.id == booking.id).count()
+        logger.info(
+            "Booking created id=%s exists=%s db=%s schema=%s scheduled_at=%s ends_at=%s",
+            booking.id,
+            exists,
+            db_url,
+            schema,
+            booking.scheduled_at,
+            booking.ends_at,
+        )
+    except Exception as exc:
+        logger.warning("Booking insert diagnostic failed: %s", exc)
     return BookingOut.model_validate(booking)
+
+
+@router.get("/available-slots", response_model=list[BookingSlotsByDateOut])
+def list_available_slots(
+    lawyer_user_id: int = Query(..., description="users.id for the lawyer"),
+    branch_id: int = Query(..., description="Branch ID for the selected location"),
+    service_package_id: int = Query(..., description="Service package ID to infer duration"),
+    start_date: date = Query(default_factory=date.today),
+    days: int = Query(14, ge=1, le=31),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    # Any authenticated user can view slots
+    return get_available_slots(
+        db,
+        lawyer_user_id=lawyer_user_id,
+        branch_id=branch_id,
+        service_package_id=service_package_id,
+        start_date=start_date,
+        days=days,
+    )
 
 
 @router.get("/my", response_model=list[BookingOut])
@@ -251,6 +385,7 @@ def cancel_booking(
         )
 
     booking.status = "cancelled"
+    booking.blocks_time = False
     db.commit()
     db.refresh(booking)
     log_event(
@@ -269,6 +404,7 @@ def cancel_booking(
 
 @router.get("/lawyer/incoming", response_model=list[BookingOut])
 def list_lawyer_incoming_bookings(
+    status: str | None = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -281,11 +417,23 @@ def list_lawyer_incoming_bookings(
             detail="Only lawyers can view incoming bookings",
         )
 
+    statuses = None
+    if status:
+        normalized = status.strip().lower()
+        if normalized in {"all", "*", "any"}:
+            statuses = {"pending", "confirmed", "rejected", "cancelled"}
+        elif "," in normalized:
+            statuses = {s.strip().lower() for s in normalized.split(",") if s.strip()}
+        else:
+            statuses = {normalized}
+    else:
+        statuses = {"pending"}
+
     bookings = (
         db.query(Booking)
         .filter(
             Booking.lawyer_id == current_user.id,
-            Booking.status == "pending",
+            func.lower(Booking.status).in_(list(statuses)),
         )
         .order_by(Booking.created_at.desc())
         .all()
@@ -309,7 +457,15 @@ def list_incoming_bookings(
 
     q = db.query(Booking).filter(Booking.lawyer_id == current_user.id)
     if status:
-        q = q.filter(Booking.status.ilike(status))
+        normalized = status.strip().lower()
+        if normalized in {"all", "*", "any"}:
+            statuses = {"pending", "confirmed", "rejected", "cancelled"}
+            q = q.filter(func.lower(Booking.status).in_(list(statuses)))
+        elif "," in normalized:
+            statuses = {s.strip().lower() for s in normalized.split(",") if s.strip()}
+            q = q.filter(func.lower(Booking.status).in_(list(statuses)))
+        else:
+            q = q.filter(func.lower(Booking.status) == normalized)
     bookings = q.order_by(Booking.created_at.desc()).all()
     return [BookingOut.model_validate(b) for b in bookings]
 
@@ -349,6 +505,7 @@ def confirm_booking(
         )
 
     booking.status = "confirmed"
+    booking.blocks_time = True
     db.commit()
     db.refresh(booking)
     log_event(
@@ -400,6 +557,7 @@ def reject_booking(
         )
 
     booking.status = "rejected"
+    booking.blocks_time = False
     db.commit()
     db.refresh(booking)
     log_event(

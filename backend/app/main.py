@@ -65,6 +65,8 @@ from app.modules.apprenticeship.router import router as apprenticeship_router  #
 from app.modules.queue.router import router as queue_router  # noqa: E402
 from app.modules.lawyer_dashboard.routes import router as lawyer_dashboard_router  # noqa: E402
 from app.modules.documents.routes import router as documents_router  # noqa: E402
+from app.modules.documents.routes import booking_router as booking_documents_router  # noqa: E402
+from app.modules.documents.routes import cases_router as cases_documents_router  # noqa: E402
 from app.modules.disputes.routes import (  # noqa: E402
     router as disputes_router,
     admin_router as admin_disputes_router,
@@ -186,6 +188,8 @@ app.include_router(lawyer_dashboard_router, prefix="/api")
 # ✅ Documents router MUST be included ONCE
 # NOTE: documents_router already has prefix="/api/documents" in its own file.
 app.include_router(documents_router)
+app.include_router(booking_documents_router)
+app.include_router(cases_documents_router)
 
 # ✅ Checklist answers routers
 app.include_router(checklist_answers_router)

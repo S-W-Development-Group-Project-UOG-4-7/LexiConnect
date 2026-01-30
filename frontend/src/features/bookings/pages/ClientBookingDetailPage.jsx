@@ -4,7 +4,7 @@ import {
   getBookingById,
   getLawyerServicePackages,
 } from "../../../services/bookings";
-import { listDocuments } from "../../documents/services/documents.service";
+import { getBookingDocuments } from "../../documents/services/documents.service";
 import { getIntakeByBooking, getIntakeByCase } from "../../intake/services/intake.service";
 import api from "../../../services/api";
 
@@ -160,14 +160,10 @@ export default function ClientBookingDetailPage() {
       setDocError("");
       setDocLoading(true);
       try {
-        if (booking?.case_id) {
-          const { data } = await api.get(`/api/documents/by-case/${booking.case_id}`)
-;
-          setDocs(data || []);
-        } else {
-          const res = await listDocuments(booking.id); // safe use numeric id
-          setDocs(res?.data || res || []);
-        }
+        // Docs are case-owned; the booking endpoint resolves case_id and returns the
+        // shared case documents so all bookings in the case stay consistent.
+        const res = await getBookingDocuments(booking.id); // safe use numeric id
+        setDocs(res?.data || res || []);
       } catch (err) {
         setDocError(
           err?.response?.data?.detail ||
@@ -319,8 +315,8 @@ export default function ClientBookingDetailPage() {
         </div>
       )}
 
-      {!docLoading && !docError && docs.length === 0 && (
-        <Card>
+        {!docLoading && !docError && docs.length === 0 && (
+          <Card>
           <div className="text-white font-semibold mb-1">No documents yet</div>
           <div className="text-slate-400 text-sm mb-4">
             Upload PDFs, images, or related files for your lawyer to review.
@@ -336,7 +332,10 @@ export default function ClientBookingDetailPage() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         {docs.slice(0, 4).map((doc) => {
-          const fileUrl = `${API_BASE}${doc.file_path?.startsWith("/") ? "" : "/"}${doc.file_path || ""}`;
+          const fallbackPath = `${API_BASE}${
+            doc.file_path?.startsWith("/") ? "" : "/"
+          }${doc.file_path || ""}`;
+          const fileUrl = doc.file_url ? `${API_BASE}${doc.file_url}` : fallbackPath;
           const fileName = doc.file_path?.split("/").pop() || doc.original_name || doc.original_filename || "file";
 
           return (

@@ -71,8 +71,9 @@ export const cancelBooking = async (id) => {
  * Lawyer only endpoint
  * @returns {Promise<Array>} Array of pending booking objects
  */
-export const lawyerListIncomingBookings = async () => {
-  const { data } = await api.get("/api/bookings/lawyer/incoming");
+export const lawyerListIncomingBookings = async (status) => {
+  const params = status ? { status } : undefined;
+  const { data } = await api.get("/api/bookings/lawyer/incoming", { params });
   return data;
 };
 
@@ -103,8 +104,9 @@ export const lawyerRejectBooking = async (bookingId) => {
  * Lawyer only endpoint
  * @returns {Promise<Array>} Array of pending booking objects
  */
-export const getLawyerIncomingBookings = async () => {
-  const { data } = await api.get("/api/bookings/lawyer/incoming");
+export const getLawyerIncomingBookings = async (status) => {
+  const params = status ? { status } : undefined;
+  const { data } = await api.get("/api/bookings/lawyer/incoming", { params });
   return data;
 };
 
