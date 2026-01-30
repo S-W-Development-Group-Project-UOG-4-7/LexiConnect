@@ -283,8 +283,9 @@ def create_doc_comment(
     booking = _get_booking_or_404(db, doc.booking_id)
     _ensure_can_access_booking_docs(current_user, booking)
 
-    if not (_is_admin(current_user) or _is_lawyer(current_user)):
-        raise HTTPException(status_code=403, detail="Only lawyers or admins can comment")
+    # Allow client + lawyer + admin to comment (access is still enforced above)
+    if not (_is_admin(current_user) or _is_lawyer(current_user) or _is_client(current_user)):
+        raise HTTPException(status_code=403, detail="Only authorized users can comment")
 
     comment_text = (payload.comment_text or "").strip()
     if not comment_text:
