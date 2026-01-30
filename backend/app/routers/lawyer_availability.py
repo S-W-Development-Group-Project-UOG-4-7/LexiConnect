@@ -10,6 +10,7 @@ from app.models.user import User, UserRole
 from app.models.lawyer_availability import WeeklyAvailability, WeekDay
 from app.modules.blackouts.models import BlackoutDay
 from app.models.branch import Branch
+from app.modules.availability.service import resolve_lawyer_user_id
 from app.routers.auth import get_current_user
 
 # ---------------------------------------------------------------------------
@@ -111,6 +112,22 @@ class AvailabilityBundle(BaseModel):
 def _require_lawyer(user: User):
     if user.role != UserRole.lawyer:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only lawyers can access this resource")
+
+
+def _resolve_target_user_id(
+    db: Session,
+    *,
+    lawyer_user_id: Optional[int],
+    lawyer_id: Optional[int],
+) -> Optional[int]:
+    if lawyer_user_id is not None:
+        return lawyer_user_id
+    if lawyer_id is None:
+        return None
+    user = db.query(User).filter(User.id == lawyer_id, User.role == UserRole.lawyer).first()
+    if user:
+        return user.id
+    return resolve_lawyer_user_id(db, lawyer_id)
 
 
 def _to_weekday(day_str: str) -> WeekDay:
@@ -221,11 +238,12 @@ def get_my_availability(
 @router.get("/weekly", response_model=List[WeeklyOut])
 def list_weekly(
     lawyer_id: Optional[int] = Query(None, description="Compatibility param (optional)"),
+    lawyer_user_id: Optional[int] = Query(None, description="Preferred users.id (optional)"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     _require_lawyer(current_user)
-    target_id = lawyer_id or current_user.id
+    target_id = _resolve_target_user_id(db, lawyer_user_id=lawyer_user_id, lawyer_id=lawyer_id) or current_user.id
     if target_id != current_user.id:
         raise HTTPException(status_code=403, detail="Cannot view another lawyer's availability")
 
@@ -253,11 +271,12 @@ def list_weekly(
 @router.get("/branches", response_model=List[dict])
 def list_branches(
     lawyer_id: Optional[int] = Query(None, description="Compatibility param (optional)"),
+    lawyer_user_id: Optional[int] = Query(None, description="Preferred users.id (optional)"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     _require_lawyer(current_user)
-    target_id = lawyer_id or current_user.id
+    target_id = _resolve_target_user_id(db, lawyer_user_id=lawyer_user_id, lawyer_id=lawyer_id) or current_user.id
     if target_id != current_user.id:
         raise HTTPException(status_code=403, detail="Cannot view another lawyer's branches")
     branches = db.query(Branch).filter(Branch.user_id == target_id).all()
@@ -267,12 +286,13 @@ def list_branches(
 @router.get("/blackouts", response_model=List[BlackoutOut])
 def list_blackouts(
     lawyer_id: Optional[int] = Query(None, description="Compatibility param (optional)"),
+    lawyer_user_id: Optional[int] = Query(None, description="Preferred users.id (optional)"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     _require_lawyer(current_user)
     # BlackoutDay FK points to users.id
-    target_id = lawyer_id or current_user.id
+    target_id = _resolve_target_user_id(db, lawyer_user_id=lawyer_user_id, lawyer_id=lawyer_id) or current_user.id
     if target_id != current_user.id:
         raise HTTPException(status_code=403, detail="Cannot view another lawyer's blackouts")
 
@@ -447,11 +467,12 @@ def delete_weekly_slot(
 def create_blackout(
     payload: BlackoutCreate,
     lawyer_id: Optional[int] = Query(None, description="Compatibility param (optional)"),
+    lawyer_user_id: Optional[int] = Query(None, description="Preferred users.id (optional)"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     _require_lawyer(current_user)
-    target_id = lawyer_id or current_user.id
+    target_id = _resolve_target_user_id(db, lawyer_user_id=lawyer_user_id, lawyer_id=lawyer_id) or current_user.id
     if target_id != current_user.id:
         raise HTTPException(status_code=403, detail="Cannot create blackout for another lawyer")
 
@@ -499,20 +520,22 @@ def delete_blackout(
 @router.get("/blackout", response_model=List[BlackoutOut])
 def list_blackouts_legacy(
     lawyer_id: Optional[int] = Query(None, description="Compatibility param (optional)"),
+    lawyer_user_id: Optional[int] = Query(None, description="Preferred users.id (optional)"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    return list_blackouts(lawyer_id, db, current_user)
+    return list_blackouts(lawyer_id, lawyer_user_id, db, current_user)
 
 
 @router.post("/blackout", response_model=BlackoutOut, status_code=status.HTTP_201_CREATED)
 def create_blackout_legacy(
     payload: BlackoutCreate,
     lawyer_id: Optional[int] = Query(None, description="Compatibility param (optional)"),
+    lawyer_user_id: Optional[int] = Query(None, description="Preferred users.id (optional)"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    return create_blackout(payload, lawyer_id, db, current_user)
+    return create_blackout(payload, lawyer_id, lawyer_user_id, db, current_user)
 
 
 @router.delete("/blackout/{entry_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -528,7 +551,8 @@ def delete_blackout_legacy(
 def preview_slots(
     from_date: str = Query(..., description="YYYY-MM-DD"),
     to_date: str = Query(..., description="YYYY-MM-DD"),
-    lawyer_id: Optional[int] = Query(None, description="Required for clients/admins; optional for lawyers"),
+    lawyer_id: Optional[int] = Query(None, description="Compatibility param (optional)"),
+    lawyer_user_id: Optional[int] = Query(None, description="Preferred users.id (optional)"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -545,13 +569,13 @@ def preview_slots(
 
     # Determine target lawyer
     if current_user.role == UserRole.lawyer:
-        target_lawyer_id = lawyer_id or current_user.id
+        target_lawyer_id = _resolve_target_user_id(db, lawyer_user_id=lawyer_user_id, lawyer_id=lawyer_id) or current_user.id
         if target_lawyer_id != current_user.id:
             raise HTTPException(status_code=403, detail="Cannot view another lawyer's slots")
     else:
-        if lawyer_id is None:
+        target_lawyer_id = _resolve_target_user_id(db, lawyer_user_id=lawyer_user_id, lawyer_id=lawyer_id)
+        if target_lawyer_id is None:
             raise HTTPException(status_code=422, detail="lawyer_id is required")
-        target_lawyer_id = lawyer_id
         target_user = (
             db.query(User)
             .filter(User.id == target_lawyer_id, User.role == UserRole.lawyer)

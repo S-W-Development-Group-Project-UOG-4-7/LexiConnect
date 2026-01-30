@@ -48,6 +48,7 @@ class BlackoutDate(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     lawyer_id = Column(Integer, ForeignKey("lawyers.id"), nullable=False, index=True)
+    lawyer_user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
     
     # Date and time
     date = Column(DateTime(timezone=True), nullable=False, index=True)
@@ -70,6 +71,7 @@ class AvailabilityException(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     lawyer_id = Column(Integer, ForeignKey("lawyers.id"), nullable=False, index=True)
+    lawyer_user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
     weekly_availability_id = Column(Integer, ForeignKey("weekly_availability.id"), nullable=False)
     
     # Exception date

@@ -36,6 +36,7 @@ class AvailabilityTemplateUpdate(BaseModel):
 class AvailabilityTemplateOut(BaseModel):
     id: uuid.UUID
     lawyer_id: int
+    lawyer_user_id: int | None = None
     day_of_week: int
     start_time: time
     end_time: time
@@ -43,6 +44,12 @@ class AvailabilityTemplateOut(BaseModel):
     is_active: bool
     created_at: datetime
     updated_at: datetime
+
+    @model_validator(mode="after")
+    def hydrate_lawyer_user_id(self):
+        if self.lawyer_user_id is None:
+            self.lawyer_user_id = self.lawyer_id
+        return self
 
     model_config = ConfigDict(from_attributes=True)
 

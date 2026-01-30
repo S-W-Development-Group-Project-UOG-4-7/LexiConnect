@@ -75,6 +75,7 @@ const AvailabilityEditor = () => {
   const [saveMessage, setSaveMessage] = useState('');
   const [saving, setSaving] = useState(false);
   const [loadingBranches, setLoadingBranches] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState(null);
   const [availabilities, setAvailabilities] = useState([]);
   const [blackouts, setBlackouts] = useState([]);
   const [loadingAvailabilities, setLoadingAvailabilities] = useState(false);
@@ -140,6 +141,17 @@ const AvailabilityEditor = () => {
   };
 
   useEffect(() => {
+    const fetchCurrentUserId = async () => {
+      const authConfig = withAuthConfig();
+      if (!authConfig) return;
+      try {
+        const { data } = await api.get('/users/me', authConfig);
+        setCurrentUserId(data?.id ?? null);
+      } catch (_) {
+        setCurrentUserId(null);
+      }
+    };
+
     const fetchBranches = async () => {
       try {
         setLoadingBranches(true);
@@ -160,9 +172,15 @@ const AvailabilityEditor = () => {
     };
     
 
+    fetchCurrentUserId();
     fetchBranches();
     loadAvailabilityData();
   }, []);
+
+  useEffect(() => {
+    if (currentUserId === null) return;
+    loadAvailabilityData();
+  }, [currentUserId]);
 
   const loadAvailabilities = async () => {
     const authConfig = withAuthConfig({}, (msg) => setErrors((prev) => ({ ...prev, list: msg })));
@@ -172,7 +190,13 @@ const AvailabilityEditor = () => {
     }
     try {
       setLoadingAvailabilities(true);
-      const { data } = await api.get('/api/lawyer-availability/weekly', authConfig);
+      const { data } = await api.get('/api/lawyer-availability/weekly', {
+        ...authConfig,
+        params: {
+          ...(authConfig.params || {}),
+          ...(currentUserId ? { lawyer_user_id: currentUserId } : {}),
+        },
+      });
       console.log('[availability] fetched list', data?.length, data);
       const deduped = [];
       const seen = new Set();
@@ -207,7 +231,13 @@ const AvailabilityEditor = () => {
       return;
     }
     try {
-      const { data } = await api.get('/api/lawyer-availability/blackouts', authConfig);
+      const { data } = await api.get('/api/lawyer-availability/blackouts', {
+        ...authConfig,
+        params: {
+          ...(authConfig.params || {}),
+          ...(currentUserId ? { lawyer_user_id: currentUserId } : {}),
+        },
+      });
       setBlackouts(data || []);
     } catch (err) {
       if (handleAuthFailure(err, (msg) => setErrors((prev) => ({ ...prev, list: msg })))) return;
@@ -294,7 +324,13 @@ const AvailabilityEditor = () => {
     try {
       setSaving(true);
       for (const body of payloads) {
-        const res = await api.post('/api/lawyer-availability/weekly', body, authConfig);
+        const res = await api.post('/api/lawyer-availability/weekly', body, {
+          ...authConfig,
+          params: {
+            ...(authConfig.params || {}),
+            ...(currentUserId ? { lawyer_user_id: currentUserId } : {}),
+          },
+        });
         console.log('[availability] save success', res.status, res.data);
       }
       setSaveMessage('Availability saved successfully.');
@@ -353,7 +389,13 @@ const AvailabilityEditor = () => {
 
     try {
       setCancelingSlotId(slot.id ?? key);
-      await api.post('/api/lawyer-availability/blackouts', payload, authConfig);
+      await api.post('/api/lawyer-availability/blackouts', payload, {
+        ...authConfig,
+        params: {
+          ...(authConfig.params || {}),
+          ...(currentUserId ? { lawyer_user_id: currentUserId } : {}),
+        },
+      });
       setCancelMessage(`Availability on ${dateToCancel} ${startLabel}–${endLabel} cancelled.`);
       setCancelledSlotKeys((prev) => {
         const next = new Set(prev);

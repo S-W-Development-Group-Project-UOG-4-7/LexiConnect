@@ -16,9 +16,24 @@ from app.models.branch import Branch
 from app.models.lawyer_availability import WeeklyAvailability
 from app.models.lawyer import Lawyer
 from app.models.service_package import ServicePackage
+from app.models.user import User, UserRole
 from app.modules.blackouts.models import BlackoutDay
 
 logger = logging.getLogger(__name__)
+
+
+def resolve_lawyer_user_id(db: Session, lawyer_id: int) -> int | None:
+    if lawyer_id is None:
+        return None
+    lawyer = db.query(Lawyer).filter(Lawyer.id == lawyer_id).first()
+    if not lawyer:
+        return None
+    if lawyer.user_id:
+        return lawyer.user_id
+    if not lawyer.email:
+        return None
+    user = db.query(User).filter(User.email == lawyer.email).first()
+    return user.id if user else None
 
 
 def _get_timezone(tz_name: str):
@@ -243,6 +258,17 @@ def get_bookable_slots(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="duration_minutes must be between 5 and 240",
         )
+
+    user_row = (
+        db.query(User)
+        .filter(User.id == lawyer_id, User.role == UserRole.lawyer)
+        .first()
+    )
+    if not user_row:
+        mapped_id = resolve_lawyer_user_id(db, lawyer_id)
+        if mapped_id is not None:
+            lawyer_id = mapped_id
+
     end_date = date_from + timedelta(days=days - 1)
 
     weekly_rows = (
@@ -427,6 +453,16 @@ def get_available_slots(
 ) -> list[dict]:
     if days < 1 or days > 31:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="days must be 1-31")
+
+    user_row = (
+        db.query(User)
+        .filter(User.id == lawyer_user_id, User.role == UserRole.lawyer)
+        .first()
+    )
+    if not user_row:
+        mapped_id = resolve_lawyer_user_id(db, lawyer_user_id)
+        if mapped_id is not None:
+            lawyer_user_id = mapped_id
 
     lawyer_row = db.query(Lawyer).filter(Lawyer.user_id == lawyer_user_id).first()
     if not lawyer_row:

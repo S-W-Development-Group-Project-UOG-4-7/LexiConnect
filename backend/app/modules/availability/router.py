@@ -30,6 +30,7 @@ from app.modules.availability.service import (
     delete_availability_template,
     get_bookable_slots,
     list_my_availability,
+    resolve_lawyer_user_id,
     update_availability_template,
 )
 
@@ -96,6 +97,7 @@ def delete_template(
 @router.get("/bookable-slots", response_model=list[BookableSlotsByDate])
 def get_bookable_slots_for_lawyer(
     lawyer_id: int | None = Query(default=None),
+    lawyer_user_id: int | None = Query(default=None),
     date_from: date = Query(..., description="YYYY-MM-DD"),
     days: int = Query(14, ge=1, le=31),
     service_package_id: int | None = Query(default=None),
@@ -107,25 +109,31 @@ def get_bookable_slots_for_lawyer(
 ):
     role = str(getattr(current_user, "role", "") or "").lower()
     target_id: int | None = None
+    resolved_user_id: int | None = None
+
+    if lawyer_user_id is not None:
+        resolved_user_id = lawyer_user_id
+    elif lawyer_id is not None:
+        target_user = db.query(User).filter(User.id == lawyer_id, User.role == UserRole.lawyer).first()
+        if target_user:
+            resolved_user_id = target_user.id
+        else:
+            resolved_user_id = resolve_lawyer_user_id(db, lawyer_id)
 
     if role == "lawyer":
-        target_id = lawyer_id or current_user.id
+        target_id = resolved_user_id or current_user.id
         if target_id != current_user.id:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not allowed")
     else:
-        if lawyer_id is None:
+        if resolved_user_id is None:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail="lawyer_id is required",
+                detail="lawyer_user_id is required",
             )
-        target_user = (
-            db.query(User)
-            .filter(User.id == lawyer_id, User.role == UserRole.lawyer)
-            .first()
-        )
+        target_user = db.query(User).filter(User.id == resolved_user_id, User.role == UserRole.lawyer).first()
         if not target_user:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Lawyer not found")
-        target_id = lawyer_id
+        target_id = resolved_user_id
 
     lawyer_row = db.query(Lawyer).filter(Lawyer.user_id == target_id).first()
 
