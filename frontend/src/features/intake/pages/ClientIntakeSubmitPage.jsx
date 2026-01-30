@@ -14,6 +14,9 @@ import { getBookingById } from "../../../services/bookings"; // <-- adjust if ne
 
 const URGENCY = ["Low", "Medium", "High"];
 
+// --- Draft helpers (localStorage) ---
+const draftKey = (bookingId) => `lexiconnect:intake:draft:booking:${bookingId}`;
+
 function buildAnswersJson(rows) {
   const out = {};
   for (const row of rows) {
@@ -78,6 +81,10 @@ export default function ClientIntakeSubmitPage() {
   const [submitting, setSubmitting] = useState(false);
   const [err, setErr] = useState("");
   const [success, setSuccess] = useState("");
+
+  // draft states
+  const [draftStatus, setDraftStatus] = useState("idle"); // idle | saved | unsaved
+  const [lastSavedAt, setLastSavedAt] = useState(null);
 
   const answersJson = useMemo(() => buildAnswersJson(qaRows), [qaRows]);
 
@@ -146,6 +153,7 @@ export default function ClientIntakeSubmitPage() {
         setQaRows(answersToRows(data?.answers_json || {}));
 
         setMode("view");
+        setDraftStatus("idle");
       } catch (e) {
         if (!mounted) return;
 
@@ -156,7 +164,8 @@ export default function ClientIntakeSubmitPage() {
         } else {
           const status = e?.response?.status;
           if (status === 401) setErr("Unauthorized. Please login again.");
-          else if (status === 403) setErr("You are not allowed to view this intake.");
+          else if (status === 403)
+            setErr("You are not allowed to view this intake.");
           else setErr(e?.response?.data?.detail || "Failed to load intake");
         }
       } finally {
@@ -169,6 +178,80 @@ export default function ClientIntakeSubmitPage() {
       mounted = false;
     };
   }, [bookingIdNum, hasValidBookingId]);
+
+  // -------------------------
+  // Draft: restore once in CREATE mode (only if intake doesn't exist)
+  // -------------------------
+  useEffect(() => {
+    if (!hasValidBookingId) return;
+    if (loadingIntake) return;
+
+    // Only restore draft if no server intake yet and we're creating
+    if (mode !== "create") return;
+
+    try {
+      const raw = localStorage.getItem(draftKey(bookingIdNum));
+      if (!raw) return;
+
+      const draft = JSON.parse(raw);
+      if (!draft || typeof draft !== "object") return;
+
+      // restore
+      setSubject(draft.subject || "");
+      setDetails(draft.details || "");
+      setUrgency(draft.urgency || URGENCY[1]);
+      setQaRows(Array.isArray(draft.qaRows) && draft.qaRows.length ? draft.qaRows : [{ key: "", value: "" }]);
+
+      setDraftStatus("saved");
+      setLastSavedAt(draft.savedAt || null);
+    } catch (e) {
+      console.warn("Failed to restore intake draft", e);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, loadingIntake, bookingIdNum, hasValidBookingId]);
+
+  // -------------------------
+  // Draft: autosave while typing (CREATE or EDIT only)
+  // -------------------------
+  useEffect(() => {
+    if (!hasValidBookingId) return;
+    if (readOnly) return; // don't save in view mode
+
+    // Mark as unsaved as soon as user changes fields
+    setDraftStatus("unsaved");
+
+    const t = setTimeout(() => {
+      try {
+        const payload = {
+          subject,
+          details,
+          urgency,
+          qaRows,
+          savedAt: new Date().toISOString(),
+        };
+        localStorage.setItem(draftKey(bookingIdNum), JSON.stringify(payload));
+        setDraftStatus("saved");
+        setLastSavedAt(payload.savedAt);
+      } catch (e) {
+        console.warn("Failed to autosave intake draft", e);
+      }
+    }, 800); // debounce
+
+    return () => clearTimeout(t);
+  }, [subject, details, urgency, qaRows, readOnly, bookingIdNum, hasValidBookingId]);
+
+  function clearDraft() {
+    if (!hasValidBookingId) return;
+    try {
+      localStorage.removeItem(draftKey(bookingIdNum));
+      setDraftStatus("idle");
+      setLastSavedAt(null);
+      setSuccess("Draft cleared.");
+      setErr("");
+    } catch (e) {
+      setErr("Failed to clear draft.");
+    }
+  }
 
   function addRow() {
     setQaRows((prev) => [...prev, { key: "", value: "" }]);
@@ -189,8 +272,18 @@ export default function ClientIntakeSubmitPage() {
     setErr("");
     setSuccess("");
 
-    if (!canSave) {
-      if (!hasValidBookingId) setErr("Missing/invalid booking id.");
+    if (!hasValidBookingId) {
+      setErr("Missing/invalid booking id.");
+      return;
+    }
+
+    // Better validation feedback
+    if (subject.trim().length < 3) {
+      setErr("Subject must be at least 3 characters.");
+      return;
+    }
+    if (details.trim().length < 10) {
+      setErr("Details must be at least 10 characters.");
       return;
     }
 
@@ -210,6 +303,13 @@ export default function ClientIntakeSubmitPage() {
         setExistingIntake(res?.data || null);
         setMode("view");
         setSuccess("Intake submitted successfully.");
+
+        // clear draft after successful submit
+        try {
+          localStorage.removeItem(draftKey(bookingIdNum));
+        } catch {}
+        setDraftStatus("idle");
+        setLastSavedAt(null);
         return;
       }
 
@@ -231,13 +331,22 @@ export default function ClientIntakeSubmitPage() {
         setExistingIntake(res?.data || null);
         setMode("view");
         setSuccess("Intake updated successfully.");
+
+        // clear draft after successful update
+        try {
+          localStorage.removeItem(draftKey(bookingIdNum));
+        } catch {}
+        setDraftStatus("idle");
+        setLastSavedAt(null);
       }
     } catch (e2) {
       const status = e2?.response?.status;
 
       if (status === 401) setErr("Unauthorized. Please login again.");
-      else if (status === 403) setErr("You are not allowed to submit/update this intake.");
-      else if (status >= 500) setErr("Server error while saving intake. Check backend logs.");
+      else if (status === 403)
+        setErr("You are not allowed to submit/update this intake.");
+      else if (status >= 500)
+        setErr("Server error while saving intake. Check backend logs.");
       else setErr(e2?.response?.data?.detail || "Failed to save intake");
     } finally {
       setSubmitting(false);
@@ -264,6 +373,13 @@ export default function ClientIntakeSubmitPage() {
       setSubject("");
       setDetails("");
       setQaRows([{ key: "", value: "" }]);
+
+      // clear draft too
+      try {
+        localStorage.removeItem(draftKey(bookingIdNum));
+      } catch {}
+      setDraftStatus("idle");
+      setLastSavedAt(null);
 
       setSuccess("Intake deleted.");
     } catch (e) {
@@ -300,6 +416,13 @@ export default function ClientIntakeSubmitPage() {
   const derivedCaseType =
     existingIntake?.case_type || deriveCaseTypeFromBooking(booking);
 
+  const draftLabel =
+    draftStatus === "saved"
+      ? "Draft saved"
+      : draftStatus === "unsaved"
+      ? "Unsaved changes"
+      : "No draft";
+
   return (
     <div className="min-h-screen p-6 text-white">
       <div className="max-w-3xl mx-auto">
@@ -323,6 +446,28 @@ export default function ClientIntakeSubmitPage() {
                     {new Date(existingIntake.updated_at).toLocaleString()})
                   </>
                 )}
+              </div>
+            )}
+
+            {/* Draft indicator only when creating/editing */}
+            {!readOnly && hasValidBookingId && (
+              <div className="mt-2 text-xs opacity-80 flex items-center gap-2">
+                <span className="px-2 py-1 rounded border border-slate-700 bg-slate-900/60">
+                  {draftLabel}
+                  {lastSavedAt ? (
+                    <span className="opacity-70">
+                      {" "}
+                      • {new Date(lastSavedAt).toLocaleTimeString()}
+                    </span>
+                  ) : null}
+                </span>
+                <button
+                  type="button"
+                  onClick={clearDraft}
+                  className="px-2 py-1 rounded bg-slate-800 border border-slate-700 hover:bg-slate-700"
+                >
+                  Clear draft
+                </button>
               </div>
             )}
           </div>
@@ -432,7 +577,9 @@ export default function ClientIntakeSubmitPage() {
                 disabled={readOnly}
                 className="mt-1 w-full rounded bg-slate-800 border border-slate-700 px-3 py-2 disabled:opacity-60"
               />
-              <div className="text-xs opacity-70 mt-1">Keep it short and clear.</div>
+              <div className="text-xs opacity-70 mt-1">
+                Keep it short and clear (min 3 characters).
+              </div>
             </div>
 
             <div className="md:col-span-2">
@@ -445,7 +592,7 @@ export default function ClientIntakeSubmitPage() {
                 className="mt-1 w-full rounded bg-slate-800 border border-slate-700 px-3 py-2 disabled:opacity-60"
               />
               <div className="text-xs opacity-70 mt-1">
-                Tip: include dates, amounts, messages, agreements, and witnesses.
+                Tip: include dates, amounts, messages, agreements, and witnesses (min 10 characters).
               </div>
             </div>
           </div>
