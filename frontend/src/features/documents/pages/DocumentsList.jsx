@@ -79,7 +79,11 @@ export default function DocumentsList() {
     ? "/lawyer"
     : "/client";
 
-  const canComment = role === "lawyer" || role === "admin";
+  // ✅ After backend fix: client + lawyer + admin can comment (if they have access)
+  const canComment = role === "client" || role === "lawyer" || role === "admin";
+
+  // Only lawyers/admins can set status tags like [reviewed] / [needs_action]
+  const canSetStatus = role === "lawyer" || role === "admin";
 
   const load = async () => {
     setLoading(true);
@@ -196,7 +200,9 @@ export default function DocumentsList() {
     setCommentError("");
 
     try {
-      const taggedComment = `[${commentStatus}] ${trimmed}`;
+      // Lawyers/Admins can tag status; Clients just post plain text
+      const taggedComment = canSetStatus ? `[${commentStatus}] ${trimmed}` : trimmed;
+
       await createDocumentComment(selectedDoc.id, taggedComment);
       setCommentText("");
 
@@ -206,7 +212,8 @@ export default function DocumentsList() {
     } catch (e2) {
       const status = e2?.response?.status;
       if (status === 401) setCommentError("Unauthorized. Please login again.");
-      else if (status === 403) setCommentError("Only lawyers/admins can comment.");
+      else if (status === 403)
+        setCommentError("Only authorized users can comment on this document.");
       else setCommentError(e2?.response?.data?.detail || "Failed to add comment");
     } finally {
       setCommentSaving(false);
@@ -232,14 +239,16 @@ export default function DocumentsList() {
     const statusClass = statusStyles[statusKey] || statusStyles.new;
     const commentCount = Number(doc.comment_count || 0);
 
-    const uploaderRole = (
-      doc.uploaded_by_role ||
-      doc.latest_comment?.created_by_role ||
-      ""
-    ).toLowerCase();
+    // Prefer showing uploader role (not latest comment role)
+    const uploaderRole = (doc.uploaded_by_role || "").toLowerCase();
+    const uploaderLabel = uploaderRole || "unknown";
+    const uploaderClass =
+      roleBadgeStyles[uploaderLabel] || roleBadgeStyles.unknown;
 
-    const roleLabel = uploaderRole || "unknown";
-    const roleClass = roleBadgeStyles[roleLabel] || roleBadgeStyles.unknown;
+    // Latest comment role (optional badge)
+    const latestRole = (doc.latest_comment?.created_by_role || "").toLowerCase();
+    const latestLabel = latestRole || "unknown";
+    const latestClass = roleBadgeStyles[latestLabel] || roleBadgeStyles.unknown;
 
     return (
       <button
@@ -266,17 +275,24 @@ export default function DocumentsList() {
         </div>
 
         <div className="mt-3 flex flex-wrap gap-2 text-xs">
-          <span className={`px-2 py-1 rounded-full ${roleClass}`}>
-            Latest by: {roleLabel}
+          <span className={`px-2 py-1 rounded-full ${uploaderClass}`}>
+            Uploaded by: {uploaderLabel}
           </span>
+
           <span className="px-2 py-1 rounded-full bg-slate-800 text-slate-300 border border-slate-700">
             {commentCount} comments
           </span>
+
+          {doc.latest_comment?.id && (
+            <span className={`px-2 py-1 rounded-full ${latestClass}`}>
+              Latest comment by: {latestLabel}
+            </span>
+          )}
         </div>
 
         <div className="mt-3 text-sm text-slate-400 truncate">
           {doc.latest_comment?.comment_text
-            ? `Latest: ${doc.latest_comment.comment_text}`
+            ? `Latest: ${stripStatusTag(doc.latest_comment.comment_text)}`
             : "No comments yet."}
         </div>
 
@@ -460,22 +476,29 @@ export default function DocumentsList() {
 
                     {canComment && (
                       <form onSubmit={onSubmitComment} className="space-y-2">
-                        <div className="flex items-center gap-2 text-xs text-slate-300">
-                          <span>Status</span>
-                          <select
-                            value={commentStatus}
-                            onChange={(e) => setCommentStatus(e.target.value)}
-                            className="rounded bg-slate-950/70 border border-slate-800 px-2 py-1 text-xs"
-                          >
-                            <option value="reviewed">Reviewed</option>
-                            <option value="needs_action">Needs action</option>
-                          </select>
-                        </div>
+                        {canSetStatus && (
+                          <div className="flex items-center gap-2 text-xs text-slate-300">
+                            <span>Status</span>
+                            <select
+                              value={commentStatus}
+                              onChange={(e) => setCommentStatus(e.target.value)}
+                              className="rounded bg-slate-950/70 border border-slate-800 px-2 py-1 text-xs"
+                            >
+                              <option value="reviewed">Reviewed</option>
+                              <option value="needs_action">Needs action</option>
+                            </select>
+                          </div>
+                        )}
+
                         <textarea
                           value={commentText}
                           onChange={(e) => setCommentText(e.target.value)}
                           rows={3}
-                          placeholder="Add a comment for the client..."
+                          placeholder={
+                            role === "client"
+                              ? "Add a comment for the lawyer..."
+                              : "Add a comment for the client..."
+                          }
                           className="w-full rounded-lg bg-slate-950/70 border border-slate-800 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
                         />
                         <button
@@ -510,7 +533,7 @@ export default function DocumentsList() {
 
                     {!canComment && (
                       <div className="text-xs text-slate-500">
-                        Only lawyers/admins can post comments.
+                        Only authorized users can post comments.
                       </div>
                     )}
                   </div>
