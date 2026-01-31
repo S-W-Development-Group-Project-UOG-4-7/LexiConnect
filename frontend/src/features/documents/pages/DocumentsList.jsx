@@ -85,6 +85,9 @@ export default function DocumentsList() {
   // Only lawyers/admins can set status tags like [reviewed] / [needs_action]
   const canSetStatus = role === "lawyer" || role === "admin";
 
+  // ✅ Safe UI: only admin sees Delete button (backend still enforces permissions)
+  const canDelete = role === "admin";
+
   const load = async () => {
     setLoading(true);
     setErr("");
@@ -512,15 +515,17 @@ export default function DocumentsList() {
                     )}
 
                     <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => onDelete(selectedDoc)}
-                        disabled={deletingId === selectedDoc.id}
-                        className="px-3 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-sm font-semibold disabled:opacity-60"
-                      >
-                        {deletingId === selectedDoc.id
-                          ? "Deleting..."
-                          : "Delete"}
-                      </button>
+                      {canDelete && (
+                        <button
+                          onClick={() => onDelete(selectedDoc)}
+                          disabled={deletingId === selectedDoc.id}
+                          className="px-3 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-sm font-semibold disabled:opacity-60"
+                        >
+                          {deletingId === selectedDoc.id
+                            ? "Deleting..."
+                            : "Delete"}
+                        </button>
+                      )}
                       <a
                         href={selectedFileUrl}
                         target="_blank"
