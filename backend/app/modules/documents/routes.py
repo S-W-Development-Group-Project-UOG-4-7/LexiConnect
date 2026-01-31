@@ -283,13 +283,22 @@ def create_doc_comment(
     booking = _get_booking_or_404(db, doc.booking_id)
     _ensure_can_access_booking_docs(current_user, booking)
 
-    # Allow client + lawyer + admin to comment (access is still enforced above)
+    # ✅ Allow client + lawyer + admin to comment (access is still enforced above)
     if not (_is_admin(current_user) or _is_lawyer(current_user) or _is_client(current_user)):
         raise HTTPException(status_code=403, detail="Only authorized users can comment")
 
     comment_text = (payload.comment_text or "").strip()
     if not comment_text:
         raise HTTPException(status_code=400, detail="Comment text is required")
+
+    # ✅ Only lawyers/admins can apply status tags
+    lowered = comment_text.lower()
+    if lowered.startswith("[reviewed]") or lowered.startswith("[needs_action]"):
+        if not (_is_admin(current_user) or _is_lawyer(current_user)):
+            raise HTTPException(
+                status_code=403,
+                detail="Only lawyers/admins can set status tags",
+            )
 
     return create_document_comment(
         db=db,
