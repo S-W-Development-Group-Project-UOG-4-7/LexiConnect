@@ -4,13 +4,14 @@ import {
   CategoryScale,
   LinearScale,
   BarElement,
+  Title,
   Tooltip,
   Legend,
 } from "chart.js";
 import { Bar } from "react-chartjs-2";
 import { getAuditTopActions } from "../../services/adminMetrics.service";
 
-ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip, Legend);
+ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
 
 export default function AuditTopActionsBarChart() {
   const [rows, setRows] = useState([]);

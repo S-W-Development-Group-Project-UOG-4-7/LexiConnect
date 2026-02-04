@@ -5,13 +5,22 @@ import {
   LinearScale,
   PointElement,
   LineElement,
+  Title,
   Tooltip,
   Legend,
 } from "chart.js";
 import { Line } from "react-chartjs-2";
 import { getAuthLoginsPerMinute } from "../../services/adminMetrics.service";
 
-ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend);
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  Title,
+  Tooltip,
+  Legend
+);
 
 const formatLabel = (iso) => {
   if (!iso) return "";

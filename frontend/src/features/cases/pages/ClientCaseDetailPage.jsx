@@ -426,13 +426,13 @@ export default function ClientCaseDetailPage() {
                     </div>
                     {data.status || "-"}
                   </div>
-                )}
-              </div>
+                </div>
 
+                <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-5 space-y-3">
+                  <div className="text-xs uppercase tracking-wide text-slate-400">
+                    Assigned Lawyer
+                  </div>
                   <div className="text-sm text-slate-300">
-                    <div className="text-xs uppercase tracking-wide text-slate-400">
-                      Assigned Lawyer
-                    </div>
                     {lawyer?.full_name ||
                       (data.selected_lawyer_id
                         ? `Lawyer #${data.selected_lawyer_id}`
@@ -691,6 +691,6 @@ export default function ClientCaseDetailPage() {
           )}
         </>
       )}
-    </PageShell>
+    </div>
   );
 }
