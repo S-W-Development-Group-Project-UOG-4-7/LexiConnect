@@ -138,28 +138,38 @@ const availabilityService = {
   async getLawyerSlots(lawyerId, params = {}) {
     const queryParams = new URLSearchParams();
     
-    if (params.date) {
-      queryParams.append('date', params.date);
-    }
+    // Required params for the backend endpoint
     if (params.from) {
-      queryParams.append('from', params.from);
+      queryParams.append('from_date', params.from);
     }
     if (params.to) {
-      queryParams.append('to', params.to);
+      queryParams.append('to_date', params.to);
     }
-    if (params.day) {
-      queryParams.append('day', params.day);
-    }
-    if (params.after) {
-      queryParams.append('after', params.after);
-    }
+    // lawyer_id is required for non-lawyer users
+    queryParams.append('lawyer_id', lawyerId);
 
-    const url = queryParams.toString() 
-      ? `/availability/lawyers/${lawyerId}/slots?${queryParams.toString()}`
-      : `/availability/lawyers/${lawyerId}/slots`;
+    const url = `/api/lawyer-availability/slots?${queryParams.toString()}`;
+    console.log('🔍 FETCHING SLOTS:', url);
 
     const response = await api.get(url);
-    return response.data;
+    console.log('🔍 SLOTS RESPONSE:', response.data);
+    
+    // Transform backend response to match expected format for CalendarPreview
+    // Backend returns: { date, start_time, end_time, branch_id, branch_name, location, is_blackout }
+    // CalendarPreview expects: { start: ISO datetime string }
+    const transformedSlots = response.data.map(slot => ({
+      ...slot,
+      // Create ISO datetime string for the 'start' field expected by CalendarPreview
+      start: `${slot.date}T${slot.start_time}`,
+      end: `${slot.date}T${slot.end_time}`
+    }));
+    
+    return transformedSlots;
+  },
+
+  // Database cleanup
+  async cleanDatabase() {
+    await api.delete('/api/lawyer-availability/clean');
   }
 };
 

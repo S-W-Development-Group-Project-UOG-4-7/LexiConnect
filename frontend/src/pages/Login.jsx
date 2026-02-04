@@ -6,7 +6,7 @@ import { getUserFromToken } from "../services/auth";
 export default function Login() {
   const navigate = useNavigate();
   const [email, setEmail] = useState("lawyer@lexiconnect.local");
-  const [password, setPassword] = useState("password");
+  const [password, setPassword] = useState("Lawyer@123");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
