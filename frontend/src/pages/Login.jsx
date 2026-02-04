@@ -8,7 +8,7 @@ export default function Login() {
   const navigate = useNavigate();
   const { refreshMe } = useAuth();
   const [email, setEmail] = useState("lawyer@lexiconnect.local");
-  const [password, setPassword] = useState("password");
+  const [password, setPassword] = useState("Lawyer@123");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 

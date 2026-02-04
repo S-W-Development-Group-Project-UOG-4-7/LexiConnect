@@ -1884,3 +1884,199 @@ body {
   border-color: rgba(255, 255, 255, 0.16);
   background: rgba(255, 255, 255, 0.06);
 }
+
+/* ========================================
+   REPEAT STEP - LIGHT THEME (MATCHING REFERENCE)
+   ======================================== */
+
+.repeat-step-light {
+  width: 100%;
+  background: #ffffff;
+  border-radius: 16px;
+  padding: 32px 28px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08);
+}
+
+.repeat-title-light {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #1e293b;
+  margin: 0 0 8px 0;
+  text-align: center;
+}
+
+.repeat-subtitle-light {
+  font-size: 0.95rem;
+  color: #64748b;
+  margin: 0 0 28px 0;
+  text-align: center;
+}
+
+.repeat-options-light {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* Option Card */
+.repeat-card-light {
+  background: #ffffff;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 18px 20px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: block;
+}
+
+.repeat-card-light:hover {
+  border-color: #cbd5e1;
+  background: #f8fafc;
+}
+
+.repeat-card-light.selected {
+  border-color: #14b8a6;
+  background: rgba(20, 184, 166, 0.04);
+  box-shadow: 0 0 0 3px rgba(20, 184, 166, 0.1);
+}
+
+.repeat-card-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* Custom Radio Button */
+.repeat-radio-light {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 20px;
+  height: 20px;
+  min-width: 20px;
+  border: 2px solid #cbd5e1;
+  border-radius: 50%;
+  background: #ffffff;
+  cursor: pointer;
+  position: relative;
+  transition: all 0.15s ease;
+}
+
+.repeat-radio-light:checked {
+  border-color: #14b8a6;
+  background: #14b8a6;
+}
+
+.repeat-radio-light:checked::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #ffffff;
+}
+
+.repeat-radio-light:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(20, 184, 166, 0.2);
+}
+
+/* Icon */
+.repeat-icon-light {
+  color: #64748b;
+  flex-shrink: 0;
+}
+
+.repeat-card-light.selected .repeat-icon-light {
+  color: #14b8a6;
+}
+
+/* Label */
+.repeat-card-label {
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: #334155;
+}
+
+/* Expanded Content */
+.repeat-card-expand {
+  margin-top: 16px;
+  padding-left: 32px;
+}
+
+/* Weeks Input */
+.weeks-inline-light {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.weeks-input-light {
+  width: 70px;
+  height: 40px;
+  border-radius: 8px;
+  background: #f1f5f9;
+  border: 1.5px solid #e2e8f0;
+  color: #334155;
+  font-size: 1rem;
+  font-weight: 600;
+  text-align: center;
+  outline: none;
+  transition: all 0.15s ease;
+  -moz-appearance: textfield;
+}
+
+.weeks-input-light::-webkit-outer-spin-button,
+.weeks-input-light::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.weeks-input-light:focus {
+  border-color: #14b8a6;
+  box-shadow: 0 0 0 3px rgba(20, 184, 166, 0.15);
+  background: #ffffff;
+}
+
+.weeks-suffix-light {
+  font-size: 0.9rem;
+  color: #64748b;
+  font-weight: 500;
+}
+
+/* Date Input */
+.date-inline-light {
+  display: flex;
+  align-items: center;
+}
+
+.date-input-light {
+  width: 180px;
+  height: 40px;
+  border-radius: 8px;
+  background: #f1f5f9;
+  border: 1.5px solid #e2e8f0;
+  color: #334155;
+  font-size: 0.95rem;
+  font-weight: 500;
+  padding: 0 14px;
+  outline: none;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.date-input-light:focus {
+  border-color: #14b8a6;
+  box-shadow: 0 0 0 3px rgba(20, 184, 166, 0.15);
+  background: #ffffff;
+}
+
+.date-error-light {
+  font-size: 0.8rem;
+  color: #ef4444;
+  margin: 10px 0 0 0;
+}
+
+/* ======================================== */

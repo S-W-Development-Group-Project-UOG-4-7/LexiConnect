@@ -76,6 +76,21 @@ function AvailabilityManagePage({ me, branches }) {
     }
   };
 
+  const handleCleanDatabase = async () => {
+    if (!window.confirm('⚠️ Are you sure you want to clean all availability data? This cannot be undone!')) {
+      return;
+    }
+    
+    try {
+      await availabilityService.cleanDatabase();
+      alert('✅ Database cleaned successfully');
+      setRefreshKey(prev => prev + 1);
+    } catch (error) {
+      console.error('Failed to clean database:', error);
+      alert('❌ Failed to clean database: ' + (error.response?.data?.detail || error.message));
+    }
+  };
+
   // Summary cards data
   const weeklyRules = rules.length;
   const totalSlots = 'Auto-calculated'; // Could be calculated from calendar data
@@ -101,9 +116,34 @@ function AvailabilityManagePage({ me, branches }) {
       minHeight: '100vh'
     }}>
       {/* Page Title */}
-      <h1 style={{ marginBottom: '30px', color: '#333' }}>
-        Availability Management
-      </h1>
+      <div style={{ 
+        display: 'flex', 
+        justifyContent: 'space-between', 
+        alignItems: 'center', 
+        marginBottom: '30px' 
+      }}>
+        <h1 style={{ margin: 0, color: '#333' }}>
+          Availability Management
+        </h1>
+        <button
+          onClick={handleCleanDatabase}
+          style={{
+            padding: '10px 20px',
+            backgroundColor: '#dc3545',
+            color: 'white',
+            border: 'none',
+            borderRadius: '6px',
+            cursor: 'pointer',
+            fontSize: '14px',
+            fontWeight: '500',
+            transition: 'background-color 0.2s'
+          }}
+          onMouseOver={(e) => e.target.style.backgroundColor = '#c82333'}
+          onMouseOut={(e) => e.target.style.backgroundColor = '#dc3545'}
+        >
+          🗑️ Clean Database
+        </button>
+      </div>
 
       {/* Summary Cards */}
       <div style={{
@@ -185,8 +225,8 @@ function AvailabilityManagePage({ me, branches }) {
         />
       </div>
 
-      {/* Section 2: Calendar Preview */}
-      <div style={{ 
+      {/* Section 2: Calendar Preview - HIDDEN */}
+      {/* <div style={{ 
         marginBottom: '40px', 
         padding: '25px', 
         border: '1px solid #e9ecef', 
@@ -203,7 +243,7 @@ function AvailabilityManagePage({ me, branches }) {
           onCancelDay={handleCancelDay}
           exceptions={exceptions}
         />
-      </div>
+      </div> */}
 
       {/* Section 3: Blocked Dates (Inline Exceptions) */}
       <div style={{ 
