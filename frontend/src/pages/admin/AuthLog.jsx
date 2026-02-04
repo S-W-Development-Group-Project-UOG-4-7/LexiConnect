@@ -37,12 +37,12 @@ export default function AuthLog() {
       if (success === "Success") params.success = true;
       if (success === "Failure") params.success = false;
       if (eventType && eventType !== "All") params.event_type = eventType;
-      if (debouncedEmail) params.email = debouncedEmail;
-      if (reason) params.failure_reason = reason;
+      if (debouncedEmail) params.q = debouncedEmail;
+      if (reason) params.reason = reason;
       if (dateFrom) params.date_from = `${dateFrom}T00:00:00`;
       if (dateTo) params.date_to = `${dateTo}T23:59:59`;
 
-      const res = await api.get("/api/auth-logs", { params });
+      const res = await api.get("/api/admin/auth-logs", { params });
       setLogs(res.data?.items || []);
       setTotal(res.data?.total || 0);
       setPage(res.data?.page || nextPage);

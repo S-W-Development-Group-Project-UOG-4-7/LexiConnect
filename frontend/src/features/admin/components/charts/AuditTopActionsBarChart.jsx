@@ -4,33 +4,45 @@ import {
   CategoryScale,
   LinearScale,
   BarElement,
+  Title,
   Tooltip,
   Legend,
 } from "chart.js";
 import { Bar } from "react-chartjs-2";
 import { getAuditTopActions } from "../../services/adminMetrics.service";
 
-ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip, Legend);
+ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
 
 export default function AuditTopActionsBarChart() {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const timerRef = useRef(null);
+  const errorCountRef = useRef(0);
 
   const load = async () => {
+    if (errorCountRef.current >= 3) {
+      return;
+    }
     setLoading(true);
     setError("");
     try {
       const res = await getAuditTopActions(7, 8);
       setRows(Array.isArray(res) ? res : []);
+      errorCountRef.current = 0;
     } catch (err) {
-      setError(
+      const detail =
         err?.response?.data?.detail ||
-          err?.response?.data?.message ||
-          "Failed to load audit action metrics."
-      );
+        err?.response?.data?.message ||
+        err?.message;
+      console.error("Audit top actions metrics failed:", detail);
+      setError("Failed to load audit action metrics");
       setRows([]);
+      errorCountRef.current += 1;
+      if (errorCountRef.current >= 3 && timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
     } finally {
       setLoading(false);
     }
@@ -90,8 +102,15 @@ export default function AuditTopActionsBarChart() {
     <div className="admin-chart-card">
       <div className="admin-chart-header">
         <div>
-          <h3 className="admin-chart-title">Top Audit Actions (7 days)</h3>
-          <p className="admin-chart-subtitle">Most common actions in the last week.</p>
+          <h3 className="admin-chart-title">
+            Top Audit Actions (7 days)
+            <span
+              className="admin-tooltip"
+              title="Most frequent actions recorded in audit logs."
+            >
+              i
+            </span>
+          </h3>
         </div>
       </div>
 

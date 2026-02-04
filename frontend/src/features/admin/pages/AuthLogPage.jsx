@@ -43,11 +43,22 @@ export default function AuthLogPage() {
       setPage(data?.page || nextPage);
       setPageSize(data?.page_size || nextPageSize);
     } catch (err) {
-      const msg =
-        err?.response?.data?.detail ||
-        err?.response?.data?.message ||
-        "Failed to load auth logs.";
-      setError(msg);
+      const statusCode = err?.response?.status;
+      if (statusCode === 404) {
+        setLogs([]);
+        setTotal(0);
+        setError("");
+        return;
+      }
+      if (statusCode >= 500) {
+        const msg =
+          err?.response?.data?.detail ||
+          err?.response?.data?.message ||
+          "Failed to load auth logs.";
+        setError(msg);
+      } else {
+        setError("");
+      }
       setLogs([]);
       setTotal(0);
     } finally {
@@ -80,7 +91,8 @@ export default function AuthLogPage() {
     return entry?.success ? "Success" : "Failed";
   };
 
-  const userLabel = (entry) => entry?.user_name || entry?.user || entry?.user_id || "-";
+  const userLabel = (entry) =>
+    entry?.user_name || entry?.email || entry?.user || entry?.user_id || "-";
 
   const successCount = useMemo(
     () => logs.filter((l) => l?.success === true).length,
@@ -242,7 +254,7 @@ export default function AuthLogPage() {
                     </td>
                     <td className="py-3 pr-4">{userLabel(entry)}</td>
                     <td className="py-3 pr-4">{entry.email || "-"}</td>
-                    <td className="py-3 pr-4">{entry.ip || entry.ip_address || "-"}</td>
+                    <td className="py-3 pr-4">{entry.ip_address || entry.ip || "-"}</td>
                     <td className="py-3 pr-4">
                       <span
                         className={`px-2 py-1 rounded-full text-xs border ${
@@ -254,7 +266,9 @@ export default function AuthLogPage() {
                         {statusLabel(entry)}
                       </span>
                     </td>
-                    <td className="py-3">{entry.reason || entry.failure_reason || "-"}</td>
+                    <td className="py-3">
+                      {entry.message || entry.reason || entry.failure_reason || "-"}
+                    </td>
                   </tr>
                 ))}
             </tbody>

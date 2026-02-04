@@ -13,3 +13,29 @@ export async function getAuditTopActions(days = 7, limit = 8) {
   });
   return data;
 }
+
+export async function getSystemActivityDistribution(days = 7) {
+  const { data } = await api.get("/api/admin/metrics/system-activity-distribution", {
+    params: { days },
+  });
+  return data;
+}
+
+export async function getBookingOutcomeDistribution(days = 30) {
+  const { data } = await api.get("/api/admin/metrics/booking-outcome-distribution", {
+    params: { days },
+  });
+  return data;
+}
+
+export async function getBookingStatusDistribution(days = 30) {
+  const { data } = await api.get("/api/admin/metrics/booking-status-distribution", {
+    params: { days },
+  });
+  return data;
+}
+
+export async function getKycStatusDistribution() {
+  const { data } = await api.get("/api/admin/metrics/kyc-status-distribution");
+  return data;
+}

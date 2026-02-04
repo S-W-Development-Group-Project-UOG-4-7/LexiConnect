@@ -4,6 +4,7 @@ import { ArrowLeft, ArrowRight, Briefcase, MapPin, MessageCircle, Search } from 
 
 import { fetchPublicCases } from "../services/publicFeedApi";
 import { getSpecializations } from "../../cases/services/cases.service";
+import { useAuth } from "../../../context/AuthContext";
 
 type PublicCase = {
   id: number;
@@ -23,6 +24,7 @@ const formatDate = (value?: string) => {
 
 export default function PublicCaseFeedPage() {
   const navigate = useNavigate();
+  const { user, isAuthenticated } = useAuth();
   const [cases, setCases] = useState<PublicCase[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -38,6 +40,17 @@ export default function PublicCaseFeedPage() {
 
   const [specializations, setSpecializations] = useState<Array<{ id: number; name: string }>>([]);
   const [specializationsLoading, setSpecializationsLoading] = useState(true);
+
+  const isAuthed =
+    Boolean(isAuthenticated) ||
+    Boolean(user) ||
+    Boolean(localStorage.getItem("access_token"));
+  const home =
+    isAuthed && user?.role === "client"
+      ? "/client/dashboard"
+      : isAuthed && user?.role === "lawyer"
+        ? "/lawyer/dashboard"
+        : "/";
 
   const districtOptions = useMemo(
     () => ["Colombo", "Kandy", "Galle", "Jaffna", "Gampaha"],
@@ -117,7 +130,7 @@ export default function PublicCaseFeedPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white">
       <div className="max-w-6xl mx-auto px-6 py-10 space-y-8">
-        <Link to="/" className="inline-flex items-center gap-2 text-sm text-amber-300">
+        <Link to={home} className="inline-flex items-center gap-2 text-sm text-amber-300">
           <ArrowLeft className="w-4 h-4" />
           Back to home
         </Link>

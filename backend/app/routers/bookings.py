@@ -18,6 +18,7 @@ from app.schemas.booking import (
 )
 from app.models.user import User
 from app.modules.audit_log.service import log_event
+from app.modules.notifications.service import create_notification
 from app.modules.blackouts.models import BlackoutDay
 from app.modules.lawyer_profiles.models import LawyerProfile
 from app.models.branch import Branch
@@ -116,6 +117,10 @@ def create_booking(
     if not allowed_starts:
         raise HTTPException(status_code=400, detail="No available slot for selected time")
     scheduled_at = booking_in.scheduled_at
+    if scheduled_at and scheduled_at.tzinfo is None:
+        scheduled_at = scheduled_at.replace(tzinfo=timezone.utc)
+    elif scheduled_at:
+        scheduled_at = scheduled_at.astimezone(timezone.utc)
     matches = any(
         (s.astimezone(timezone.utc) == scheduled_at.astimezone(timezone.utc)) for s in allowed_starts
     )
@@ -125,7 +130,7 @@ def create_booking(
     duration_minutes = int(pkg.duration or 0)
     if duration_minutes <= 0:
         raise HTTPException(status_code=400, detail="Service duration is invalid")
-    ends_at = booking_in.scheduled_at + timedelta(minutes=duration_minutes)
+    ends_at = scheduled_at + timedelta(minutes=duration_minutes)
 
     # Conflict check (pending + confirmed)
     conflict = (
@@ -137,7 +142,7 @@ def create_booking(
             Booking.scheduled_at.isnot(None),
             Booking.ends_at.isnot(None),
             Booking.scheduled_at < ends_at,
-            Booking.ends_at > booking_in.scheduled_at,
+            Booking.ends_at > scheduled_at,
         )
         .first()
     )
@@ -148,7 +153,7 @@ def create_booking(
         client_id=current_user.id,
         lawyer_id=booking_in.lawyer_id,
         branch_id=booking_in.branch_id,
-        scheduled_at=booking_in.scheduled_at,
+        scheduled_at=scheduled_at,
         ends_at=ends_at,
         note=booking_in.note,
         service_package_id=booking_in.service_package_id,
@@ -158,11 +163,10 @@ def create_booking(
     )
     db.add(booking)
     try:
-        db.commit()
+        db.flush()
     except IntegrityError:
         db.rollback()
         raise HTTPException(status_code=409, detail="SLOT_TAKEN")
-    db.refresh(booking)
     # Diagnostics: confirm insert + log DB URL/schema and timestamps (sanitized).
     try:
         db_url = db.get_bind().engine.url.render_as_string(hide_password=True)
@@ -191,7 +195,24 @@ def create_booking(
             "status_from": "new",
             "status_to": booking.status,
         },
+        commit=False,
     )
+    # Notification fired for booking request
+    try:
+        create_notification(
+            db,
+            user_id=booking.lawyer_id,
+            type="BOOKING_REQUESTED",
+            title="New booking request",
+            message="A client requested a booking.",
+            entity_type="booking",
+            entity_id=booking.id,
+            commit=False,
+        )
+    except Exception as exc:
+        logger.warning("Notification insert failed (BOOKING_REQUESTED): %s", exc)
+    db.commit()
+    db.refresh(booking)
     return BookingOut.model_validate(booking)
 
 
@@ -406,8 +427,6 @@ def cancel_booking(
 
     booking.status = "cancelled"
     booking.blocks_time = False
-    db.commit()
-    db.refresh(booking)
     log_event(
         db,
         user=current_user,
@@ -418,7 +437,24 @@ def cancel_booking(
             "client_id": booking.client_id,
             "lawyer_id": booking.lawyer_id,
         },
+        commit=False,
     )
+    # Notification fired for booking cancellation
+    try:
+        create_notification(
+            db,
+            user_id=booking.lawyer_id,
+            type="BOOKING_CANCELLED",
+            title="Booking cancelled",
+            message="A client cancelled a booking.",
+            entity_type="booking",
+            entity_id=booking.id,
+            commit=False,
+        )
+    except Exception as exc:
+        logger.warning("Notification insert failed (BOOKING_CANCELLED): %s", exc)
+    db.commit()
+    db.refresh(booking)
     return BookingCancelOut.model_validate(booking)
 
 
@@ -534,8 +570,9 @@ def confirm_booking(
     status_from = booking.status
     booking.status = "confirmed"
     booking.blocks_time = True
-    db.commit()
-    db.refresh(booking)
+    pretty_time = (
+        booking.scheduled_at.strftime("%b %d, %Y %H:%M") if booking.scheduled_at else "scheduled time"
+    )
     log_event(
         db,
         user=current_user,
@@ -548,7 +585,24 @@ def confirm_booking(
             "status_from": status_from,
             "status_to": booking.status,
         },
+        commit=False,
     )
+    # Notification fired for booking confirmation
+    try:
+        create_notification(
+            db,
+            user_id=booking.client_id,
+            type="BOOKING_CONFIRMED",
+            title="Booking confirmed",
+            message=f"Your booking was confirmed for {pretty_time}.",
+            entity_type="booking",
+            entity_id=booking.id,
+            commit=False,
+        )
+    except Exception as exc:
+        logger.warning("Notification insert failed (BOOKING_CONFIRMED): %s", exc)
+    db.commit()
+    db.refresh(booking)
     return BookingOut.model_validate(booking)
 
 
@@ -590,8 +644,6 @@ def reject_booking(
     status_from = booking.status
     booking.status = "rejected"
     booking.blocks_time = False
-    db.commit()
-    db.refresh(booking)
     log_event(
         db,
         user=current_user,
@@ -604,5 +656,22 @@ def reject_booking(
             "status_from": status_from,
             "status_to": booking.status,
         },
+        commit=False,
     )
+    # Notification fired for booking rejection
+    try:
+        create_notification(
+            db,
+            user_id=booking.client_id,
+            type="BOOKING_REJECTED",
+            title="Booking rejected",
+            message="Your booking request was rejected.",
+            entity_type="booking",
+            entity_id=booking.id,
+            commit=False,
+        )
+    except Exception as exc:
+        logger.warning("Notification insert failed (BOOKING_REJECTED): %s", exc)
+    db.commit()
+    db.refresh(booking)
     return BookingOut.model_validate(booking)

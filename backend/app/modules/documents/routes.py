@@ -98,6 +98,21 @@ def _ensure_can_access_booking_docs(current_user: User, booking: Booking):
     raise HTTPException(status_code=403, detail="Not allowed")
 
 
+def _ensure_can_access_document(db: Session, current_user: User, doc: Document):
+    if _is_admin(current_user):
+        return
+    if getattr(doc, "booking_id", None):
+        booking = _get_booking_or_404(db, doc.booking_id)
+        _ensure_can_access_booking_docs(current_user, booking)
+        return
+    case_id = getattr(doc, "case_id", None)
+    if not case_id:
+        raise HTTPException(status_code=404, detail="Document not found")
+    case = db.query(Case).filter(Case.id == case_id).first()
+    if not case or not _can_access_case(current_user, case, db):
+        raise HTTPException(status_code=403, detail="Not allowed")
+
+
 def _can_access_case(user: User, case: Case, db: Session) -> bool:
     if _is_admin(user):
         return True
@@ -247,3 +262,33 @@ def upload_document(
         success=True,
     )
     return doc
+
+
+@router.get("/{document_id}/download")
+def download_document(
+    document_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    doc = get_document(db, document_id)
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    _ensure_can_access_document(db, current_user, doc)
+
+    file_path = getattr(doc, "file_path", None)
+    if not file_path:
+        raise HTTPException(status_code=404, detail="File not found")
+
+    file_path = os.path.normpath(file_path)
+    if not os.path.isabs(file_path):
+        file_path = os.path.normpath(os.path.join(os.getcwd(), file_path))
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="File not found")
+
+    filename = (
+        getattr(doc, "original_filename", None)
+        or getattr(doc, "title", None)
+        or f"document_{doc.id}"
+    )
+    return FileResponse(path=file_path, filename=filename)

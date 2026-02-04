@@ -3,6 +3,7 @@ import os
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.encoders import jsonable_encoder
 from starlette.requests import Request
 from sqlalchemy import String, cast, func, or_
 from sqlalchemy.orm import Session
@@ -90,7 +91,11 @@ def list_audit_logs(
 
     if user_email:
         like = f"%{user_email}%"
-        query = query.join(User, User.id == AuditLog.actor_user_id).filter(User.email.ilike(like))
+        query = query.filter(
+            or_(
+                AuditLog.user_email.ilike(like),
+            )
+        )
 
     if keyword:
         like = f"%{keyword}%"
@@ -151,33 +156,53 @@ def list_audit_logs(
     if date_to:
         query = query.filter(func.date(AuditLog.created_at) <= date_to.date())
 
-    total = query.count()
-    logs = (
-        query.order_by(AuditLog.created_at.desc())
-        .offset((page - 1) * page_size)
-        .limit(page_size)
-        .all()
-    )
-    actor_ids = {l.actor_user_id for l in logs if l.actor_user_id}
+    try:
+        total = query.count()
+        logs = (
+            query.order_by(AuditLog.created_at.desc())
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+            .all()
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500, detail=f"Failed to load audit logs: {exc}"
+        ) from exc
+    actor_ids = {l.user_id for l in logs if l.user_id}
     actor_email_by_id = {}
     if actor_ids:
         rows = db.query(User.id, User.email).filter(User.id.in_(actor_ids)).all()
         actor_email_by_id = {r.id: r.email for r in rows}
     items = []
     for l in logs:
+        meta_payload = jsonable_encoder(l.meta) if l.meta is not None else None
+        entity_type = (l.meta or {}).get("entity_type")
+        entity_id = (l.meta or {}).get("entity_id")
+        entity = (
+            f"{entity_type}:{entity_id}"
+            if entity_type and entity_id
+            else (entity_type or entity_id or None)
+        )
+        status_value = _extract_success_value(l)
         items.append(
             {
                 "id": l.id,
-                "actor_user_id": l.actor_user_id,
-                "actor_email": actor_email_by_id.get(l.actor_user_id),
+                "occurred_at": l.created_at,
+                "actor_user_id": l.user_id,
+                "actor_id": l.user_id,
+                "actor_email": actor_email_by_id.get(l.user_id) or l.user_email,
                 "actor_role": (l.meta or {}).get("actor_role"),
                 "user_id": l.user_id,
+                "user_email": l.user_email,
                 "action": l.action,
                 "description": l.description,
-                "meta": l.meta,
-                "entity_type": (l.meta or {}).get("entity_type"),
-                "entity_id": (l.meta or {}).get("entity_id"),
-                "success": _extract_success_value(l),
+                "meta": meta_payload,
+                "details": meta_payload,
+                "entity_type": entity_type,
+                "entity_id": entity_id,
+                "entity": entity,
+                "success": status_value,
+                "status": status_value,
                 "ip_address": (l.meta or {}).get("ip_address"),
                 "user_agent": (l.meta or {}).get("user_agent"),
                 "created_at": l.created_at,

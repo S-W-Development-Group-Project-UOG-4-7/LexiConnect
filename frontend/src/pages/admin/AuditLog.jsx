@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
-import api from "../../services/api";
+import { listAuditLogs } from "../../features/admin/services/auditLogs.service";
 import "./AuditLog.css";
 
 const ACTIONS = [
@@ -56,20 +56,31 @@ export default function AuditLog() {
       if (dateFrom) params.date_from = `${dateFrom}T00:00:00`;
       if (dateTo) params.date_to = `${dateTo}T23:59:59`;
 
-      const res = await api.get("/api/admin/audit-logs", { params });
-      setLogs(res.data?.items || []);
-      setTotal(res.data?.total || 0);
-      setPage(res.data?.page || nextPage);
-      setPageSize(res.data?.page_size || nextPageSize);
+      const data = await listAuditLogs(params);
+      setLogs(data?.items || []);
+      setTotal(data?.total || 0);
+      setPage(data?.page || nextPage);
+      setPageSize(data?.page_size || nextPageSize);
     } catch (err) {
-      const msg =
-        err?.response?.data?.detail ||
-        err?.response?.data?.message ||
-        "Failed to load audit logs.";
-      setError(msg);
+      const statusCode = err?.response?.status;
+      if (statusCode === 404) {
+        setError("");
+        setLogs([]);
+        setTotal(0);
+        return;
+      }
+      if (statusCode >= 500) {
+        const msg =
+          err?.response?.data?.detail ||
+          err?.response?.data?.message ||
+          "Failed to load audit logs.";
+        setError(msg);
+      } else {
+        setError("");
+      }
       setLogs([]);
       setTotal(0);
-      if (err?.response?.status === 401 || err?.response?.status === 403) {
+      if (statusCode === 401 || statusCode === 403) {
         window.location.href = "/not-authorized";
       }
     } finally {

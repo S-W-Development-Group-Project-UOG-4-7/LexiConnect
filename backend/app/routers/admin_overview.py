@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import func
+from sqlalchemy import case, func
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -99,26 +99,34 @@ def admin_overview(
 
 @router.get("/metrics/auth-logins-per-minute")
 def auth_logins_per_minute(
-    minutes: int = Query(60, ge=5, le=240),
+    minutes: int = Query(60, ge=1, le=1440),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     _require_admin(current_user)
 
+    minutes = max(1, min(1440, minutes))
     now_utc = datetime.now(timezone.utc)
-    minutes = max(5, min(240, minutes))
-    cutoff = now_utc - timedelta(minutes=minutes)
+    end = now_utc.replace(second=0, microsecond=0)
+    start = end - timedelta(minutes=minutes - 1)
 
-    rows = (
-        db.query(
-            func.date_trunc("minute", AuthLog.occurred_at).label("minute"),
-            func.count().label("count"),
+    try:
+        rows = (
+            db.query(
+                func.date_trunc("minute", AuthLog.occurred_at).label("minute"),
+                func.sum(case((AuthLog.success.is_(True), 1), else_=0)).label("success"),
+                func.sum(case((AuthLog.success.is_(False), 1), else_=0)).label("fail"),
+            )
+            .filter(AuthLog.occurred_at >= start, AuthLog.event_type == "LOGIN")
+            .group_by("minute")
+            .order_by("minute")
+            .all()
         )
-        .filter(AuthLog.occurred_at >= cutoff, AuthLog.event_type == "LOGIN")
-        .group_by("minute")
-        .order_by("minute")
-        .all()
-    )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to load auth login metrics: {exc}",
+        ) from exc
 
     counts = {}
     for row in rows:
@@ -127,22 +135,22 @@ def auth_logins_per_minute(
             continue
         if minute.tzinfo is None:
             minute = minute.replace(tzinfo=timezone.utc)
-        counts[minute] = int(row.count or 0)
-
-    start = cutoff.replace(second=0, microsecond=0)
-    if start.tzinfo is None:
-        start = start.replace(tzinfo=timezone.utc)
-    end = now_utc.replace(second=0, microsecond=0)
+        counts[minute] = {"success": int(row.success or 0), "fail": int(row.fail or 0)}
 
     series = []
     cursor = start
-    while cursor <= end:
-        count = counts.get(cursor, 0)
-        minute_iso = cursor.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
-        series.append({"minute": minute_iso, "count": count})
+    for _ in range(minutes):
+        bucket = counts.get(cursor, {"success": 0, "fail": 0})
+        series.append(
+            {
+                "minute": cursor.astimezone(timezone.utc).isoformat().replace("+00:00", "Z"),
+                "success": bucket["success"],
+                "fail": bucket["fail"],
+            }
+        )
         cursor = cursor + timedelta(minutes=1)
 
-    return series
+    return {"minutes": minutes, "series": series}
 
 
 @router.get("/metrics/audit-top-actions")
@@ -168,3 +176,141 @@ def audit_top_actions(
     )
 
     return [{"action": r.action, "count": int(r.count or 0)} for r in rows]
+
+
+@router.get("/metrics/system-activity-distribution")
+def system_activity_distribution(
+    days: int = Query(7, ge=1, le=90),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _require_admin(current_user)
+
+    days = max(1, min(90, days))
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+
+    try:
+        logins = (
+            db.query(func.count(AuthLog.id))
+            .filter(AuthLog.event_type == "LOGIN", AuthLog.occurred_at >= cutoff)
+            .scalar()
+            or 0
+        )
+        bookings = (
+            db.query(func.count(Booking.id))
+            .filter(Booking.created_at >= cutoff)
+            .scalar()
+            or 0
+        )
+        audit_actions = (
+            db.query(func.count(AuditLog.id))
+            .filter(AuditLog.created_at >= cutoff)
+            .scalar()
+            or 0
+        )
+        rejections = (
+            db.query(func.count(Booking.id))
+            .filter(
+                Booking.created_at >= cutoff,
+                func.upper(Booking.status) == "REJECTED",
+            )
+            .scalar()
+            or 0
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to load system activity distribution: {exc}",
+        ) from exc
+
+    return {
+        "days": days,
+        "series": [
+            {"label": "Logins", "count": int(logins)},
+            {"label": "Bookings", "count": int(bookings)},
+            {"label": "Audit Actions", "count": int(audit_actions)},
+            {"label": "Rejections", "count": int(rejections)},
+        ],
+    }
+
+
+@router.get("/metrics/booking-outcome-distribution")
+def booking_outcome_distribution(
+    days: int = Query(30, ge=1, le=365),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _require_admin(current_user)
+
+    days = max(1, min(365, days))
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+
+    try:
+        rows = (
+            db.query(func.upper(Booking.status).label("status"), func.count().label("count"))
+            .filter(Booking.created_at >= cutoff)
+            .group_by("status")
+            .all()
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to load booking outcome distribution: {exc}",
+        ) from exc
+
+    series = [{"status": r.status or "UNKNOWN", "count": int(r.count or 0)} for r in rows]
+
+    return {"days": days, "series": series}
+
+
+@router.get("/metrics/booking-status-distribution")
+def booking_status_distribution(
+    days: int = Query(30, ge=1, le=365),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _require_admin(current_user)
+
+    days = max(1, min(365, days))
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+
+    try:
+        rows = (
+            db.query(func.upper(Booking.status).label("status"), func.count().label("count"))
+            .filter(Booking.created_at >= cutoff)
+            .group_by("status")
+            .all()
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to load booking status distribution: {exc}",
+        ) from exc
+
+    labels = [r.status or "UNKNOWN" for r in rows]
+    values = [int(r.count or 0) for r in rows]
+    return {"days": days, "labels": labels, "values": values}
+
+
+@router.get("/metrics/kyc-status-distribution")
+def kyc_status_distribution(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _require_admin(current_user)
+
+    try:
+        rows = (
+            db.query(KYCSubmission.status, func.count().label("count"))
+            .group_by(KYCSubmission.status)
+            .all()
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to load kyc status distribution: {exc}",
+        ) from exc
+
+    labels = [r.status or "unknown" for r in rows]
+    values = [int(r.count or 0) for r in rows]
+    return {"labels": labels, "values": values}

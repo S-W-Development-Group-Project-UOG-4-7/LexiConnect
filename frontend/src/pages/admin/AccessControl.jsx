@@ -24,6 +24,7 @@ const AccessControl = () => {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [moduleDisabled, setModuleDisabled] = useState(false);
   const [lastUpdated, setLastUpdated] = useState(null);
 
   const [roleForm, setRoleForm] = useState(defaultRoleForm);
@@ -35,6 +36,7 @@ const AccessControl = () => {
   const [selectedRoleName, setSelectedRoleName] = useState("");
   const [selectedRoleDescription, setSelectedRoleDescription] = useState("");
   const [selectedRoleIsSystem, setSelectedRoleIsSystem] = useState(false);
+  const [showDangerZone, setShowDangerZone] = useState(false);
   const [rolePrivilegeKeys, setRolePrivilegeKeys] = useState([]);
   const [initialRolePrivilegeKeys, setInitialRolePrivilegeKeys] = useState([]);
   const [expandedModules, setExpandedModules] = useState(new Set());
@@ -104,22 +106,31 @@ const AccessControl = () => {
   const loadCoreData = async () => {
     setLoading(true);
     setError("");
+    setModuleDisabled(false);
     try {
       const [modulesRes, privilegesRes, rolesRes] = await Promise.all([
-        api.get("/admin/access-control/modules"),
-        api.get("/admin/access-control/privileges"),
-        api.get("/admin/access-control/roles"),
+        api.get("/api/admin/access-control/modules"),
+        api.get("/api/admin/access-control/privileges"),
+        api.get("/api/admin/access-control/roles"),
       ]);
       setModules(modulesRes.data || []);
       setPrivileges(privilegesRes.data || []);
       setRoles(rolesRes.data || []);
       setLastUpdated(new Date());
     } catch (err) {
-      const message =
-        err?.response?.data?.detail ||
-        err?.response?.data?.message ||
-        "Failed to load access control data.";
-      setError(message);
+      const status = err?.response?.status;
+      if (status == 404) {
+        setModuleDisabled(true);
+        setError("Access Control module not enabled.");
+      } else if (status >= 500) {
+        setError("Failed to load access control data.");
+      } else {
+        const message =
+          err?.response?.data?.detail ||
+          err?.response?.data?.message ||
+          "Failed to load access control data.";
+        setError(message);
+      }
     } finally {
       setLoading(false);
     }
@@ -129,7 +140,7 @@ const AccessControl = () => {
     setLoading(true);
     setError("");
     try {
-      const { data } = await api.get("/admin/access-control/users", {
+      const { data } = await api.get("/api/admin/access-control/users", {
         params: {
           search: userSearch || undefined,
           page: nextPage,
@@ -156,10 +167,10 @@ const AccessControl = () => {
   }, []);
 
   useEffect(() => {
-    if (activeTab === "users") {
+    if (!moduleDisabled && activeTab === "users") {
       loadUsers(1, userPageSize);
     }
-  }, [activeTab, userPageSize]);
+  }, [activeTab, userPageSize, moduleDisabled]);
 
   const handleCreateRole = async (e) => {
     e.preventDefault();
@@ -171,7 +182,7 @@ const AccessControl = () => {
         description: roleForm.description.trim() || null,
         is_system: Boolean(roleForm.is_system),
       };
-      const { data } = await api.post("/admin/access-control/roles", payload);
+      const { data } = await api.post("/api/admin/access-control/roles", payload);
       setRoles((prev) => [...prev, data]);
       setRoleForm(defaultRoleForm);
       setShowCreateRole(false);
@@ -194,7 +205,7 @@ const AccessControl = () => {
     setError("");
     setSuccess("");
     try {
-      const { data } = await api.get(`/admin/access-control/roles/${role.id}/privileges`);
+      const { data } = await api.get(`/api/admin/access-control/roles/${role.id}/privileges`);
       setRolePrivilegeKeys(data || []);
       setInitialRolePrivilegeKeys(data || []);
       setExpandedModules(new Set());
@@ -216,7 +227,7 @@ const AccessControl = () => {
         name: selectedRoleIsSystem ? undefined : selectedRoleName.trim(),
         description: selectedRoleDescription.trim() || null,
       };
-      const { data } = await api.put(`/admin/access-control/roles/${selectedRoleId}`, payload);
+      const { data } = await api.put(`/api/admin/access-control/roles/${selectedRoleId}`, payload);
       setRoles((prev) => prev.map((r) => (r.id === data.id ? data : r)));
       setSuccess("Role details updated.");
       setLastUpdated(new Date());
@@ -236,7 +247,7 @@ const AccessControl = () => {
     setError("");
     setSuccess("");
     try {
-      await api.delete(`/admin/access-control/roles/${selectedRoleId}`);
+      await api.delete(`/api/admin/access-control/roles/${selectedRoleId}`);
       setRoles((prev) => prev.filter((r) => r.id !== selectedRoleId));
       setSelectedRoleId(null);
       setRolePrivilegeKeys([]);
@@ -301,7 +312,7 @@ const AccessControl = () => {
     try {
       const payload = { privilege_keys: rolePrivilegeKeys };
       const { data } = await api.put(
-        `/admin/access-control/roles/${selectedRoleId}/privileges`,
+        `/api/admin/access-control/roles/${selectedRoleId}/privileges`,
         payload
       );
       const updatedKeys = data || rolePrivilegeKeys;
@@ -320,7 +331,7 @@ const AccessControl = () => {
     }
   };
 
-  const handleResetRolePrivileges = () => {
+  const handleDiscardRolePrivileges = () => {
     setRolePrivilegeKeys(initialRolePrivilegeKeys);
   };
   const handleUserSelect = async (user) => {
@@ -331,9 +342,9 @@ const AccessControl = () => {
     setSuccess("");
     try {
       const [rolesRes, effectiveRes, overridesRes] = await Promise.all([
-        api.get(`/admin/access-control/users/${user.id}/roles`),
-        api.get(`/admin/access-control/users/${user.id}/privileges/effective`),
-        api.get(`/admin/access-control/users/${user.id}/privileges/overrides`),
+        api.get(`/api/admin/access-control/users/${user.id}/roles`),
+        api.get(`/api/admin/access-control/users/${user.id}/privileges/effective`),
+        api.get(`/api/admin/access-control/users/${user.id}/privileges/overrides`),
       ]);
       setUserRoles(rolesRes.data || []);
       setUserEffectivePrivileges(effectiveRes.data || []);
@@ -358,10 +369,10 @@ const AccessControl = () => {
     setSuccess("");
     try {
       const payload = { role_names: userRoles };
-      const { data } = await api.put(`/admin/access-control/users/${selectedUser.id}/roles`, payload);
+      const { data } = await api.put(`/api/admin/access-control/users/${selectedUser.id}/roles`, payload);
       setUserRoles(data || []);
       const effectiveRes = await api.get(
-        `/admin/access-control/users/${selectedUser.id}/privileges/effective`
+        `/api/admin/access-control/users/${selectedUser.id}/privileges/effective`
       );
       setUserEffectivePrivileges(effectiveRes.data || []);
       setSuccess("User roles updated.");
@@ -395,7 +406,7 @@ const AccessControl = () => {
         denies: userDenyOverrides,
       };
       const { data } = await api.put(
-        `/admin/access-control/users/${selectedUser.id}/privileges/overrides`,
+        `/api/admin/access-control/users/${selectedUser.id}/privileges/overrides`,
         payload
       );
       const grants = data.filter((o) => o.effect === "grant").map((o) => o.privilege_key);
@@ -403,7 +414,7 @@ const AccessControl = () => {
       setUserGrantOverrides(grants);
       setUserDenyOverrides(denies);
       const effectiveRes = await api.get(
-        `/admin/access-control/users/${selectedUser.id}/privileges/effective`
+        `/api/admin/access-control/users/${selectedUser.id}/privileges/effective`
       );
       setUserEffectivePrivileges(effectiveRes.data || []);
       setSuccess("Overrides saved.");
@@ -448,6 +459,20 @@ const AccessControl = () => {
         timeStyle: "short",
       }).format(lastUpdated)
     : "--";
+
+  const moduleIcon = (key) => {
+    const map = {
+      access_control: "AC",
+      bookings: "BK",
+      cases: "CS",
+      documents: "DOC",
+      kyc: "KYC",
+      audit: "AUD",
+      auth: "AUTH",
+      users: "USR",
+    };
+    return map[String(key || "").toLowerCase()] || "MOD";
+  };
 
   const catalogSearchResults = useMemo(() => {
     const query = roleSearch.trim().toLowerCase();
@@ -501,9 +526,20 @@ const AccessControl = () => {
           ))}
         </nav>
 
-        {loading && <div className="access-control-loading">Loading access control data...</div>}
+        {loading && (
+          <div className="access-control-loading">
+            <div className="access-control-skeleton" />
+            <div className="access-control-skeleton" />
+            <div className="access-control-skeleton" />
+          </div>
+        )}
 
-        {!loading && activeTab === "roles" && (
+        {moduleDisabled && !loading && (
+          <div className="access-control-empty">Access Control module not enabled.</div>
+        )}
+
+
+        {!moduleDisabled && !loading && activeTab === "roles" && (
           <div className="access-control-roles-layout">
             <section className="access-control-panel">
               <div className="panel-header">
@@ -549,10 +585,20 @@ const AccessControl = () => {
                     }`}
                     onClick={() => selectRole(role)}
                   >
-                    <div>
-                      <div className="access-control-list-title">{role.name}</div>
+                    <div className="role-list-main">
+                      <div className="access-control-list-title">
+                        {role.name}
+                        {role.is_system && <span className="role-lock">LOCK</span>}
+                      </div>
                       <div className="access-control-list-meta">
                         {role.is_system ? "System role" : "Custom role"}
+                      </div>
+                      <div className="access-control-list-stats">
+                        <span>Users: N/A</span>
+                        <span>
+                          Permissions:{" "}
+                          {selectedRoleId === role.id ? rolePrivilegeKeys.length : "N/A"}
+                        </span>
                       </div>
                     </div>
                     <div className="access-control-list-desc">{role.description || "-"}</div>
@@ -601,8 +647,8 @@ const AccessControl = () => {
 
             <section className="access-control-panel">
               {!selectedRoleId ? (
-                <div className="access-control-empty">
-                  Select a role to view permissions and descriptions.
+                <div className="access-control-empty centered">
+                  Select a role to manage permissions.
                 </div>
               ) : (
                 <div className="role-permissions">
@@ -623,16 +669,20 @@ const AccessControl = () => {
                       const totalCount = modulePrivs.length;
                       const isOpen = expandedModules.has(module.id);
                       return (
-                        <div key={module.id} className="permission-accordion">
+                        <div key={module.id} className="permission-accordion permission-card">
                           <button
                             type="button"
                             className="accordion-header"
                             onClick={() => toggleModule(module.id)}
                             aria-expanded={isOpen}
+                            disabled={!selectedRoleId}
                           >
-                            <div>
-                              <div className="module-title">{module.name}</div>
-                              <div className="module-desc">{module.description || "-"}</div>
+                            <div className="module-header">
+                              <span className="module-icon">{moduleIcon(module.key)}</span>
+                              <div>
+                                <div className="module-title">{module.name}</div>
+                                <div className="module-desc">{module.description || "-"}</div>
+                              </div>
                             </div>
                             <div className="module-count">
                               Enabled {enabledCount} / {totalCount}
@@ -645,6 +695,7 @@ const AccessControl = () => {
                                   type="button"
                                   className="access-control-btn secondary"
                                   onClick={() => handleBulkAction(module.id, "enable")}
+                                  disabled={!selectedRoleId}
                                 >
                                   Enable all
                                 </button>
@@ -652,6 +703,7 @@ const AccessControl = () => {
                                   type="button"
                                   className="access-control-btn ghost"
                                   onClick={() => handleBulkAction(module.id, "disable")}
+                                  disabled={!selectedRoleId}
                                 >
                                   Disable all
                                 </button>
@@ -673,7 +725,7 @@ const AccessControl = () => {
                                         type="checkbox"
                                         checked={rolePrivilegeKeys.includes(priv.key)}
                                         onChange={() => handleTogglePrivilege(priv.key)}
-                                        disabled={saving}
+                                        disabled={saving || !selectedRoleId}
                                       />
                                       <span className="toggle-slider" />
                                     </label>
@@ -697,17 +749,17 @@ const AccessControl = () => {
                         <button
                           type="button"
                           className="access-control-btn ghost"
-                          onClick={handleResetRolePrivileges}
+                          onClick={handleDiscardRolePrivileges}
                         >
-                          Reset
+                          Discard
                         </button>
                         <button
                           type="button"
                           className="access-control-btn primary"
                           onClick={handleSaveRolePrivileges}
-                          disabled={saving}
+                          disabled={saving || !selectedRoleId}
                         >
-                          Save changes
+                          Save
                         </button>
                       </div>
                     </div>
@@ -727,6 +779,7 @@ const AccessControl = () => {
                       <h2>Role details</h2>
                       <span className="panel-subtitle">Edit metadata and review governance notes.</span>
                     </div>
+                    <div className="panel-meta">Last modified {lastUpdatedLabel}</div>
                   </div>
 
                   <div className="role-meta-grid">
@@ -756,22 +809,33 @@ const AccessControl = () => {
                     type="button"
                     className="access-control-btn secondary"
                     onClick={handleSaveRoleMeta}
-                    disabled={saving}
+                    disabled={saving || !selectedRoleId}
                   >
                     Save role details
                   </button>
 
                   <div className="danger-zone">
-                    <h3>Danger zone</h3>
-                    <p>Deleting a role immediately removes access from assigned users.</p>
                     <button
                       type="button"
-                      className="access-control-btn danger"
-                      onClick={handleDeleteRole}
-                      disabled={selectedRoleIsSystem}
+                      className="danger-toggle"
+                      onClick={() => setShowDangerZone((prev) => !prev)}
                     >
-                      Delete role
+                      {showDangerZone ? "Hide" : "Show"} danger zone
                     </button>
+                    {showDangerZone && (
+                      <div className="danger-content">
+                        <h3>Danger zone</h3>
+                        <p>Deleting a role immediately removes access from assigned users.</p>
+                        <button
+                          type="button"
+                          className="access-control-btn danger"
+                          onClick={handleDeleteRole}
+                          disabled={selectedRoleIsSystem}
+                        >
+                          Delete role
+                        </button>
+                      </div>
+                    )}
                   </div>
 
                   <div className="audit-hints">
@@ -788,7 +852,7 @@ const AccessControl = () => {
           </div>
         )}
 
-        {!loading && activeTab === "users" && (
+        {!moduleDisabled && !loading && activeTab === "users" && (
           <div className="access-control-users-layout">
             <section className="access-control-panel">
               <div className="panel-header">
@@ -918,7 +982,7 @@ const AccessControl = () => {
                       type="button"
                       className="access-control-btn primary"
                       onClick={handleSaveUserRoles}
-                      disabled={saving}
+                      disabled={saving || !selectedRoleId}
                     >
                       Save roles
                     </button>
@@ -970,7 +1034,7 @@ const AccessControl = () => {
                             type="button"
                             className="access-control-btn danger"
                             onClick={handleSaveOverrides}
-                            disabled={saving}
+                            disabled={saving || !selectedRoleId}
                           >
                             Save overrides
                           </button>
@@ -1025,7 +1089,7 @@ const AccessControl = () => {
             </section>
           </div>
         )}
-        {!loading && activeTab === "catalog" && (
+        {!moduleDisabled && !loading && activeTab === "catalog" && (
           <section className="access-control-panel">
             <div className="panel-header">
               <div>

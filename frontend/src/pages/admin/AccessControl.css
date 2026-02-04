@@ -96,6 +96,25 @@
 .access-control-loading {
   padding: 24px;
   color: #94a3b8;
+  display: grid;
+  gap: 12px;
+}
+
+.access-control-skeleton {
+  height: 14px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(148, 163, 184, 0.08), rgba(148, 163, 184, 0.2), rgba(148, 163, 184, 0.08));
+  background-size: 200% 100%;
+  animation: accessControlShimmer 1.4s ease infinite;
+}
+
+@keyframes accessControlShimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
 }
 
 .access-control-roles-layout {
@@ -221,12 +240,36 @@
 }
 
 .access-control-list-item.active {
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 1px #3b82f6 inset;
+  border-color: rgba(148, 163, 184, 0.45);
+  background: rgba(15, 23, 42, 0.75);
+  box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.15);
 }
 
 .access-control-list-title {
   font-weight: 600;
+}
+
+.role-list-main {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.role-lock {
+  margin-left: 8px;
+  font-size: 11px;
+  color: rgba(148, 163, 184, 0.75);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  border-radius: 999px;
+  padding: 2px 6px;
+  letter-spacing: 0.08em;
+}
+
+.access-control-list-stats {
+  display: flex;
+  gap: 12px;
+  font-size: 12px;
+  color: rgba(148, 163, 184, 0.8);
 }
 
 .access-control-list-meta {
@@ -243,6 +286,15 @@
   color: #94a3b8;
   font-size: 0.9rem;
   padding: 12px 0;
+}
+
+.access-control-empty.centered {
+  min-height: 220px;
+  display: grid;
+  place-items: center;
+  border: 1px dashed rgba(148, 163, 184, 0.25);
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.6);
 }
 
 .access-control-empty.small {
@@ -275,6 +327,10 @@
   background: #0f172a;
 }
 
+.permission-card {
+  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.2);
+}
+
 .accordion-header {
   width: 100%;
   border: none;
@@ -286,6 +342,31 @@
   padding: 14px 16px;
   text-align: left;
   cursor: pointer;
+}
+
+.accordion-header:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.module-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.module-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(148, 163, 184, 0.15);
+  color: #e2e8f0;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
 }
 
 .accordion-body {
@@ -334,9 +415,9 @@
 }
 
 .permission-key {
-  font-size: 0.75rem;
-  color: #94a3b8;
-  border: 1px solid #334155;
+  font-size: 0.7rem;
+  color: rgba(148, 163, 184, 0.65);
+  border: 1px solid rgba(148, 163, 184, 0.2);
   border-radius: 999px;
   padding: 2px 8px;
 }
@@ -386,7 +467,7 @@
 
 .unsaved-bar {
   position: sticky;
-  bottom: 0;
+  bottom: 16px;
   margin-top: 12px;
   background: #0b1220;
   border: 1px solid #334155;
@@ -396,6 +477,7 @@
   justify-content: space-between;
   align-items: center;
   gap: 12px;
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.35);
 }
 
 .unsaved-actions {
@@ -409,10 +491,28 @@
 }
 
 .danger-zone {
-  border: 1px solid rgba(239, 68, 68, 0.4);
+  border: 1px solid rgba(148, 163, 184, 0.2);
   border-radius: 12px;
   padding: 12px;
-  background: rgba(239, 68, 68, 0.08);
+  background: rgba(30, 41, 59, 0.5);
+}
+
+.danger-toggle {
+  background: transparent;
+  border: none;
+  color: rgba(248, 113, 113, 0.9);
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+}
+
+.danger-content {
+  margin-top: 12px;
+}
+
+.panel-meta {
+  font-size: 0.75rem;
+  color: rgba(148, 163, 184, 0.8);
 }
 
 .audit-hints ul {

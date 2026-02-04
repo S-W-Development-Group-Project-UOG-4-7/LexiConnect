@@ -45,8 +45,8 @@ def log_event(
     )
 
     entry = AuditLog(
-        actor_user_id=actor.id if actor else None,
         user_id=target_user_id if target_user_id is not None else (actor.id if actor else None),
+        user_email=user.email if user else (actor.email if actor else None),
         action=action,
         description=description,
         meta=meta_dict,

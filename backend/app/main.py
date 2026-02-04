@@ -8,7 +8,8 @@ load_dotenv()
 import logging
 import time
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
 from fastapi.staticfiles import StaticFiles
@@ -59,6 +60,7 @@ from app.modules.checklist_answers.router import (  # noqa: E402
 # Legacy routers
 from .routers import admin, auth, bookings, dev, lawyers, token_queue, users  # noqa: F401, E402
 from .routers import admin_overview  # noqa: F401, E402
+from .routers import admin_reports  # noqa: F401, E402
 from app.modules.cases.routes import router as cases_router
 
 from app.routers.lawyer_availability import router as lawyer_availability_router  # noqa: E402
@@ -85,8 +87,9 @@ from app.modules.disputes.routes import (  # noqa: E402
 from app.modules.case_files.router import router as case_files_router  # noqa: E402
 from app.modules.lawyer_profiles.routes import router as lawyer_profiles_router  # noqa: E402
 from app.modules.audit_log.routes import router as audit_log_router  # noqa: E402
+from app.modules.auth_log.routes import admin_router as admin_auth_log_router  # noqa: E402
 from app.modules.intake.routes import router as intake_router  # noqa: E402
-from app.modules.cases.routes import router as cases_router  # noqa: E402
+from app.modules.cases.routes import router as cases_router, lawyer_router as lawyer_cases_router  # noqa: E402
 from app.modules.specializations.routes import router as specializations_router  # noqa: E402
 from app.modules.rbac.routes import router as rbac_router  # noqa: E402
 from app.modules.public_feed.routes import router as public_feed_router  # noqa: E402
@@ -94,6 +97,7 @@ from app.modules.case_comments.routes import (
     router as case_comments_router,
     votes_router as case_comment_votes_router,
 )  # noqa: E402
+from app.modules.notifications.routes import router as notifications_router  # noqa: E402
 
 # API v1 routers
 from .api.v1 import admin as admin_v1, booking as booking_v1  # noqa: E402
@@ -131,11 +135,17 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
     allow_origin_regex=r"http://(localhost|127\.0\.0\.1):\d+",
-    allow_credentials=False,  # OK IMPORTANT: keep false unless you use cookies
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
     expose_headers=["*"],
 )
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    logger.exception("Unhandled error on %s %s", request.method, request.url.path)
+    return JSONResponse(status_code=500, content={"detail": "Internal Server Error"})
 
 
 def wait_for_db(max_attempts: int = 10, delay_seconds: float = 1.0) -> None:
@@ -229,6 +239,7 @@ app.include_router(blackouts_router)
 app.include_router(kyc_router)
 app.include_router(dev.router)
 app.include_router(admin_overview.router)
+app.include_router(admin_reports.router)
 
 # ✅ Modules (grouped)
 for module_router in (
@@ -240,13 +251,19 @@ for module_router in (
     case_files_router,
     admin_kyc_router,
     audit_log_router,
+    admin_auth_log_router,
     lawyer_profiles_router,
+    notifications_router,
 ):
     app.include_router(module_router)
+
+# optional /api prefix parity
+app.include_router(notifications_router, prefix="/api")
 
 # ✅ Dedicated router include
 app.include_router(lawyer_availability_router, prefix="/api")
 app.include_router(cases_router, prefix="/api")
+app.include_router(lawyer_cases_router, prefix="/api")
 app.include_router(public_feed_router, prefix="/api")
 app.include_router(case_comments_router, prefix="/api")
 app.include_router(case_comment_votes_router, prefix="/api")
