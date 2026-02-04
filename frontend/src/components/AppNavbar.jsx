@@ -1,6 +1,7 @@
 import { NavLink, useNavigate } from "react-router-dom";
 import { LogOut, Scale } from "lucide-react";
 import { getUserFromToken, logout as clearAuth } from "../services/auth";
+import NotificationBell from "../features/notifications/components/NotificationBell";
 
 const TopNav = ({ links = [], brand = "LexiConnect" }) => {
   const navigate = useNavigate();
@@ -55,6 +56,7 @@ const TopNav = ({ links = [], brand = "LexiConnect" }) => {
 
         {/* User badge and logout */}
         <div className="flex items-center gap-3 min-w-[210px] justify-end">
+          <NotificationBell />
           <div className="hidden sm:flex flex-col items-end text-xs leading-tight">
             <span className="text-slate-300 font-medium">{email}</span>
             <span className="text-slate-400 capitalize">{role}</span>

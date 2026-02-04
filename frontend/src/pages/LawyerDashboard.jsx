@@ -1,9 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
+import api from "../services/api";
+import { lawyerListIncomingBookings } from "../services/bookings";
+import { getMyCaseRequests } from "../features/cases/services/cases.service";
+import { getMyKyc } from "../features/lawyer_kyc/services/lawyerKyc.service";
 import "./lawyer-ui.css";
 
 export default function LawyerDashboard() {
   const navigate = useNavigate();
+  const { user } = useAuth();
 
   const [kpis, setKpis] = useState({
     pendingRequests: 0,
@@ -24,20 +30,90 @@ export default function LawyerDashboard() {
     bio: "",
   });
 
+  const [kpisLoading, setKpisLoading] = useState(true);
+  const [kpisError, setKpisError] = useState("");
+
   // Load minimal identity from localStorage (safe default)
   useEffect(() => {
-    const email = localStorage.getItem("email") || "";
+    const email = user?.email || localStorage.getItem("email") || "";
     const avatarUrl = localStorage.getItem("avatar") || "";
 
     setProfile((p) => ({
       ...p,
       email,
       avatarUrl,
-      name: email ? email.split("@")[0] : p.name,
+      name: user?.full_name || (email ? email.split("@")[0] : p.name),
     }));
+  }, [user]);
 
-    // KPIs remain demo-safe for now (connect later)
-    setKpis((p) => ({ ...p }));
+  useEffect(() => {
+    let active = true;
+    const loadDashboard = async () => {
+      setKpisLoading(true);
+      setKpisError("");
+      try {
+        const todayKey = new Date().toISOString().slice(0, 10);
+        const tokenQueueEndpoint =
+          import.meta.env.VITE_TOKEN_QUEUE_ENDPOINT || "/api/token-queue";
+        const slotsEndpoint = `${tokenQueueEndpoint}/slots`;
+
+        const [incoming, kycRes, tokenRes, requests] = await Promise.all([
+          lawyerListIncomingBookings("all"),
+          getMyKyc(),
+          api.get(`${slotsEndpoint}?date=${todayKey}`),
+          getMyCaseRequests(),
+        ]);
+
+        const incomingList = Array.isArray(incoming) ? incoming : [];
+        const incomingPending = incomingList.filter(
+          (b) => String(b?.status || "").toUpperCase() === "PENDING"
+        ).length;
+
+        const kycStatus =
+          kycRes?.data?.status || kycRes?.status || "not_submitted";
+
+        const slots = Array.isArray(tokenRes?.data?.slots)
+          ? tokenRes.data.slots
+          : [];
+        const tokenCount = slots.reduce(
+          (sum, slot) => sum + (Array.isArray(slot?.bookings) ? slot.bookings.length : 0),
+          0
+        );
+
+        const requestList = Array.isArray(requests) ? requests : [];
+        const pendingRequestStatuses = new Set([
+          "PENDING",
+          "REQUESTED",
+          "WAITING_CLIENT_APPROVAL",
+          "AWAITING_CLIENT_APPROVAL",
+        ]);
+        const pendingRequests = requestList.filter((r) =>
+          pendingRequestStatuses.has(String(r?.status || "").toUpperCase())
+        ).length;
+
+        if (!active) return;
+        setKpis({
+          pendingRequests,
+          incomingBookings: incomingPending,
+          tokenQueueToday: tokenCount,
+          kycStatus,
+        });
+      } catch (err) {
+        if (!active) return;
+        const message =
+          err?.response?.data?.detail ||
+          err?.response?.data?.message ||
+          "Failed to load dashboard metrics.";
+        setKpisError(message);
+      } finally {
+        if (active) setKpisLoading(false);
+      }
+    };
+
+    loadDashboard();
+    return () => {
+      active = false;
+    };
   }, []);
 
   const kycLabel = useMemo(() => {
@@ -47,6 +123,8 @@ export default function LawyerDashboard() {
     if (s === "not_submitted") return { text: "Not Submitted", cls: "not-submitted" };
     return { text: "Pending", cls: "pending" };
   }, [kpis.kycStatus]);
+
+  const renderKpiValue = (value) => (kpisLoading ? "—" : value);
 
   const initials = useMemo(() => {
     const base = (profile.name || profile.email || "Lawyer").trim();
@@ -136,30 +214,45 @@ export default function LawyerDashboard() {
             <div className="dash-kpis tidy">
               <div className="dash-kpi">
                 <div className="dash-kpi-label">Pending Requests</div>
-                <div className="dash-kpi-value">{kpis.pendingRequests}</div>
+                <div className="dash-kpi-value">
+                  {renderKpiValue(kpis.pendingRequests)}
+                </div>
                 <div className="dash-kpi-meta">Waiting for client approval</div>
               </div>
 
               <div className="dash-kpi">
                 <div className="dash-kpi-label">Incoming Bookings</div>
-                <div className="dash-kpi-value">{kpis.incomingBookings}</div>
+                <div className="dash-kpi-value">
+                  {renderKpiValue(kpis.incomingBookings)}
+                </div>
                 <div className="dash-kpi-meta">Need accept / reject</div>
               </div>
 
               <div className="dash-kpi">
                 <div className="dash-kpi-label">Token Queue Today</div>
-                <div className="dash-kpi-value">{kpis.tokenQueueToday}</div>
+                <div className="dash-kpi-value">
+                  {renderKpiValue(kpis.tokenQueueToday)}
+                </div>
                 <div className="dash-kpi-meta">Consultations for today</div>
               </div>
 
               <div className="dash-kpi">
                 <div className="dash-kpi-label">KYC Status</div>
                 <div className="dash-kpi-value">
-                  <span className={`lc-chip ${kycLabel.cls}`}>{kycLabel.text}</span>
+                  {kpisLoading ? (
+                    <span className="lc-chip pending">—</span>
+                  ) : (
+                    <span className={`lc-chip ${kycLabel.cls}`}>{kycLabel.text}</span>
+                  )}
                 </div>
                 <div className="dash-kpi-meta">Verification & trust</div>
               </div>
             </div>
+            {kpisError && (
+              <div style={{ marginTop: "0.75rem", color: "rgba(248, 113, 113, 0.95)", fontSize: "0.85rem" }}>
+                {kpisError}
+              </div>
+            )}
 
             {/* Today’s Work */}
             <div className="dash-section">

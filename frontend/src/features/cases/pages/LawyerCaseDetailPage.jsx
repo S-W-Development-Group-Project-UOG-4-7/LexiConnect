@@ -2,35 +2,13 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import PageShell from "../../../components/ui/PageShell";
 import { getCaseById } from "../services/cases.service";
-
-// Reuse the same document list service the client page uses
-import { listCaseDocuments } from "../../documents/services/documents.service";
-
-// NOTE:
-// We call review-link with fetch so we don't depend on where axios instance is.
-// If you already have an axios client with auth headers, you can move this into a service later.
+import { listLawyerCaseBookings } from "../../../services/bookings";
+import { getUserFromToken } from "../../../services/auth";
 
 export default function LawyerCaseDetailPage() {
   const { caseId } = useParams();
   const navigate = useNavigate();
   const cid = Number(caseId);
-
-  // Backend origin for opening files (/uploads/...)
-  const BACKEND_ORIGIN = import.meta.env.VITE_API_ORIGIN || "http://127.0.0.1:8000";
-
-  const getToken = () =>
-    localStorage.getItem("access_token") ||
-    localStorage.getItem("token") ||
-    localStorage.getItem("accessToken") ||
-    "";
-
-  const resolveFileUrl = (fileUrl) => {
-    if (!fileUrl) return "";
-    if (String(fileUrl).startsWith("http")) return fileUrl;
-    const origin = BACKEND_ORIGIN.replace(/\/+$/, "");
-    const path = String(fileUrl).startsWith("/") ? fileUrl : `/${fileUrl}`;
-    return `${origin}${path}`;
-  };
 
   const formatDateTime = (value) => {
     if (!value) return "—";
@@ -48,15 +26,12 @@ export default function LawyerCaseDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  // Docs
-  const [documents, setDocuments] = useState([]);
-  const [loadingDocs, setLoadingDocs] = useState(true);
-  const [docsError, setDocsError] = useState("");
-
-  // Review links (by docId)
-  const [reviewLinksByDocId, setReviewLinksByDocId] = useState({});
-  const [loadingReviews, setLoadingReviews] = useState(false);
-
+  // Tabs
+  const [activeTab, setActiveTab] = useState("documents");
+  // Bookings
+  const [bookings, setBookings] = useState([]);
+  const [bookingsLoading, setBookingsLoading] = useState(false);
+  const [bookingsError, setBookingsError] = useState("");
   // Load case
   useEffect(() => {
     const load = async () => {
@@ -85,111 +60,37 @@ export default function LawyerCaseDetailPage() {
     load();
   }, [cid]);
 
-  // Load documents
+  // Load bookings (lawyer scoped)
   useEffect(() => {
-    const loadDocs = async () => {
+    const loadBookings = async () => {
       if (!Number.isFinite(cid) || cid <= 0) return;
-
-      setLoadingDocs(true);
-      setDocsError("");
+      setBookingsLoading(true);
+      setBookingsError("");
       try {
-        const docRes = await listCaseDocuments(cid);
-        const docs = docRes?.data ?? docRes ?? [];
-        setDocuments(Array.isArray(docs) ? docs : []);
+        const list = await listLawyerCaseBookings(cid);
+        const safeList = Array.isArray(list) ? list : [];
+        const user = getUserFromToken();
+        const lawyerId = Number(user?.id);
+        const filtered = Number.isFinite(lawyerId)
+          ? safeList.filter((b) => Number(b.lawyer_id) === lawyerId)
+          : safeList;
+        setBookings(filtered);
       } catch (e) {
-        setDocuments([]);
-        setDocsError(
+        setBookings([]);
+        setBookingsError(
           e?.response?.data?.detail ||
             e?.response?.data?.message ||
-            "Failed to load documents."
+            "Failed to load bookings."
         );
       } finally {
-        setLoadingDocs(false);
+        setBookingsLoading(false);
       }
     };
 
-    loadDocs();
+    loadBookings();
   }, [cid]);
 
-  // Load review links for each doc (lawyer can see all)
-  useEffect(() => {
-    const loadReviewLinks = async () => {
-      if (!documents.length) {
-        setReviewLinksByDocId({});
-        return;
-      }
-
-      setLoadingReviews(true);
-      try {
-        const token = getToken();
-        const origin = BACKEND_ORIGIN.replace(/\/+$/, "");
-
-        const pairs = await Promise.all(
-          documents.map(async (doc) => {
-            const docId = doc.id;
-            try {
-              const res = await fetch(`${origin}/api/documents/${docId}/review-link`, {
-                headers: {
-                  Accept: "application/json",
-                  Authorization: token ? `Bearer ${token}` : "",
-                },
-              });
-
-              if (!res.ok) {
-                // If forbidden or something, just show empty list for that doc
-                return [docId, []];
-              }
-
-              const json = await res.json();
-              return [docId, Array.isArray(json) ? json : []];
-            } catch {
-              return [docId, []];
-            }
-          })
-        );
-
-        const next = {};
-        for (const [docId, links] of pairs) next[docId] = links;
-        setReviewLinksByDocId(next);
-      } finally {
-        setLoadingReviews(false);
-      }
-    };
-
-    loadReviewLinks();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [documents]);
-
   const caseTitle = useMemo(() => data?.title || `Case #${cid}`, [data?.title, cid]);
-
-  const downloadViaApi = async (docId, filenameHint) => {
-    // This will work even when /download needs Authorization (because we attach token)
-    const token = getToken();
-    const origin = BACKEND_ORIGIN.replace(/\/+$/, "");
-
-    try {
-      const res = await fetch(`${origin}/api/documents/${docId}/download`, {
-        headers: {
-          Authorization: token ? `Bearer ${token}` : "",
-        },
-      });
-
-      if (!res.ok) throw new Error("Download failed");
-
-      const blob = await res.blob();
-      const url = window.URL.createObjectURL(blob);
-
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = filenameHint || `document_${docId}`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      window.URL.revokeObjectURL(url);
-    } catch {
-      alert("Download failed (auth or server). For now, use Open if available.");
-    }
-  };
 
   return (
     <PageShell
@@ -207,162 +108,123 @@ export default function LawyerCaseDetailPage() {
       )}
 
       {!loading && !error && data && (
-        <div className="rounded-lg border border-slate-800 bg-slate-900/60 p-5 space-y-3">
-          <div className="flex items-center justify-between">
-            <div className="text-white font-semibold text-lg">{data.title}</div>
+        <div className="rounded-lg border border-slate-800 bg-slate-900/60 p-5 space-y-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <div className="text-xs uppercase text-slate-400">Case</div>
+              <div className="text-xl font-semibold text-white">{data.title}</div>
+            </div>
             <span className="px-3 py-1 rounded-full text-xs bg-slate-800 border border-slate-700 text-slate-200">
-              {data.status || "—"}
+              {data.status || "--"}
             </span>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm text-slate-200">
             <div>
-              <div className="text-slate-400 text-xs">CATEGORY</div>
-              <div className="text-slate-200">{data.category || "—"}</div>
+              <div className="text-slate-400 text-xs uppercase">Category</div>
+              <div>{data.category || "--"}</div>
             </div>
             <div>
-              <div className="text-slate-400 text-xs">DISTRICT</div>
-              <div className="text-slate-200">{data.district || "—"}</div>
+              <div className="text-slate-400 text-xs uppercase">District</div>
+              <div>{data.district || "--"}</div>
             </div>
             <div>
-              <div className="text-slate-400 text-xs">CASE ID</div>
-              <div className="text-slate-200">{data.id}</div>
+              <div className="text-slate-400 text-xs uppercase">Created</div>
+              <div>{formatDateTime(data.created_at)}</div>
+            </div>
+            <div>
+              <div className="text-slate-400 text-xs uppercase">Case ID</div>
+              <div>{data.id}</div>
             </div>
           </div>
 
           <div>
-            <div className="text-slate-400 text-xs">PUBLIC SUMMARY</div>
-            <div className="text-slate-200">{data.summary_public || "—"}</div>
-          </div>
-
-          {data.summary_private ? (
-            <div>
-              <div className="text-slate-400 text-xs">PRIVATE SUMMARY</div>
-              <div className="text-slate-200">{data.summary_private}</div>
+            <div className="text-slate-400 text-xs uppercase">Public Summary</div>
+            <div className="text-slate-200 whitespace-pre-wrap">
+              {data.summary_public || "--"}
             </div>
-          ) : null}
+          </div>
+        </div>
+      )}
+      <div className="flex gap-2">
+        {["documents", "bookings"].map((tabId) => {
+          const active = activeTab === tabId;
+          return (
+            <button
+              key={tabId}
+              onClick={() => setActiveTab(tabId)}
+              className={`px-4 py-2 rounded-lg text-sm font-semibold border transition-colors ${
+                active
+                  ? "bg-amber-600/20 border-amber-500 text-white"
+                  : "bg-slate-800 border-slate-700 text-slate-300 hover:text-white hover:border-slate-500"
+              }`}
+            >
+              {tabId === "documents" ? "Documents" : "Bookings"}
+            </button>
+          );
+        })}
+      </div>
+
+      {activeTab === "documents" && (
+        <div className="rounded-lg border border-slate-800 bg-slate-900/60 p-5 space-y-3">
+          <div className="text-white font-semibold">Case Documents</div>
+          <div className="text-sm text-slate-300">
+            View and manage files uploaded for this case.
+          </div>
+          <div className="pt-2">
+            <button
+              type="button"
+              onClick={() => navigate(`/lawyer/cases/${cid}/documents`)}
+              className="px-4 py-2 rounded-lg bg-amber-500 hover:bg-amber-600 text-slate-950 text-sm font-semibold"
+            >
+              Manage Documents
+            </button>
+          </div>
         </div>
       )}
 
-      {/* Documents */}
-      <div className="rounded-lg border border-slate-800 bg-slate-900/60 p-5 space-y-3">
-        <div className="flex items-center justify-between">
-          <div className="text-white font-semibold">Case Documents</div>
-          <div className="text-xs text-slate-400">
-            {loadingDocs ? "Loading…" : `${documents.length} files`}
+      {activeTab === "bookings" && (
+        <div className="rounded-lg border border-slate-800 bg-slate-900/60 p-5 space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="text-white font-semibold">Case Bookings</div>
+            <div className="text-xs text-slate-400">
+              {bookingsLoading ? "Loading..." : `${bookings.length} bookings`}
+            </div>
           </div>
-        </div>
 
-        {docsError && !loadingDocs && (
-          <div className="text-sm text-red-200 border border-red-700 bg-red-900/30 rounded-lg p-3">
-            {docsError}
-          </div>
-        )}
+          {bookingsError && !bookingsLoading && (
+            <div className="text-sm text-red-200 border border-red-700 bg-red-900/30 rounded-lg p-3">
+              {bookingsError}
+            </div>
+          )}
 
-        {!loadingDocs && !docsError && documents.length === 0 && (
-          <div className="text-sm text-slate-300">No documents uploaded yet.</div>
-        )}
+          {!bookingsLoading && !bookingsError && bookings.length === 0 && (
+            <div className="text-sm text-slate-300">No bookings for this case yet.</div>
+          )}
 
-        {!loadingDocs && documents.length > 0 && (
-          <div className="space-y-3">
-            {documents.map((doc) => {
-              const name =
-                doc.title || doc.original_filename || doc.file_name || `Document #${doc.id}`;
-
-              const openHref = resolveFileUrl(doc.file_url || doc.fileUrl || "");
-
-              const links = reviewLinksByDocId[doc.id] || [];
-
-              return (
+          {!bookingsLoading && bookings.length > 0 && (
+            <div className="space-y-3">
+              {bookings.map((b) => (
                 <div
-                  key={doc.id}
-                  className="rounded-xl border border-slate-800 bg-slate-950/30 p-4 space-y-3"
+                  key={b.id}
+                  className="rounded-xl border border-slate-800 bg-slate-950/30 p-4 space-y-2"
                 >
-                  <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-                    <div>
-                      <div className="text-white font-semibold">{name}</div>
-                      <div className="text-xs text-slate-400">
-                        Uploaded {formatDateTime(doc.created_at || doc.uploaded_at)}
-                      </div>
-                    </div>
-
-                    <div className="flex flex-wrap gap-2">
-                      {openHref ? (
-                        <a
-                          href={openHref}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-xs font-semibold text-white hover:bg-slate-700"
-                        >
-                          Open
-                        </a>
-                      ) : (
-                        <span className="px-3 py-2 rounded-lg bg-slate-900 border border-slate-800 text-xs text-slate-400">
-                          No file_url
-                        </span>
-                      )}
-
-                      <button
-                        onClick={() => downloadViaApi(doc.id, name)}
-                        className="px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-xs font-semibold text-white hover:bg-slate-700"
-                      >
-                        Download (API)
-                      </button>
-                    </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="text-white font-semibold">Booking #{b.id}</div>
+                    <span className="px-3 py-1 rounded-full text-xs bg-slate-800 border border-slate-700 text-slate-200">
+                      {b.status || "?"}
+                    </span>
                   </div>
-
-                  {/* Review Links */}
-                  <div className="pt-3 border-t border-slate-800">
-                    <div className="flex items-center justify-between">
-                      <div className="text-sm font-semibold text-white">
-                        Apprentice Review Links
-                      </div>
-                      <div className="text-xs text-slate-500">
-                        {loadingReviews ? "Loading…" : ""}
-                      </div>
-                    </div>
-
-                    {links.length === 0 ? (
-                      <div className="text-sm text-slate-300 mt-2">
-                        No review links submitted yet.
-                      </div>
-                    ) : (
-                      <div className="mt-2 space-y-2">
-                        {links.map((r) => (
-                          <div
-                            key={r.id ?? `${doc.id}-${r.apprentice_id}-${r.updated_at}`}
-                            className="rounded-lg border border-slate-800 bg-slate-900/40 p-3"
-                          >
-                            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
-                              <a
-                                href={r.review_link}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="text-amber-300 hover:underline text-sm break-all"
-                              >
-                                {r.review_link}
-                              </a>
-                              <div className="text-xs text-slate-500">
-                                Apprentice #{r.apprentice_id} •{" "}
-                                {formatDateTime(r.updated_at || r.created_at)}
-                              </div>
-                            </div>
-                            {r.note ? (
-                              <div className="text-sm text-slate-200 mt-2 whitespace-pre-wrap">
-                                {r.note}
-                              </div>
-                            ) : null}
-                          </div>
-                        ))}
-                      </div>
-                    )}
+                  <div className="text-sm text-slate-300">
+                    Scheduled: {formatDateTime(b.scheduled_at)}
                   </div>
+                  <div className="text-xs text-slate-500">Client #{b.client_id}</div>
                 </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="flex justify-end">
         <button

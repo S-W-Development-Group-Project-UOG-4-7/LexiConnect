@@ -67,6 +67,7 @@ import ClientCaseChecklistPage from "../features/checklist/pages/ClientCaseCheck
 import LawyerCaseDetailPage from "../features/cases/pages/LawyerCaseDetailPage";
 import ClientCaseDetailPage from "../features/cases/pages/ClientCaseDetailPage";
 import ClientLawyerProfilePage from "../features/lawyers/pages/ClientLawyerProfilePage";
+import LawyerCaseDocuments from "../features/documents/pages/LawyerCaseDocuments";
 
 // OK Apprenticeship pages
 import ApprenticeDashboard from "../features/apprenticeship/pages/ApprenticeDashboard";
@@ -85,6 +86,7 @@ import KYCApproval from "../pages/admin/KYCApproval";
 import AuditLog from "../pages/admin/AuditLog";
 import AccessControl from "../pages/admin/AccessControl";
 import AuthLogPage from "../features/admin/pages/AuthLogPage";
+import NotificationsHistory from "../features/notifications/pages/NotificationsHistory";
 
 const DashboardRedirect = () => {
   const role = (getRole() || localStorage.getItem("role") || "").toLowerCase();
@@ -193,6 +195,7 @@ const AppRoutes = () => {
         }
       >
         <Route path="/force-reset-password" element={<ForceResetPasswordPage />} />
+        <Route path="/notifications" element={<NotificationsHistory />} />
       </Route>
 
       {/* Client area */}
@@ -265,6 +268,7 @@ const AppRoutes = () => {
         <Route path="/lawyer/cases/feed" element={<LawyerCaseFeedPage />} />
         <Route path="/lawyer/cases/requests" element={<LawyerMyRequestsPage />} />
         <Route path="/lawyer/cases/:caseId" element={<LawyerCaseDetailPage />} />
+        <Route path="/lawyer/cases/:caseId/documents" element={<LawyerCaseDocuments />} />
         <Route path="/lawyer/public/cases/:id" element={<LawyerPublicCaseDetailsPage />} />
         <Route path="/lawyer/profile/edit" element={<LawyerEditProfilePage />} />
         <Route path="/lawyer/public-profile" element={<LawyerPublicProfilePage />} />

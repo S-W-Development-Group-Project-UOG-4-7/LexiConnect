@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import os
 import logging
 import smtplib
@@ -24,8 +24,6 @@ from app.modules.auth.schemas import ChangePasswordRequest, GenericMessageRespon
 from app.modules.rbac.models import Role as RoleModel, UserRole as UserRoleModel
 from app.modules.rbac.services import get_user_effective_privilege_keys
 from app.modules.auth_log.service import create_auth_log
-
-from uuid import UUID
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 logger = logging.getLogger(__name__)
@@ -97,14 +95,14 @@ def create_refresh_token(data: dict, expires_delta: Optional[timedelta] = None) 
     return _create_token(data, expire, "refresh")
 
 
-def _coerce_uuid(value) -> Optional[UUID]:
+def _coerce_int(value) -> Optional[int]:
     if value is None:
         return None
-    if isinstance(value, UUID):
+    if isinstance(value, int):
         return value
-    if isinstance(value, str):
+    if isinstance(value, str) and value.isdigit():
         try:
-            return UUID(value)
+            return int(value)
         except ValueError:
             return None
     return None
@@ -117,7 +115,7 @@ def _safe_log_auth(
     success: bool,
     email: Optional[str],
     request: Optional[Request],
-    failure_reason: Optional[str] = None,
+    message: Optional[str] = None,
     user_id=None,
     method: Optional[str] = None,
 ):
@@ -126,11 +124,10 @@ def _safe_log_auth(
             db,
             event_type=event_type,
             success=success,
-            user_id=_coerce_uuid(user_id),
-            email=email,
-            failure_reason=failure_reason,
-            method=method,
+            user_id=_coerce_int(user_id),
+            message=message,
             request=request,
+            occurred_at=datetime.now(timezone.utc),
         )
     except Exception:
         db.rollback()
@@ -230,7 +227,11 @@ def register(user_in: UserCreate, db: Session = Depends(get_db)):
 
 
 @router.post("/login")
-def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+def login(
+    request: Request,
+    form_data: OAuth2PasswordRequestForm = Depends(),
+    db: Session = Depends(get_db),
+):
     # OAuth2PasswordRequestForm uses 'username' field, but we use it as email
     email = form_data.username
     user = get_user_by_email(db, email)
@@ -241,7 +242,7 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
             success=False,
             email=email,
             request=request,
-            failure_reason="USER_NOT_FOUND",
+            message="INVALID_CREDENTIALS",
             method="password",
         )
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password")
@@ -253,7 +254,7 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
             success=False,
             email=email,
             request=request,
-            failure_reason="DISABLED",
+            message="DISABLED",
             user_id=user.id,
             method="password",
         )
@@ -266,7 +267,7 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
             success=False,
             email=email,
             request=request,
-            failure_reason="WRONG_PASSWORD",
+            message="INVALID_CREDENTIALS",
             user_id=user.id,
             method="password",
         )
@@ -282,6 +283,16 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
     refresh_token = create_refresh_token(
         data=base_claims,
         expires_delta=timedelta(minutes=REFRESH_TOKEN_EXPIRE_MINUTES),
+    )
+
+    _safe_log_auth(
+        db,
+        event_type="LOGIN",
+        success=True,
+        email=email,
+        request=request,
+        user_id=user.id,
+        method="password",
     )
 
     user_payload = UserOut.model_validate(user)

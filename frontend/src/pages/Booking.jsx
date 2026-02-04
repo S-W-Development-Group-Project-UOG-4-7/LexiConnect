@@ -72,6 +72,27 @@ const parseMinutes = (value) => {
   return hours * 60 + minutes;
 };
 
+const parseNumber = (value) => {
+  if (value === null || value === undefined || value === "") return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+};
+
+const normalizeService = (svc) => {
+  if (!svc || typeof svc !== "object") return null;
+  return {
+    ...svc,
+    name: svc.name || svc.title || svc.service_name || "Service",
+    description: svc.description || svc.details || "",
+    priceLkr: parseNumber(
+      svc.price_lkr ?? svc.price ?? svc.fee_lkr ?? svc.fee ?? svc.amount_lkr
+    ),
+    durationMins: parseNumber(
+      svc.duration_minutes ?? svc.duration_mins ?? svc.duration ?? svc.minutes
+    ),
+  };
+};
+
 const formatMinutes = (total) => {
   const hours = Math.floor(total / 60) % 24;
   const minutes = total % 60;
@@ -218,9 +239,33 @@ const SlotRail = ({
   );
 };
 
+const toDatetimeLocalValue = (value) => {
+  if (!value) return "";
+  const dt = new Date(value);
+  if (Number.isNaN(dt.getTime())) return "";
+  const pad = (n) => String(n).padStart(2, "0");
+  const yyyy = dt.getFullYear();
+  const mm = pad(dt.getMonth() + 1);
+  const dd = pad(dt.getDate());
+  const hh = pad(dt.getHours());
+  const min = pad(dt.getMinutes());
+  return `${yyyy}-${mm}-${dd}T${hh}:${min}`;
+};
+
+const toBackendISO = (value) => {
+  if (!value) return null;
+  const dt = new Date(value);
+  if (Number.isNaN(dt.getTime())) return null;
+  return dt.toISOString();
+};
+
 export default function Booking() {
   const { lawyerId } = useParams();
   const navigate = useNavigate();
+  const priceFormatter = useMemo(
+    () => new Intl.NumberFormat("en-LK", { maximumFractionDigits: 0 }),
+    []
+  );
 
   const prefilledLawyerId = useMemo(() => {
     const n = Number(lawyerId);
@@ -523,13 +568,11 @@ export default function Booking() {
       if (!userId || Number.isNaN(userId)) return;
       try {
         const data = await getLawyerServicePackages(userId);
-        setServices(data || []);
-        setPackagesCount((data || []).length);
-        console.debug("[booking] packages debug", {
-          routeParam: userId,
-          resolvedLawyerId: userId,
-          packagesCount: (data || []).length,
-        });
+        const normalized = Array.isArray(data)
+          ? data.map(normalizeService).filter(Boolean)
+          : [];
+        setServices(normalized);
+        setPackagesCount(normalized.length);
       } catch (err) {
         setServices([]);
         const message =
@@ -675,7 +718,7 @@ export default function Booking() {
 
     const payload = {
       lawyer_id: resolvedLawyerId,
-      scheduled_at: scheduledAt ? new Date(scheduledAt).toISOString() : null,
+      scheduled_at: toBackendISO(scheduledAt),
       note: note.trim() || undefined,
       service_package_id: selectedServiceId,
       branch_id: selectedBranchId ?? selectedSlot?.branch_id ?? undefined,
@@ -842,7 +885,11 @@ export default function Booking() {
                     <div className="text-white font-semibold">{svc.name}</div>
                     <div className="text-slate-400 text-sm">{svc.description}</div>
                     <div className="text-slate-300 text-sm">
-                      LKR {svc.price_lkr} - {svc.duration_minutes} mins
+                      {svc.priceLkr != null
+                        ? `LKR ${priceFormatter.format(svc.priceLkr)}`
+                        : "LKR —"}{" "}
+                      ·{" "}
+                      {svc.durationMins != null ? `${svc.durationMins} mins` : "— mins"}
                     </div>
                   </div>
                   <input
@@ -982,7 +1029,7 @@ export default function Booking() {
                             return;
                           }
                           setSelectedSlot(slot);
-                          setScheduledAt(slot.start);
+                          setScheduledAt(toDatetimeLocalValue(slot.start));
                         }}
                       />
                     ))}

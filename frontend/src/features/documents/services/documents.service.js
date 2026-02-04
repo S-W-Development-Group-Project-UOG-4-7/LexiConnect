@@ -29,8 +29,18 @@ export const listDocuments = (bookingId) => getBookingDocuments(bookingId);
 // LIST case docs
 export const listCaseDocuments = async (caseId) => {
   const id = Number(caseId);
-  const res = await api.get(`/api/documents/by-case/${id}`);
-  return res.data;
+  if (!Number.isFinite(id) || id <= 0) {
+    return [];
+  }
+  try {
+    const res = await api.get(`/api/documents/by-case/${id}`);
+    return Array.isArray(res?.data) ? res.data : [];
+  } catch (err) {
+    if (err?.response?.status === 422) {
+      return [];
+    }
+    throw err;
+  }
 };
 
 // UPLOAD booking doc
@@ -82,6 +92,17 @@ export const uploadCaseDocument = async ({ caseId, fileName, file }) => {
     headers: { "Content-Type": "multipart/form-data" },
   });
   return res.data;
+};
+
+// DOWNLOAD
+export const downloadDocument = async (docId) => {
+  const id = Number(docId);
+  if (!Number.isFinite(id) || id <= 0) {
+    throw new Error("Invalid docId for downloadDocument()");
+  }
+  return api.get(`/api/documents/${id}/download`, {
+    responseType: "blob",
+  });
 };
 
 // DELETE

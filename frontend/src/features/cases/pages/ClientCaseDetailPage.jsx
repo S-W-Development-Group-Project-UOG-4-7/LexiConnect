@@ -338,27 +338,6 @@ export default function ClientCaseDetailPage() {
 
           {/* Top actions */}
           <div className="flex flex-wrap gap-3">
-            <button
-              onClick={() => navigate("/client/cases")}
-              className="px-4 py-2 rounded-lg bg-slate-800 border border-slate-700 hover:bg-slate-700 text-sm font-semibold text-white"
-            >
-              Documents
-            </button>
-
-            <button
-              onClick={() => setTab("documents")}
-              className="px-4 py-2 rounded-lg bg-slate-800 border border-slate-700 hover:bg-slate-700 text-sm font-semibold text-white"
-            >
-              Bookings
-            </button>
-
-            <button
-              onClick={() => setTab("requests")}
-              className="px-4 py-2 rounded-lg bg-slate-800 border border-slate-700 hover:bg-slate-700 text-sm font-semibold text-white"
-            >
-              Requests
-            </button>
-
             {!upcomingBooking && (
               <button
                 onClick={() => navigate("/client/search")}
@@ -371,19 +350,28 @@ export default function ClientCaseDetailPage() {
 
           {/* Tabs (FIXED) */}
           <div className="flex gap-2">
-            {["overview", "requests"].map((tabId) => {
+            {["overview", "documents", "bookings", "requests"].map((tabId) => {
               const active = activeTab === tabId;
               return (
                 <button
                   key={tabId}
-                  onClick={() => setTab(tabId)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setTab(tabId);
+                  }}
                   className={`px-4 py-2 rounded-lg text-sm font-semibold border transition-colors ${
                     active
                       ? "bg-amber-600/20 border-amber-500 text-white"
                       : "bg-slate-800 border-slate-700 text-slate-300 hover:text-white hover:border-slate-500"
                   }`}
                 >
-                  {tabId === "overview" ? "Overview" : "Requests"}
+                  {tabId === "overview"
+                    ? "Overview"
+                    : tabId === "documents"
+                    ? "Documents"
+                    : tabId === "bookings"
+                    ? "Bookings"
+                    : "Requests"}
                 </button>
               );
             })}

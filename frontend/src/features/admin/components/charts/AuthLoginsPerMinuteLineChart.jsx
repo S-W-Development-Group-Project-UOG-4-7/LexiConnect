@@ -33,6 +33,7 @@ export default function AuthLoginsPerMinuteLineChart() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [lastUpdated, setLastUpdated] = useState(null);
+  const [windowMinutes, setWindowMinutes] = useState(60);
   const timerRef = useRef(null);
 
   const load = async () => {
@@ -40,15 +41,26 @@ export default function AuthLoginsPerMinuteLineChart() {
     setError("");
     try {
       const res = await getAuthLoginsPerMinute(60);
-      setDataPoints(Array.isArray(res) ? res : []);
+      const series = Array.isArray(res?.series) ? res.series : [];
+      setDataPoints(series);
+      setWindowMinutes(res?.minutes || 60);
       setLastUpdated(new Date());
+      if (timerRef.current) {
+        clearTimeout(timerRef.current);
+      }
+      timerRef.current = setTimeout(load, 10000);
     } catch (err) {
-      setError(
+      const detail =
         err?.response?.data?.detail ||
-          err?.response?.data?.message ||
-          "Failed to load auth login metrics."
-      );
+        err?.response?.data?.message ||
+        err?.message;
+      console.error("Auth logins per minute metrics failed:", detail);
+      setError("Failed to load auth login metrics");
       setDataPoints([]);
+      if (timerRef.current) {
+        clearTimeout(timerRef.current);
+        timerRef.current = null;
+      }
     } finally {
       setLoading(false);
     }
@@ -56,25 +68,25 @@ export default function AuthLoginsPerMinuteLineChart() {
 
   useEffect(() => {
     load();
-    timerRef.current = setInterval(load, 10000);
     return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
+      if (timerRef.current) clearTimeout(timerRef.current);
     };
   }, []);
 
   const chartData = useMemo(() => {
     const labels = dataPoints.map((p) => formatLabel(p.minute));
-    const counts = dataPoints.map((p) => p.count || 0);
+    const counts = dataPoints.map((p) => (p.success || 0) + (p.fail || 0));
     return {
       labels,
       datasets: [
         {
-          label: "Logins per minute",
+          label: "Logins",
           data: counts,
           borderColor: "#60a5fa",
           backgroundColor: "rgba(96, 165, 250, 0.2)",
           tension: 0.35,
-          pointRadius: 2,
+          pointRadius: 3,
+          pointHoverRadius: 4,
         },
       ],
     };
@@ -109,8 +121,15 @@ export default function AuthLoginsPerMinuteLineChart() {
     <div className="admin-chart-card">
       <div className="admin-chart-header">
         <div>
-          <h3 className="admin-chart-title">Auth Logins (Last 60 min)</h3>
-          <p className="admin-chart-subtitle">Includes successful and failed logins.</p>
+          <h3 className="admin-chart-title">
+            Auth Logins (Last {windowMinutes} min)
+            <span
+              className="admin-tooltip"
+              title="Login attempts aggregated by time bucket."
+            >
+              i
+            </span>
+          </h3>
         </div>
         {lastUpdated && (
           <span className="admin-chart-updated">
@@ -128,6 +147,12 @@ export default function AuthLoginsPerMinuteLineChart() {
       ) : (
         <div className="admin-chart-canvas">
           <Line data={chartData} options={options} />
+        </div>
+      )}
+
+      {!loading && !error && dataPoints.length < 3 && (
+        <div className="admin-chart-empty">
+          Low login volume — data will appear as activity increases.
         </div>
       )}
     </div>

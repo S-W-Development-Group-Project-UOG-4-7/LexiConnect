@@ -58,6 +58,18 @@ export const listBookingsByCaseId = async (caseId) => {
 };
 
 /**
+ * List bookings for a case scoped to current lawyer
+ * @param {number} caseId - Case ID
+ * @returns {Promise<Array>} Array of booking objects
+ */
+export const listLawyerCaseBookings = async (caseId) => {
+  const id = Number(caseId);
+  if (!Number.isFinite(id) || id <= 0) return [];
+  const { data } = await api.get(`/api/lawyer/cases/${id}/bookings`);
+  return data;
+};
+
+/**
  * Cancel a booking
  * Only the client who owns the booking can cancel it
  * @param {number} id - Booking ID

@@ -8,6 +8,7 @@ import {
   listDocumentComments,
 } from "../services/documents.service";
 import { getRole } from "../../../services/auth";
+import { getBookingById } from "../../../services/bookings";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000";
 
@@ -48,7 +49,7 @@ export default function DocumentsList() {
   const location = useLocation();
 
   const bookingIdNum = useMemo(() => Number(bookingId), [bookingId]);
-  const hasValidBookingId = Number.isFinite(bookingIdNum) && bookingIdNum > 0;
+  const hasValidBookingId = Number.isInteger(bookingIdNum) && bookingIdNum > 0;
 
   const [docs, setDocs] = useState([]);
   const [err, setErr] = useState("");
@@ -80,13 +81,22 @@ export default function DocumentsList() {
       setSelectedDoc(null);
       setComments([]);
       setLoading(false);
-      setErr("Invalid booking id in URL.");
+      setErr("Invalid booking id.");
       return;
     }
 
     try {
-      const res = await listCaseDocuments({ bookingId: bookingIdNum }); // axios response
-      const data = res?.data || [];
+      const booking = await getBookingById(bookingIdNum);
+      const caseId = Number(booking?.case_id);
+      if (!Number.isInteger(caseId) || caseId <= 0) {
+        setDocs([]);
+        setSelectedDoc(null);
+        setComments([]);
+        setErr("Invalid booking id.");
+        return;
+      }
+
+      const data = await listCaseDocuments(caseId);
       setDocs(Array.isArray(data) ? data : []);
 
       // keep selection consistent
@@ -99,6 +109,7 @@ export default function DocumentsList() {
       if (status === 401) setErr("Unauthorized. Please login again.");
       else if (status === 403) setErr("Not allowed to view documents for this booking.");
       else setErr(e?.response?.data?.detail || "Failed to load documents");
+      setDocs([]);
     } finally {
       setLoading(false);
     }
@@ -318,16 +329,15 @@ export default function DocumentsList() {
 
         {loading && <div className="text-slate-400">Loading documents...</div>}
 
-        {!loading && docs.length === 0 && !err && (
+        {!loading && Array.isArray(docs) && docs.length === 0 && !err && (
           <div className="bg-slate-900/60 border border-slate-800 rounded-xl p-6 text-center">
-            <div className="text-lg font-semibold">No documents yet</div>
-            <div className="text-slate-400 text-sm mt-1">
-              Upload a file to start your case record.
+            <div className="text-lg font-semibold">
+              No documents uploaded for this booking yet.
             </div>
           </div>
         )}
 
-        {!loading && docs.length > 0 && (
+        {!loading && Array.isArray(docs) && docs.length > 0 && (
           <div className="grid grid-cols-1 lg:grid-cols-[1.4fr_0.9fr] gap-6">
             <div className="space-y-3">{docs.map(renderDocCard)}</div>
 

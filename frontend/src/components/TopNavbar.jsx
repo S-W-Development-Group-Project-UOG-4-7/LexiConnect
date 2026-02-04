@@ -1,6 +1,7 @@
 // src/components/TopNavbar.jsx
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useEffect, useMemo, useRef, useState } from "react";
+import NotificationBell from "../features/notifications/components/NotificationBell";
 
 const TopNavbar = ({
   brandTitle = "LexiConnect",
@@ -91,6 +92,7 @@ const TopNavbar = ({
           className="flex items-center gap-3 min-w-[210px] justify-end relative"
           ref={profileRef}
         >
+          <NotificationBell />
           {/* Mobile Menu Button */}
           <button
             type="button"

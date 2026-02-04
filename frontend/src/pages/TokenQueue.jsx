@@ -66,95 +66,6 @@ const getFirstDayOfMonth = (year, month) => new Date(year, month, 1).getDay();
 const isUuid = (value) =>
   typeof value === "string" && value.includes("-");
 
-// ============== DEMO DATA GENERATOR ==============
-const buildDemoData = () => {
-  const today = new Date();
-  const year = today.getFullYear();
-  const month = today.getMonth();
-  const currentDay = today.getDate();
-  const demoData = {};
-
-  const clients = [
-    { name: "Rajesh Kumar", email: "rajesh@email.com", phone: "+91 98765 43210", reason: "Property dispute consultation" },
-    { name: "Priya Sharma", email: "priya@email.com", phone: "+91 87654 32109", reason: "Business contract review" },
-    { name: "Amit Patel", email: "amit@email.com", phone: "+91 76543 21098", reason: "Family law matters" },
-    { name: "Sunita Verma", email: "sunita@email.com", phone: "+91 65432 10987", reason: "Will preparation" },
-    { name: "Vikram Singh", email: "vikram@email.com", phone: "+91 54321 09876", reason: "Criminal case inquiry" },
-    { name: "Meera Reddy", email: "meera@email.com", phone: "+91 43210 98765", reason: "Divorce proceedings" },
-    { name: "Karthik Iyer", email: "karthik@email.com", phone: "+91 32109 87654", reason: "IP registration" },
-    { name: "Ananya Gupta", email: "ananya@email.com", phone: "+91 21098 76543", reason: "Employment dispute" },
-  ];
-
-  // Today's slots
-  const todaySlots = [
-    { id: "s1", start_time: "09:00", end_time: "10:00", location: "Main Office", max_bookings: 3 },
-    { id: "s2", start_time: "10:00", end_time: "11:00", location: "Main Office", max_bookings: 3 },
-    { id: "s3", start_time: "11:00", end_time: "12:00", location: "Branch A", max_bookings: 2 },
-    { id: "s4", start_time: "14:00", end_time: "15:00", location: "Main Office", max_bookings: 3 },
-    { id: "s5", start_time: "15:00", end_time: "16:00", location: "Main Office", max_bookings: 2 },
-    { id: "s6", start_time: "16:00", end_time: "17:00", location: "Main Office", max_bookings: 2 },
-  ];
-
-  // Generate appointments for various days
-  const daysToPopulate = [];
-  for (let d = currentDay - 7; d <= currentDay + 14; d++) {
-    if (d > 0 && d <= getDaysInMonth(year, month)) {
-      if (Math.random() > 0.3) daysToPopulate.push(d);
-    }
-  }
-  // Always include today
-  if (!daysToPopulate.includes(currentDay)) {
-    daysToPopulate.push(currentDay);
-  }
-
-  daysToPopulate.forEach((day) => {
-    const dateKey = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-    const isPast = day < currentDay;
-    const isToday = day === currentDay;
-    const numTokens = isToday ? 6 : Math.floor(Math.random() * 5) + 1;
-    const tokens = [];
-    
-    const times = ["09:15", "09:45", "10:15", "10:45", "11:15", "14:15", "14:45", "15:15", "15:45", "16:15"];
-
-    for (let i = 0; i < numTokens; i++) {
-      const client = clients[i % clients.length];
-
-      let status;
-      if (isPast) {
-        status = Math.random() > 0.2 ? "completed" : "no_show";
-      } else if (isToday) {
-        // For today, show varied statuses
-        if (i === 0) status = "completed";
-        else if (i === 1) status = "completed";
-        else if (i === 2) status = "in_progress";
-        else if (i === 3) status = "confirmed";
-        else if (i === 4) status = "pending";
-        else status = "pending";
-      } else {
-        status = Math.random() > 0.5 ? "confirmed" : "pending";
-      }
-
-      tokens.push({
-        id: `demo-${dateKey}-${i + 1}`,
-        token_number: i + 1,
-        client_name: client.name,
-        client_email: client.email,
-        client_phone: client.phone,
-        date: dateKey,
-        time: times[i % times.length],
-        reason: client.reason,
-        status,
-        slot_id: todaySlots[i % todaySlots.length].id,
-        service_type: "Legal Consultation",
-      });
-    }
-
-    demoData[dateKey] = { slots: todaySlots, tokens };
-  });
-
-  return demoData;
-};
-
 // ============== MAIN COMPONENT ==============
 const TokenQueue = () => {
   const endpoint = import.meta.env.VITE_TOKEN_QUEUE_ENDPOINT || "/api/token-queue";
@@ -170,7 +81,6 @@ const TokenQueue = () => {
   const [allData, setAllData] = useState({}); // { dateKey: { slots: [], tokens: [] } }
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [isDemo, setIsDemo] = useState(false);
 
   // UI state
   const [actionId, setActionId] = useState(null);
@@ -269,17 +179,33 @@ const TokenQueue = () => {
     try {
       const params = new URLSearchParams();
       params.append("date", dateStr);
-      const { data } = await api.get(`${slotsEndpoint}?${params.toString()}`);
+      const [slotsRes, queueRes] = await Promise.all([
+        api.get(`${slotsEndpoint}?${params.toString()}`),
+        api.get(`${endpoint}?date=${encodeURIComponent(dateStr)}`),
+      ]);
 
-      const slots = Array.isArray(data?.slots) ? data.slots : [];
+      const slots = Array.isArray(slotsRes?.data?.slots) ? slotsRes.data.slots : [];
+      const queueEntries = Array.isArray(queueRes?.data) ? queueRes.data : [];
+      const queueByClientId = new Map();
+      queueEntries.forEach((q) => {
+        if (q?.client_id != null && !queueByClientId.has(q.client_id)) {
+          queueByClientId.set(q.client_id, q);
+        }
+      });
       const tokens = slots.flatMap((slot) =>
-        (slot.bookings || []).map((b) => ({
-          ...b,
-          status: normalizeStatus(b.status),
-          client_name: b.client_name || `Client #${b.client_id}`,
-          time: b.time_local,
-          slot_id: slot.id,
-        }))
+        (slot.bookings || []).map((b) => {
+          const queueEntry = queueByClientId.get(b.client_id);
+          const status = normalizeStatus(queueEntry?.status || b.status);
+          return {
+            ...b,
+            status,
+            queue_entry_id: queueEntry?.id,
+            queue_status: queueEntry?.status,
+            client_name: b.client_name || `Client #${b.client_id}`,
+            time: b.time_local,
+            slot_id: slot.id,
+          };
+        })
       );
 
       const ordered = [...tokens].sort((a, b) => {
@@ -295,13 +221,19 @@ const TokenQueue = () => {
       }));
       const slotsWithNumbers = slots.map((slot) => ({
         ...slot,
-        bookings: (slot.bookings || []).map((b) => ({
-          ...b,
-          status: normalizeStatus(b.status),
-          client_name: b.client_name || `Client #${b.client_id}`,
-          time: b.time_local,
-          token_number: tokenNumberById.get(b.id) || b.token_number,
-        })),
+        bookings: (slot.bookings || []).map((b) => {
+          const queueEntry = queueByClientId.get(b.client_id);
+          const status = normalizeStatus(queueEntry?.status || b.status);
+          return {
+            ...b,
+            status,
+            queue_entry_id: queueEntry?.id,
+            queue_status: queueEntry?.status,
+            client_name: b.client_name || `Client #${b.client_id}`,
+            time: b.time_local,
+            token_number: tokenNumberById.get(b.id) || b.token_number,
+          };
+        }),
       }));
 
       if (import.meta.env.DEV) {
@@ -324,7 +256,6 @@ const TokenQueue = () => {
         ...prev,
         [dateStr]: { slots: slotsWithNumbers, tokens: tokensWithNumbers },
       }));
-      setIsDemo(false);
     } catch (err) {
       setError(err?.response?.data?.detail || "Failed to load queue");
     } finally {
@@ -332,15 +263,9 @@ const TokenQueue = () => {
     }
   };
 
-  const loadDemoData = () => {
-    setAllData(buildDemoData());
-    setIsDemo(true);
-    setError("");
-  };
-
   // Load data when date changes
   useEffect(() => {
-    if (selectedDate && !isDemo) {
+    if (selectedDate) {
       fetchQueue(selectedDate);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -374,44 +299,63 @@ const TokenQueue = () => {
     setSelectedDate(formatDateKey(t));
   };
 
-  const handleStatusChange = async (id, newStatus) => {
-    if (isDemo) {
-      setAllData((prev) => {
-        const updated = { ...prev };
-        Object.keys(updated).forEach((dateKey) => {
-          updated[dateKey] = {
-            ...updated[dateKey],
-            tokens: updated[dateKey].tokens.map((t) =>
-              t.id === id ? { ...t, status: newStatus } : t
-            ),
-          };
-        });
-        return updated;
-      });
+  const handleQueueStatusChange = async (token, newStatus) => {
+    const entryId = token?.queue_entry_id;
+    if (!entryId || !isUuid(entryId)) {
+      setError("Queue entry not found for this booking.");
       return;
     }
 
-    if (!isUuid(id)) {
-      setError("Token queue actions are unavailable for booking-based view.");
-      return;
-    }
-
-    setActionId(id);
+    setActionId(token.id);
     setError("");
     try {
-      const { data } = await api.patch(`${endpoint}/${id}`, { status: newStatus });
-      setAllData((prev) => {
-        const updated = { ...prev };
-        Object.keys(updated).forEach((dateKey) => {
-          updated[dateKey] = {
-            ...updated[dateKey],
-            tokens: updated[dateKey].tokens.map((t) =>
-              t.id === id ? { ...data, status: normalizeStatus(data.status) } : t
-            ),
-          };
-        });
-        return updated;
-      });
+      await api.patch(`${endpoint}/${entryId}`, { status: newStatus });
+      await fetchQueue(selectedDate);
+    } catch (err) {
+      setError(err?.response?.data?.detail || "Action failed");
+    } finally {
+      setActionId(null);
+    }
+  };
+
+  const handleBookingAction = async (token, action) => {
+    const bookingId = Number(token?.id);
+    if (!Number.isFinite(bookingId) || bookingId <= 0) {
+      setError("Invalid booking id.");
+      return;
+    }
+
+    setActionId(token.id);
+    setError("");
+    try {
+      if (action === "confirm") {
+        await api.patch(`/api/bookings/${bookingId}/confirm`);
+      } else if (action === "reject") {
+        await api.patch(`/api/bookings/${bookingId}/reject`);
+      } else {
+        throw new Error("Unsupported booking action");
+      }
+      await fetchQueue(selectedDate);
+    } catch (err) {
+      setError(err?.response?.data?.detail || "Action failed");
+    } finally {
+      setActionId(null);
+    }
+  };
+
+  const handleBulkQueueStatusChange = async (tokens, newStatus) => {
+    const actionable = (tokens || []).filter((t) => t?.queue_entry_id);
+    if (actionable.length === 0) {
+      setError("Queue entries not found for this slot.");
+      return;
+    }
+
+    setError("");
+    try {
+      await Promise.all(
+        actionable.map((t) => api.patch(`${endpoint}/${t.queue_entry_id}`, { status: newStatus }))
+      );
+      await fetchQueue(selectedDate);
     } catch (err) {
       setError(err?.response?.data?.detail || "Action failed");
     } finally {
@@ -426,32 +370,6 @@ const TokenQueue = () => {
     }
 
     const tokenNumber = formData.token_number || (stats.total + 1);
-
-    if (isDemo) {
-      const newToken = {
-        id: `demo-${selectedDate}-new-${Date.now()}`,
-        token_number: parseInt(tokenNumber, 10),
-        client_name: formData.client_name,
-        client_email: formData.client_email,
-        client_phone: formData.client_phone,
-        date: selectedDate,
-        time: formData.time,
-        reason: formData.reason,
-        status: formData.status,
-        service_type: "Legal Consultation",
-      };
-
-      setAllData((prev) => ({
-        ...prev,
-        [selectedDate]: {
-          slots: prev[selectedDate]?.slots || [],
-          tokens: [...(prev[selectedDate]?.tokens || []), newToken],
-        },
-      }));
-      setShowAddForm(false);
-      resetForm();
-      return;
-    }
 
     try {
       const payload = {
@@ -555,24 +473,18 @@ const TokenQueue = () => {
         </div>
         <div className="flex flex-wrap gap-2">
           <button
-            onClick={() => !isDemo && fetchQueue(selectedDate)}
-            disabled={loading || isDemo}
+            onClick={() => fetchQueue(selectedDate)}
+            disabled={loading}
             className={`px-4 py-2 rounded-lg text-sm font-medium border transition-colors ${
-              loading || isDemo
+              loading
                 ? "border-white/10 bg-white/5 text-slate-500 cursor-not-allowed"
                 : "border-white/20 bg-white/10 text-slate-100 hover:bg-white/15"
             }`}
           >
-            {loading ? "Loading..." : "Refresh"}
-          </button>
-          <button
-            onClick={loadDemoData}
-            className="px-4 py-2 rounded-lg text-sm font-medium border border-amber-400/30 bg-amber-500/10 text-amber-200 hover:bg-amber-500/20 transition-colors"
-          >
-            Load Demo
-          </button>
-        </div>
+          {loading ? "Loading..." : "Refresh"}
+        </button>
       </div>
+    </div>
 
       {error && (
         <div className="mb-6 rounded-xl border border-rose-400/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
@@ -693,7 +605,6 @@ const TokenQueue = () => {
                   </h3>
                   <p className="text-sm text-slate-400 mt-1">
                     {filteredTokens.length} booking{filteredTokens.length !== 1 ? "s" : ""} across {selectedDateData.slots?.length || 0} slots
-                    {isDemo && <span className="ml-2 text-amber-300">(Demo Mode)</span>}
                   </p>
                 </div>
               </div>
@@ -733,7 +644,7 @@ const TokenQueue = () => {
                 <div className="text-5xl mb-4">📭</div>
                 <div className="text-slate-200 text-lg mb-2">No slots available for this date</div>
                 <div className="text-slate-500 text-sm">
-                  Try selecting a different date or load demo data
+                  Try selecting a different date.
                 </div>
               </div>
             ) : (
@@ -776,33 +687,25 @@ const TokenQueue = () => {
                       {slot.tokens.length > 0 && (
                         <div className="flex flex-wrap gap-2 pl-14">
                           <button
-                            onClick={() => {
-                              slot.tokens.forEach(t => handleStatusChange(t.id, "completed"));
-                            }}
+                            onClick={() => handleBulkQueueStatusChange(slot.tokens, "completed")}
                             className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-emerald-400/30 bg-emerald-500/15 text-emerald-200 hover:bg-emerald-500/25 transition-colors"
                           >
                             ✅ Complete All
                           </button>
                           <button
-                            onClick={() => {
-                              slot.tokens.forEach(t => handleStatusChange(t.id, "in_progress"));
-                            }}
+                            onClick={() => handleBulkQueueStatusChange(slot.tokens, "in_progress")}
                             className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-amber-400/30 bg-amber-500/15 text-amber-200 hover:bg-amber-500/25 transition-colors"
                           >
                             🔄 Ongoing
                           </button>
                           <button
-                            onClick={() => {
-                              slot.tokens.forEach(t => handleStatusChange(t.id, "no_show"));
-                            }}
+                            onClick={() => handleBulkQueueStatusChange(slot.tokens, "no_show")}
                             className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-red-400/30 bg-red-500/15 text-red-200 hover:bg-red-500/25 transition-colors"
                           >
                             🚫 Not Done
                           </button>
                           <button
-                            onClick={() => {
-                              slot.tokens.forEach(t => handleStatusChange(t.id, "pending"));
-                            }}
+                            onClick={() => handleBulkQueueStatusChange(slot.tokens, "pending")}
                             className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-yellow-400/30 bg-yellow-500/15 text-yellow-200 hover:bg-yellow-500/25 transition-colors"
                           >
                             ⏳ Reset
@@ -885,7 +788,7 @@ const TokenQueue = () => {
                                         disabled={busy}
                                         onClick={(e) => {
                                           e.stopPropagation();
-                                          handleStatusChange(token.id, "confirmed");
+                                          handleBookingAction(token, "confirm");
                                         }}
                                         className="px-4 py-2 rounded-lg text-sm font-semibold border border-blue-400/30 bg-blue-500/15 text-blue-200 hover:bg-blue-500/25 disabled:opacity-50"
                                       >
@@ -897,7 +800,7 @@ const TokenQueue = () => {
                                         disabled={busy}
                                         onClick={(e) => {
                                           e.stopPropagation();
-                                          handleStatusChange(token.id, "in_progress");
+                                          handleQueueStatusChange(token, "in_progress");
                                         }}
                                         className="px-4 py-2 rounded-lg text-sm font-semibold border border-amber-400/30 bg-amber-500/15 text-amber-200 hover:bg-amber-500/25 disabled:opacity-50"
                                       >
@@ -909,7 +812,7 @@ const TokenQueue = () => {
                                         disabled={busy}
                                         onClick={(e) => {
                                           e.stopPropagation();
-                                          handleStatusChange(token.id, "completed");
+                                          handleQueueStatusChange(token, "completed");
                                         }}
                                         className="px-4 py-2 rounded-lg text-sm font-semibold border border-emerald-400/30 bg-emerald-500/15 text-emerald-200 hover:bg-emerald-500/25 disabled:opacity-50"
                                       >
@@ -921,7 +824,7 @@ const TokenQueue = () => {
                                         disabled={busy}
                                         onClick={(e) => {
                                           e.stopPropagation();
-                                          handleStatusChange(token.id, "no_show");
+                                          handleQueueStatusChange(token, "no_show");
                                         }}
                                         className="px-4 py-2 rounded-lg text-sm font-semibold border border-red-400/30 bg-red-500/15 text-red-200 hover:bg-red-500/25 disabled:opacity-50"
                                       >
@@ -933,7 +836,7 @@ const TokenQueue = () => {
                                         disabled={busy}
                                         onClick={(e) => {
                                           e.stopPropagation();
-                                          handleStatusChange(token.id, "cancelled");
+                                          handleBookingAction(token, "reject");
                                         }}
                                         className="px-4 py-2 rounded-lg text-sm font-semibold border border-rose-400/30 bg-rose-500/15 text-rose-200 hover:bg-rose-500/25 disabled:opacity-50"
                                       >

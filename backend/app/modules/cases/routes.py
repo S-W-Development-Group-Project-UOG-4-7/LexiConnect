@@ -10,6 +10,9 @@ from app.models.user import UserRole, User
 from app.modules.lawyer_profiles.models import LawyerProfile
 from app.models.specialization import Specialization
 from app.routers.auth import get_current_user
+from app.models.booking import Booking
+from app.schemas.booking import BookingOut
+from app.modules.rbac.dependencies import require_privilege
 from .models import Case, CaseRequest
 from .schemas import (
     CaseCreate,
@@ -21,6 +24,7 @@ from .schemas import (
 )
 
 router = APIRouter(prefix="/cases", tags=["Cases"])
+lawyer_router = APIRouter(prefix="/lawyer/cases", tags=["Lawyer Cases"])
 
 
 def _is_role(user: User, role: str) -> bool:
@@ -38,6 +42,25 @@ def _ensure_client(user: User):
 def _ensure_lawyer(user: User):
     if not _is_role(user, "lawyer"):
         raise HTTPException(status_code=403, detail="Lawyers only")
+
+
+@lawyer_router.get("/{case_id}/bookings", response_model=List[BookingOut])
+def list_lawyer_case_bookings(
+    case_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+    _: None = Depends(require_privilege("booking.view")),
+):
+    _ensure_lawyer(current_user)
+    if case_id <= 0:
+        return []
+    bookings = (
+        db.query(Booking)
+        .filter(Booking.case_id == case_id, Booking.lawyer_id == current_user.id)
+        .order_by(Booking.scheduled_at.desc())
+        .all()
+    )
+    return [BookingOut.model_validate(b) for b in bookings]
 
 
 def _get_case_or_404(db: Session, case_id: int) -> Case:
